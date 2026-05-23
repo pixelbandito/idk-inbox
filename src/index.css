@@ -1,0 +1,21 @@
+:root {
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app { max-width: 640px; margin: 0 auto; padding: 1rem; font-family: system-ui, sans-serif; }
+.inbox-list { list-style: none; padding: 0; }
+.email { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.75rem 0.5rem; border-bottom: 1px solid #eee; }
+.email--unread { font-weight: 600; background: #f6f9ff; }
+.email__from { font-size: 0.85rem; color: #555; }
+.email__snippet { font-size: 0.85rem; color: #888; }
+.error { color: #c0392b; }
