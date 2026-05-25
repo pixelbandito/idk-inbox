@@ -10,8 +10,8 @@ export function useGoogleAuth() {
   const [error, setError] = useState<string | null>(null);
   const clientRef = useRef<google.accounts.oauth2.TokenClient | null>(null);
 
-  // Warm up the GIS library as soon as the app mounts so sign-in is instant.
-  // A failure here is left silent; it is surfaced when the user clicks signIn.
+  // Warm up the GIS library so sign-in is instant. Failures here are surfaced
+  // when the user actually clicks signIn.
   useEffect(() => {
     loadGis().catch(() => {});
   }, []);
@@ -42,7 +42,23 @@ export function useGoogleAuth() {
     clientRef.current.requestAccessToken();
   }, []);
 
-  const getToken = useCallback(() => tokenStore.get()?.accessToken ?? null, []);
+  const signOut = useCallback(() => {
+    tokenStore.clear();
+    clientRef.current = null;
+    setError(null);
+    setSignedIn(false);
+  }, []);
 
-  return { signedIn, error, signIn, getToken };
+  const getToken = useCallback(() => {
+    if (!tokenStore.isValid()) {
+      // Token expired or absent. Defer the state update to a microtask so a
+      // caller invoking getToken during render does not trigger React's
+      // "setState while rendering a different component" warning.
+      if (signedIn) queueMicrotask(() => setSignedIn(false));
+      return null;
+    }
+    return tokenStore.get()?.accessToken ?? null;
+  }, [signedIn]);
+
+  return { signedIn, error, signIn, signOut, getToken };
 }

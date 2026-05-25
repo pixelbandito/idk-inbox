@@ -7,28 +7,29 @@ function authHeaders(token: string) {
   return { headers: { Authorization: `Bearer ${token}` } };
 }
 
-export interface InboxResult {
+export interface LabelFetchResult {
   emails: EmailSummary[];
   failed: number;
 }
 
-export async function fetchInbox(token: string, maxResults = 25): Promise<InboxResult> {
-  const listRes = await fetch(
-    `${BASE}/messages?q=in:inbox&maxResults=${maxResults}`,
-    authHeaders(token),
-  );
+export async function fetchByLabel(
+  token: string,
+  label: string,
+  maxResults = 25,
+): Promise<LabelFetchResult> {
+  const q = `label:"${label}"`;
+  const listUrl = `${BASE}/messages?q=${encodeURIComponent(q)}&maxResults=${maxResults}`;
+
+  const listRes = await fetch(listUrl, authHeaders(token));
   if (!listRes.ok) throw new Error(`Gmail list failed: ${listRes.status}`);
 
   const listJson = (await listRes.json()) as { messages?: { id: string }[] };
   const ids = listJson.messages ?? [];
 
-  // Per-message gets in parallel. Use allSettled so a single rate-limited
-  // message (429) doesn't discard the whole inbox — the user sees the rest,
-  // and the failed count surfaces in the UI.
+  // format=metadata still returns labelIds, which parseGmailMessage needs for
+  // the unread flag — keep that if changing this param.
   const settled = await Promise.allSettled(
     ids.map(async ({ id }) => {
-      // format=metadata still returns labelIds, which parseGmailMessage needs
-      // for the unread flag — keep that if changing this param.
       const res = await fetch(
         `${BASE}/messages/${id}?format=metadata` +
           `&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
@@ -42,13 +43,11 @@ export async function fetchInbox(token: string, maxResults = 25): Promise<InboxR
   const emails: EmailSummary[] = [];
   let failed = 0;
   for (const r of settled) {
-    if (r.status === 'fulfilled') {
-      emails.push(parseGmailMessage(r.value));
-    } else {
+    if (r.status === 'fulfilled') emails.push(parseGmailMessage(r.value));
+    else {
       failed++;
       console.warn('Gmail message fetch failed:', r.reason);
     }
   }
-
   return { emails, failed };
 }

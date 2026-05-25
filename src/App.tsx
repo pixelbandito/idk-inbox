@@ -1,54 +1,77 @@
-import { useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useGoogleAuth } from './lib/auth/useGoogleAuth';
-import { fetchInbox } from './lib/gmail/fetchInbox';
-import { InboxList } from './components/InboxList';
-import type { EmailSummary } from './lib/gmail/types';
+import { LayoutContainer, type PanelRenderProps } from './layout/LayoutContainer';
+import { SettingsPanel } from './panels/SettingsPanel';
+import { ThreadlistPanel } from './panels/ThreadlistPanel';
+import { ThreadPanel } from './panels/ThreadPanel';
+import { ensureAppLabels, SNOOZED_LABEL } from './lib/gmail/labelBootstrap';
+import type { Panel } from './layout/types';
 import './index.css';
 
-export default function App() {
-  const { signedIn, error, signIn, getToken } = useGoogleAuth();
-  const [emails, setEmails] = useState<EmailSummary[]>([]);
-  const [failedCount, setFailedCount] = useState(0);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+const INITIAL_PANELS: Panel[] = [
+  { kind: 'settings' },
+  { kind: 'threadlist', label: 'INBOX' },
+  { kind: 'threadlist', label: SNOOZED_LABEL },
+];
 
-  async function loadInbox() {
+function displayName(label: string): string {
+  if (label === 'INBOX') return 'Inbox';
+  return label.replace(/^InboxZero\//, '');
+}
+
+export default function App() {
+  const { signedIn, error, signIn, signOut, getToken } = useGoogleAuth();
+  const bootstrapped = useRef(false);
+
+  useEffect(() => {
+    if (!signedIn || bootstrapped.current) return;
     const token = getToken();
     if (!token) return;
-    setLoading(true);
-    setLoadError(null);
-    setFailedCount(0);
-    try {
-      const result = await fetchInbox(token);
-      setEmails(result.emails);
-      setFailedCount(result.failed);
-    } catch (e) {
-      console.error(e);
-      setLoadError(e instanceof Error ? e.message : 'Failed to load inbox.');
-    } finally {
-      setLoading(false);
+    bootstrapped.current = true;
+    ensureAppLabels(token).catch((e) => {
+      console.warn('label bootstrap failed:', e);
+    });
+  }, [signedIn, getToken]);
+
+  function renderPanel(panel: Panel, _index: number, props: PanelRenderProps) {
+    if (panel.kind === 'settings') {
+      return (
+        <SettingsPanel
+          signedIn={signedIn}
+          onSignIn={signIn}
+          onSignOut={signOut}
+          onSwipeLeft={props.onSwipeLeft}
+          onSwipeRight={props.onSwipeRight}
+        />
+      );
     }
+    if (panel.kind === 'threadlist') {
+      return (
+        <ThreadlistPanel
+          label={panel.label}
+          displayName={displayName(panel.label)}
+          getToken={getToken}
+          onOpenThread={props.onOpenThread}
+          onSwipeLeft={props.onSwipeLeft}
+          onSwipeRight={props.onSwipeRight}
+        />
+      );
+    }
+    return (
+      <ThreadPanel
+        threadId={panel.threadId}
+        getToken={getToken}
+        onClose={props.onClose}
+        onSwipeLeft={props.onSwipeLeft}
+        onSwipeRight={props.onSwipeRight}
+      />
+    );
   }
 
   return (
-    <main className="app">
-      <h1>Inbox Zero</h1>
-      {!signedIn && <button onClick={signIn}>Sign in with Google</button>}
+    <>
       {error && <p className="error">Sign-in error: {error}</p>}
-      {signedIn && (
-        <>
-          <button onClick={loadInbox} disabled={loading}>
-            {loading ? 'Loading…' : 'Load inbox'}
-          </button>
-          {loadError && <p className="error">{loadError}</p>}
-          {failedCount > 0 && (
-            <p className="error">
-              {failedCount} message{failedCount === 1 ? '' : 's'} failed to load — try again.
-            </p>
-          )}
-          <InboxList emails={emails} />
-        </>
-      )}
-    </main>
+      <LayoutContainer initialPanels={INITIAL_PANELS} renderPanel={renderPanel} />
+    </>
   );
 }
