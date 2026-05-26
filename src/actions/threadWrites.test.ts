@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   modifyThreadLabelsStub, archiveThreadStub, deleteThreadStub, spamThreadStub,
-  addLabelThreadStub, removeLabelThreadStub,
+  addLabelThreadStub, removeLabelThreadStub, snoozeThreadStub, unsubscribeThreadStub,
 } from './threadWrites';
 import type { ReadonlyContext } from '../input/types';
 
@@ -99,5 +99,45 @@ describe('removeLabelThreadStub', () => {
         targets: ['t1'], add: ['idk-inbox/Receipts'], remove: [],
       });
     }
+  });
+});
+
+describe('snoozeThreadStub', () => {
+  beforeEach(() => vi.spyOn(console, 'info').mockImplementation(() => {}));
+
+  it('returns ok:false when until is missing (elicit-via picker)', async () => {
+    const result = await snoozeThreadStub({ targets: ['t1'] }, ctx);
+    expect(result.ok).toBe(false);
+  });
+
+  it('adds the snoozed labels and removes INBOX, with symmetric inverse', async () => {
+    const result = await snoozeThreadStub(
+      { targets: ['t1'], until: '2026-06-01T09:00:00Z' }, ctx,
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.inverse?.args).toEqual({
+        targets: ['t1'],
+        add: ['INBOX'],
+        remove: ['idk-inbox/Snoozed', 'idk-inbox/Snoozed/2026-06-01T09:00:00Z'],
+      });
+    }
+  });
+});
+
+describe('unsubscribeThreadStub', () => {
+  beforeEach(() => vi.spyOn(console, 'info').mockImplementation(() => {}));
+
+  it('logs and returns ok with no inverse (cannot un-unsubscribe)', async () => {
+    const result = await unsubscribeThreadStub({ targets: ['t1'] }, ctx);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.inverse).toBeUndefined();
+    }
+  });
+
+  it('returns ok:false when targets empty', async () => {
+    const result = await unsubscribeThreadStub({ targets: [] }, ctx);
+    expect(result.ok).toBe(false);
   });
 });

@@ -57,3 +57,35 @@ export const addLabelThreadStub = (args: LabelArgs, ctx: ReadonlyContext) =>
 export const removeLabelThreadStub = (args: LabelArgs, ctx: ReadonlyContext) =>
   delegate('remove-label-thread',
     { targets: args.targets, add: [], remove: [args.label] }, ctx, `Removed ${args.label}`);
+
+export interface SnoozeArgs { targets: ThreadRef[]; until?: string; }
+
+export const snoozeThreadStub = async (args: SnoozeArgs, _ctx: ReadonlyContext): Promise<ActionResult> => {
+  if (args.targets.length === 0) return { ok: false, error: 'No targets specified.' };
+  if (!args.until) return { ok: false, error: 'Snooze duration required.' };
+  console.info('[stub:snooze-thread]', args);
+  const subLabel = `idk-inbox/Snoozed/${args.until}`;
+  return {
+    ok: true,
+    description: summarize(args.targets.length, 'Snoozed'),
+    inverse: {
+      action: 'modify-thread-labels',
+      args: {
+        targets: args.targets,
+        add: ['INBOX'],
+        remove: ['idk-inbox/Snoozed', subLabel],
+      },
+      description: summarize(args.targets.length, 'Unsnoozed'),
+    },
+  };
+};
+
+export const unsubscribeThreadStub = async (args: SingleTargetArgs, _ctx: ReadonlyContext): Promise<ActionResult> => {
+  if (args.targets.length === 0) return { ok: false, error: 'No targets specified.' };
+  console.info('[stub:unsubscribe-thread]', args);
+  return {
+    ok: true,
+    description: summarize(args.targets.length, 'Unsubscribed from'),
+    // No inverse — unsubscribe is not reversible.
+  };
+};
