@@ -8,7 +8,6 @@ function summarize(n: number, verb: string): string {
   return `${verb} ${n} thread${n === 1 ? '' : 's'}`;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function modifyThreadLabelsStub(args: ModifyArgs, _ctx: ReadonlyContext): Promise<ActionResult> {
   if (args.targets.length === 0) {
     return { ok: false, error: 'No targets specified.' };
