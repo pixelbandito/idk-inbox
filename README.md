@@ -1,4 +1,4 @@
-# Inbox Zero
+# idk-inbox
 
 A mobile-first, lightweight Gmail PWA wrapper. Sign in with Google and view your inbox in a clean, read-only list.
 

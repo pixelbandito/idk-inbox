@@ -16,7 +16,7 @@ const INITIAL_PANELS: Panel[] = [
 
 function displayName(label: string): string {
   if (label === 'INBOX') return 'Inbox';
-  return label.replace(/^InboxZero\//, '');
+  return label.replace(/^idk-inbox\//, '');
 }
 
 export default function App() {

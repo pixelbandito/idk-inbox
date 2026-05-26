@@ -677,10 +677,10 @@ describe('spamThreadStub', () => {
 
 describe('addLabelThreadStub', () => {
   it('inverse removes the same label', async () => {
-    const result = await addLabelThreadStub({ targets: ['t1'], label: 'InboxZero/Receipts' }, ctx);
+    const result = await addLabelThreadStub({ targets: ['t1'], label: 'idk-inbox/Receipts' }, ctx);
     if (result.ok) {
       expect(result.inverse?.args).toEqual({
-        targets: ['t1'], add: [], remove: ['InboxZero/Receipts'],
+        targets: ['t1'], add: [], remove: ['idk-inbox/Receipts'],
       });
     }
   });
@@ -688,10 +688,10 @@ describe('addLabelThreadStub', () => {
 
 describe('removeLabelThreadStub', () => {
   it('inverse adds the same label', async () => {
-    const result = await removeLabelThreadStub({ targets: ['t1'], label: 'InboxZero/Receipts' }, ctx);
+    const result = await removeLabelThreadStub({ targets: ['t1'], label: 'idk-inbox/Receipts' }, ctx);
     if (result.ok) {
       expect(result.inverse?.args).toEqual({
-        targets: ['t1'], add: ['InboxZero/Receipts'], remove: [],
+        targets: ['t1'], add: ['idk-inbox/Receipts'], remove: [],
       });
     }
   });
@@ -797,7 +797,7 @@ describe('snoozeThreadStub', () => {
       expect(result.inverse?.args).toEqual({
         targets: ['t1'],
         add: ['INBOX'],
-        remove: ['InboxZero/Snoozed', 'InboxZero/Snoozed/2026-06-01T09:00:00Z'],
+        remove: ['idk-inbox/Snoozed', 'idk-inbox/Snoozed/2026-06-01T09:00:00Z'],
       });
     }
   });
@@ -830,7 +830,7 @@ export const snoozeThreadStub = async (args: SnoozeArgs, _ctx: ReadonlyContext):
   if (args.targets.length === 0) return { ok: false, error: 'No targets specified.' };
   if (!args.until) return { ok: false, error: 'Snooze duration required.' };
   console.info('[stub:snooze-thread]', args);
-  const subLabel = `InboxZero/Snoozed/${args.until}`;
+  const subLabel = `idk-inbox/Snoozed/${args.until}`;
   return {
     ok: true,
     description: summarize(args.targets.length, 'Snoozed'),
@@ -839,7 +839,7 @@ export const snoozeThreadStub = async (args: SnoozeArgs, _ctx: ReadonlyContext):
       args: {
         targets: args.targets,
         add: ['INBOX'],
-        remove: ['InboxZero/Snoozed', subLabel],
+        remove: ['idk-inbox/Snoozed', subLabel],
       },
       description: summarize(args.targets.length, 'Unsnoozed'),
     },
@@ -1406,7 +1406,7 @@ Modal that appears when `mode === 'picker-snooze'`. Buttons: Later today, Tomorr
 
 **Files:** `src/pickers/LabelPicker.tsx` + test.
 
-Modal that lists existing `InboxZero/<sublabel>`s and offers an input for a new sublabel. On selection, dispatches `add-label-thread({ targets, label })`.
+Modal that lists existing `idk-inbox/<sublabel>`s and offers an input for a new sublabel. On selection, dispatches `add-label-thread({ targets, label })`.
 
 **Commit:** `feat: add LabelPicker`
 

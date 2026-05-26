@@ -12,7 +12,7 @@ function stubRender(panel: Panel) {
 const initial: Panel[] = [
   { kind: 'settings' },
   { kind: 'threadlist', label: 'INBOX' },
-  { kind: 'threadlist', label: 'InboxZero/Snoozed' },
+  { kind: 'threadlist', label: 'idk-inbox/Snoozed' },
 ];
 
 describe('LayoutContainer', () => {
@@ -23,7 +23,7 @@ describe('LayoutContainer', () => {
     expect(sections[0].getAttribute('data-kind')).toBe('settings');
     expect(sections[1].getAttribute('data-kind')).toBe('threadlist');
     expect(sections[1].getAttribute('data-label')).toBe('INBOX');
-    expect(sections[2].getAttribute('data-label')).toBe('InboxZero/Snoozed');
+    expect(sections[2].getAttribute('data-label')).toBe('idk-inbox/Snoozed');
   });
 
   it('inserts a thread panel via the onOpenThread callback', () => {
@@ -54,7 +54,7 @@ describe('LayoutContainer', () => {
       { kind: 'settings' },
       { kind: 'threadlist', label: 'INBOX' },
       { kind: 'thread', threadId: 'tA', sourceLabel: 'INBOX' },
-      { kind: 'threadlist', label: 'InboxZero/Snoozed' },
+      { kind: 'threadlist', label: 'idk-inbox/Snoozed' },
     ];
     render(<LayoutContainer initialPanels={withThread} renderPanel={captureRender} />);
     expect(screen.getByTestId('p-thread-tA')).toBeInTheDocument();
