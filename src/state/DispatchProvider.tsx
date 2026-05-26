@@ -191,16 +191,23 @@ export function DispatchProvider({ children, signedIn = false, initialPanels }: 
     clearStacks,
   }), [undoStack, redoStack, pushUndo, popUndo, pushRedo, popRedo, clearStacks]);
 
-  // Dispatcher ref: undo/redo need to re-dispatch through the wrapping
-  // dispatcher (which handles undo-stack pushes), so we expose it via ref.
+  // Dispatcher ref: external callers (e.g. tests, future App-level utilities)
+  // may reach for the OUTER wrapping dispatcher via this ref. Internal
+  // appActions.redispatch must NOT use the wrapper, since re-dispatching an
+  // inverse would push the inverse's symmetric inverse back onto the undo
+  // stack, making undo infinite.
   const dispatchRef = useRef<((req: DispatchRequest) => Promise<ActionResult>) | null>(null);
+
+  // Inner dispatcher ref: undo/redo re-dispatch through this, bypassing the
+  // undo-stack-push wrapper.
+  const innerDispatchRef = useRef<((req: DispatchRequest) => Promise<ActionResult>) | null>(null);
 
   // Ref-backed accessors live as stable useCallbacks so they don't read refs
   // during render and don't churn the action-factory memos every render.
   const getPanels       = useCallback(() => panelsRef.current, []);
   const getFocusIndex   = useCallback(() => focusIndexRef.current, []);
   const redispatch      = useCallback(async (req: { action: string; args: Record<string, unknown> }): Promise<ActionResult> => {
-    const dispatch = dispatchRef.current;
+    const dispatch = innerDispatchRef.current;
     if (!dispatch) return { ok: false, error: 'Dispatcher not initialised.' };
     return dispatch({ action: req.action, args: req.args, context: ctxRef.current });
   }, []);
@@ -267,8 +274,15 @@ export function DispatchProvider({ children, signedIn = false, initialPanels }: 
     'sign-out':             asAction('sign-out',             'Sign out',        'app',        appActions.signOut),
   }), [layoutActions, selectionActions, appActions]);
 
+  // Inner dispatcher: raw action execution without undo-stack side effects.
+  // appActions.redispatch (used by undo/redo) routes through this so that
+  // re-dispatching an inverse does NOT re-push to the undo stack.
+  const innerDispatcher = useMemo(() => createDispatcher(registry), [registry]);
+
+  // Wrapping dispatcher: handles picker elicitation and pushes undo entries
+  // for successful user-initiated actions with inverses. External callers
+  // (useDispatcher hook consumers) always get this one.
   const dispatcher = useMemo(() => {
-    const inner = createDispatcher(registry);
     return async (req: DispatchRequest): Promise<ActionResult> => {
       const elicit = needsElicitation(registry, req.action, req.args);
       if (elicit) {
@@ -276,7 +290,7 @@ export function DispatchProvider({ children, signedIn = false, initialPanels }: 
         setModeState(elicit);
         return { ok: true, description: 'Picker opened' };
       }
-      const result = await inner(req);
+      const result = await innerDispatcher(req);
       if (result.ok && result.inverse) {
         pushUndo({
           original: { action: req.action, args: req.args, description: result.description },
@@ -285,13 +299,14 @@ export function DispatchProvider({ children, signedIn = false, initialPanels }: 
       }
       return result;
     };
-  }, [registry, pushUndo]);
+  }, [registry, innerDispatcher, pushUndo]);
 
   const pendingState: PendingState = useMemo(() => ({
     pending, setPending,
   }), [pending]);
 
   useEffect(() => { dispatchRef.current = dispatcher; }, [dispatcher]);
+  useEffect(() => { innerDispatchRef.current = innerDispatcher; }, [innerDispatcher]);
 
   return (
     <DispatchContext.Provider value={ctx}>
