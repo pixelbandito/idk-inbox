@@ -1,5 +1,5 @@
 import { useContext } from 'react';
-import { DispatchContext, DispatcherContext } from './dispatchContexts';
+import { DispatchContext, DispatcherContext, UndoStateContext } from './dispatchContexts';
 
 export function useDispatchContext() {
   const ctx = useContext(DispatchContext);
@@ -9,4 +9,10 @@ export function useDispatchContext() {
 
 export function useDispatcher() {
   return useContext(DispatcherContext);
+}
+
+export function useUndoState() {
+  const ctx = useContext(UndoStateContext);
+  if (!ctx) throw new Error('useUndoState called outside <DispatchProvider>.');
+  return ctx;
 }

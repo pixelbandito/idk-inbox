@@ -76,3 +76,8 @@ export interface RegisteredAction<TArgs = Record<string, unknown>> {
 }
 
 export type ActionRegistry = Record<ActionId, RegisteredAction>;
+
+export interface UndoEntry {
+  original: { action: ActionId; args: Record<string, unknown>; description: string };
+  inverse:  ActionInverse;
+}
