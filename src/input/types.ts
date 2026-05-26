@@ -60,3 +60,19 @@ export interface DispatchRequest {
   args:    Record<string, unknown>;
   context: ReadonlyContext;
 }
+
+export type ActionCategory = 'thread-write' | 'layout' | 'app' | 'selection';
+
+export interface RegisteredAction<TArgs = Record<string, unknown>> {
+  id:           ActionId;
+  label:        string;
+  category:     ActionCategory;
+  destructive?: boolean;
+  requiresAuth?: boolean;
+  elicitVia?:   PickerId;
+  /** Optional pure function that produces a context-aware preview string for Cmd-K. */
+  previewFor?:  (ctx: ReadonlyContext, args: Partial<TArgs>) => string;
+  handler:      (args: TArgs, ctx: ReadonlyContext) => Promise<ActionResult>;
+}
+
+export type ActionRegistry = Record<ActionId, RegisteredAction>;
