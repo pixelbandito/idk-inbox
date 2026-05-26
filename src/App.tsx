@@ -5,6 +5,7 @@ import { SettingsPanel } from './panels/SettingsPanel';
 import { ThreadlistPanel } from './panels/ThreadlistPanel';
 import { ThreadPanel } from './panels/ThreadPanel';
 import { ensureAppLabels, SNOOZED_LABEL } from './lib/gmail/labelBootstrap';
+import { DispatchProvider } from './state/DispatchProvider';
 import type { Panel } from './layout/types';
 import './index.css';
 
@@ -69,9 +70,9 @@ export default function App() {
   }
 
   return (
-    <>
+    <DispatchProvider signedIn={signedIn} initialPanels={INITIAL_PANELS}>
       {error && <p className="error">Sign-in error: {error}</p>}
-      <LayoutContainer initialPanels={INITIAL_PANELS} renderPanel={renderPanel} />
-    </>
+      <LayoutContainer renderPanel={renderPanel} />
+    </DispatchProvider>
   );
 }

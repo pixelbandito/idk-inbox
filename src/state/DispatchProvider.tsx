@@ -1,23 +1,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Mode, ReadonlyContext, ThreadRef, UndoEntry } from '../input/types';
+import type { Panel } from '../layout/types';
 import {
   DispatchContext,
   DispatcherContext,
+  LayoutStateContext,
   UndoStateContext,
   noopDispatcher,
+  type LayoutState,
   type UndoState,
 } from './dispatchContexts';
 
 export interface DispatchProviderProps {
   children: ReactNode;
   signedIn?: boolean;
+  initialPanels?: Panel[];
 }
 
-export function DispatchProvider({ children, signedIn = false }: DispatchProviderProps) {
+export function DispatchProvider({ children, signedIn = false, initialPanels }: DispatchProviderProps) {
   const [selection, _setSelection] = useState<ThreadRef[]>([]);
   const [mode, _setMode]           = useState<Mode>('idle');
   const [undoStack, setUndoStack]  = useState<UndoEntry[]>([]);
   const [redoStack, setRedoStack]  = useState<UndoEntry[]>([]);
+
+  const [panels, setPanelsRaw] = useState<Panel[]>(initialPanels ?? []);
+  const defaultFocus = useMemo(() => {
+    const idx = (initialPanels ?? []).findIndex((p) => p.kind !== 'settings');
+    return idx === -1 ? 0 : idx;
+  }, [initialPanels]);
+  const [focusIndex, setFocusIndexRaw] = useState<number>(defaultFocus);
+
+  const setPanels       = useCallback((updater: (p: Panel[]) => Panel[]) => setPanelsRaw(updater), []);
+  const setFocusIndex   = useCallback((updater: (i: number) => number) => setFocusIndexRaw(updater), []);
 
   // Refs mirror the stacks so popUndo/popRedo can return the popped entry
   // synchronously even when React defers the setState updater.
@@ -26,7 +40,9 @@ export function DispatchProvider({ children, signedIn = false }: DispatchProvide
   useEffect(() => { undoRef.current = undoStack; }, [undoStack]);
   useEffect(() => { redoRef.current = redoStack; }, [redoStack]);
 
-  // Layout state added in later tasks.
+  const layoutState: LayoutState = useMemo(() => ({
+    panels, focusIndex, setPanels, setFocusIndex,
+  }), [panels, focusIndex, setPanels, setFocusIndex]);
 
   const ctx: ReadonlyContext = useMemo(() => ({
     focusedPanelIndex: 1,
@@ -95,7 +111,9 @@ export function DispatchProvider({ children, signedIn = false }: DispatchProvide
     <DispatchContext.Provider value={ctx}>
       <DispatcherContext.Provider value={dispatcher}>
         <UndoStateContext.Provider value={undoState}>
-          {children}
+          <LayoutStateContext.Provider value={layoutState}>
+            {children}
+          </LayoutStateContext.Provider>
         </UndoStateContext.Provider>
       </DispatcherContext.Provider>
     </DispatchContext.Provider>

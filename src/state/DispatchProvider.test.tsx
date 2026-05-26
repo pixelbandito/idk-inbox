@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { DispatchProvider } from './DispatchProvider';
-import { useDispatchContext } from './useDispatch';
+import { useDispatchContext, useLayoutState } from './useDispatch';
 
 function Probe() {
   const ctx = useDispatchContext();
@@ -33,5 +33,21 @@ describe('DispatchProvider', () => {
       return null;
     }
     expect(() => render(<Lonely />)).toThrow(/DispatchProvider/);
+  });
+});
+
+function LayoutProbe() {
+  const { panels } = useLayoutState();
+  return <div data-testid="panel-count">{panels.length}</div>;
+}
+
+describe('layout state', () => {
+  it('initialPanels prop populates the layout panels', () => {
+    render(
+      <DispatchProvider initialPanels={[{ kind: 'settings' }, { kind: 'threadlist', label: 'INBOX' }]}>
+        <LayoutProbe />
+      </DispatchProvider>,
+    );
+    expect(screen.getByTestId('panel-count').textContent).toBe('2');
   });
 });
