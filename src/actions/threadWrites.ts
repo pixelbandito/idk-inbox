@@ -50,13 +50,33 @@ export const spamThreadStub = (args: SingleTargetArgs, ctx: ReadonlyContext) =>
   delegate('spam-thread',
     { targets: args.targets, add: ['SPAM'], remove: ['INBOX'] }, ctx, 'Marked as spam');
 
-export const addLabelThreadStub = (args: LabelArgs, ctx: ReadonlyContext) =>
-  delegate('add-label-thread',
-    { targets: args.targets, add: [args.label], remove: [] }, ctx, `Labelled with ${args.label}`);
+export const addLabelThreadStub = async (args: LabelArgs, _ctx: ReadonlyContext): Promise<ActionResult> => {
+  if (args.targets.length === 0) return { ok: false, error: 'No targets specified.' };
+  console.info('[stub:add-label-thread]', args);
+  return {
+    ok: true,
+    description: summarize(args.targets.length, `Labelled with ${args.label}`),
+    inverse: {
+      action: 'modify-thread-labels',
+      args: { targets: args.targets, add: [], remove: [args.label] },
+      description: summarize(args.targets.length, 'Restored'),
+    },
+  };
+};
 
-export const removeLabelThreadStub = (args: LabelArgs, ctx: ReadonlyContext) =>
-  delegate('remove-label-thread',
-    { targets: args.targets, add: [], remove: [args.label] }, ctx, `Removed ${args.label}`);
+export const removeLabelThreadStub = async (args: LabelArgs, _ctx: ReadonlyContext): Promise<ActionResult> => {
+  if (args.targets.length === 0) return { ok: false, error: 'No targets specified.' };
+  console.info('[stub:remove-label-thread]', args);
+  return {
+    ok: true,
+    description: summarize(args.targets.length, `Removed ${args.label}`),
+    inverse: {
+      action: 'modify-thread-labels',
+      args: { targets: args.targets, add: [args.label], remove: [] },
+      description: summarize(args.targets.length, 'Restored'),
+    },
+  };
+};
 
 export interface SnoozeArgs { targets: ThreadRef[]; until?: string; }
 
