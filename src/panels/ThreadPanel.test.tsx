@@ -35,7 +35,7 @@ describe('ThreadPanel', () => {
   it('renders the subject as the header title and each message body', async () => {
     (fetchThread as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(view);
     renderWithProvider(
-      <ThreadPanel threadId="t1" getToken={() => 'tok'} onClose={vi.fn()} />,
+      <ThreadPanel threadId="t1" panelIndex={2} getToken={() => 'tok'} onClose={vi.fn()} />,
     );
     await waitFor(() => screen.getByText('hi there'));
     expect(screen.getByRole('heading', { name: 'Hello' })).toBeInTheDocument();
@@ -45,7 +45,7 @@ describe('ThreadPanel', () => {
   it('calls onClose when the close button is clicked', async () => {
     (fetchThread as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(view);
     const close = vi.fn();
-    renderWithProvider(<ThreadPanel threadId="t1" getToken={() => 'tok'} onClose={close} />);
+    renderWithProvider(<ThreadPanel threadId="t1" panelIndex={2} getToken={() => 'tok'} onClose={close} />);
     await waitFor(() => screen.getByText('hi there'));
     fireEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(close).toHaveBeenCalledTimes(1);
@@ -53,7 +53,7 @@ describe('ThreadPanel', () => {
 
   it('shows an error message when fetch fails', async () => {
     (fetchThread as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Boom'));
-    renderWithProvider(<ThreadPanel threadId="t1" getToken={() => 'tok'} onClose={vi.fn()} />);
+    renderWithProvider(<ThreadPanel threadId="t1" panelIndex={2} getToken={() => 'tok'} onClose={vi.fn()} />);
     await waitFor(() => expect(screen.getByText(/boom/i)).toBeInTheDocument());
   });
 });

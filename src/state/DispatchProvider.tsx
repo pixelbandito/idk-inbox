@@ -43,6 +43,10 @@ export interface DispatchProviderProps {
   children: ReactNode;
   signedIn?: boolean;
   initialPanels?: Panel[];
+  /** Called when a `sign-in` action is dispatched. Defaults to a no-op. */
+  externalSignIn?: () => Promise<void>;
+  /** Called when a `sign-out` action is dispatched. Defaults to a no-op. */
+  externalSignOut?: () => void;
 }
 
 /**
@@ -81,7 +85,13 @@ function asAction(
   };
 }
 
-export function DispatchProvider({ children, signedIn = false, initialPanels }: DispatchProviderProps) {
+export function DispatchProvider({
+  children,
+  signedIn = false,
+  initialPanels,
+  externalSignIn: externalSignInProp,
+  externalSignOut: externalSignOutProp,
+}: DispatchProviderProps) {
   const [selection, setSelectionState] = useState<ThreadRef[]>([]);
   const [mode, setModeState]           = useState<Mode>('idle');
   const [undoStack, setUndoStack]      = useState<UndoEntry[]>([]);
@@ -211,8 +221,21 @@ export function DispatchProvider({ children, signedIn = false, initialPanels }: 
     if (!dispatch) return { ok: false, error: 'Dispatcher not initialised.' };
     return dispatch({ action: req.action, args: req.args, context: ctxRef.current });
   }, []);
-  const externalSignIn  = useCallback(async () => {}, []);
-  const externalSignOut = useCallback(() => {}, []);
+  // Mirror the external sign-in/sign-out props through refs so callers can swap
+  // implementations without resubscribing the action factories.
+  const externalSignInRef  = useRef<(() => Promise<void>) | undefined>(externalSignInProp);
+  const externalSignOutRef = useRef<(() => void) | undefined>(externalSignOutProp);
+  useEffect(() => { externalSignInRef.current  = externalSignInProp;  }, [externalSignInProp]);
+  useEffect(() => { externalSignOutRef.current = externalSignOutProp; }, [externalSignOutProp]);
+
+  const externalSignIn  = useCallback(async () => {
+    const fn = externalSignInRef.current;
+    if (fn) await fn();
+  }, []);
+  const externalSignOut = useCallback(() => {
+    const fn = externalSignOutRef.current;
+    if (fn) fn();
+  }, []);
 
   const selectionActions = createSelectionActions({ setMode, setSelection });
 
@@ -236,7 +259,7 @@ export function DispatchProvider({ children, signedIn = false, initialPanels }: 
     popRedo,
     pushUndo,
     pushRedo,
-    // No-ops for Part 1; App.tsx will wire real callbacks in Task 23.
+    // Wired via DispatchProvider's externalSignIn/externalSignOut props.
     externalSignIn,
     externalSignOut,
     redispatch,
