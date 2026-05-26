@@ -1,37 +1,21 @@
-import { useRef, type PointerEvent, type ReactNode } from 'react';
-
-const SWIPE_THRESHOLD_PX = 60;
+import { useRef, type ReactNode } from 'react';
+import { useGestureBindings } from '../input/useGestureBindings';
 
 export interface PanelHeaderProps {
   title: string;
-  onSwipeLeft: () => void;
-  onSwipeRight: () => void;
   actions?: ReactNode;
 }
 
-export function PanelHeader({ title, onSwipeLeft, onSwipeRight, actions }: PanelHeaderProps) {
-  const startX = useRef<number | null>(null);
-
-  function handleDown(e: PointerEvent<HTMLElement>) {
-    startX.current = e.clientX;
-  }
-
-  function handleUp(e: PointerEvent<HTMLElement>) {
-    if (startX.current === null) return;
-    const dx = e.clientX - startX.current;
-    startX.current = null;
-    if (Math.abs(dx) < SWIPE_THRESHOLD_PX) return;
-    if (dx < 0) onSwipeLeft();
-    else onSwipeRight();
-  }
+export function PanelHeader({ title, actions }: PanelHeaderProps) {
+  const ref = useRef<HTMLElement>(null);
+  useGestureBindings('panel-header', ref);
 
   return (
     <header
+      ref={ref}
       className="panel__header"
       role="banner"
-      onPointerDown={handleDown}
-      onPointerUp={handleUp}
-      onPointerCancel={() => { startX.current = null; }}
+      style={{ touchAction: 'pan-y' }}
     >
       <h2 className="panel__title">{title}</h2>
       {actions && <div className="panel__actions">{actions}</div>}

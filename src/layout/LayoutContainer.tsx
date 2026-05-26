@@ -5,8 +5,6 @@ import { useLayoutState } from '../state/useDispatch';
 export interface PanelRenderProps {
   onOpenThread: (sourceLabel: string, threadId: string) => void;
   onClose: () => void;
-  onSwipeLeft: () => void;
-  onSwipeRight: () => void;
 }
 
 export interface LayoutContainerProps {
@@ -55,8 +53,6 @@ export function LayoutContainer({ renderPanel }: LayoutContainerProps) {
           {renderPanel(panel, i, {
             onOpenThread: noop,
             onClose: noop,
-            onSwipeLeft: noop,
-            onSwipeRight: noop,
           })}
         </section>
       ))}

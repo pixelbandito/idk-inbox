@@ -4,20 +4,12 @@ export interface SettingsPanelProps {
   signedIn: boolean;
   onSignIn: () => void;
   onSignOut: () => void;
-  onSwipeLeft?: () => void;
-  onSwipeRight?: () => void;
 }
 
-export function SettingsPanel({
-  signedIn,
-  onSignIn,
-  onSignOut,
-  onSwipeLeft = () => {},
-  onSwipeRight = () => {},
-}: SettingsPanelProps) {
+export function SettingsPanel({ signedIn, onSignIn, onSignOut }: SettingsPanelProps) {
   return (
     <>
-      <PanelHeader title="Settings" onSwipeLeft={onSwipeLeft} onSwipeRight={onSwipeRight} />
+      <PanelHeader title="Settings" />
       <div className="panel__body" style={{ padding: '1rem' }}>
         {signedIn ? (
           <>

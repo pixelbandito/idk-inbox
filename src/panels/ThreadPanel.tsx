@@ -6,16 +6,12 @@ export interface ThreadPanelProps {
   threadId: string;
   getToken: () => string | null;
   onClose: () => void;
-  onSwipeLeft?: () => void;
-  onSwipeRight?: () => void;
 }
 
 export function ThreadPanel({
   threadId,
   getToken,
   onClose,
-  onSwipeLeft = () => {},
-  onSwipeRight = () => {},
 }: ThreadPanelProps) {
   const [view, setView] = useState<ThreadView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +36,6 @@ export function ThreadPanel({
     <>
       <PanelHeader
         title={view?.subject ?? ''}
-        onSwipeLeft={onSwipeLeft}
-        onSwipeRight={onSwipeRight}
         actions={<button onClick={onClose} aria-label="Close thread">×</button>}
       />
       <div className="panel__body">

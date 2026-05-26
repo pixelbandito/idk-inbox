@@ -41,8 +41,6 @@ export default function App() {
           signedIn={signedIn}
           onSignIn={signIn}
           onSignOut={signOut}
-          onSwipeLeft={props.onSwipeLeft}
-          onSwipeRight={props.onSwipeRight}
         />
       );
     }
@@ -52,8 +50,6 @@ export default function App() {
           label={panel.label}
           displayName={displayName(panel.label)}
           getToken={getToken}
-          onSwipeLeft={props.onSwipeLeft}
-          onSwipeRight={props.onSwipeRight}
         />
       );
     }
@@ -62,8 +58,6 @@ export default function App() {
         threadId={panel.threadId}
         getToken={getToken}
         onClose={props.onClose}
-        onSwipeLeft={props.onSwipeLeft}
-        onSwipeRight={props.onSwipeRight}
       />
     );
   }

@@ -9,8 +9,6 @@ export interface ThreadlistPanelProps {
   label: string;
   displayName: string;
   getToken: () => string | null;
-  onSwipeLeft?: () => void;
-  onSwipeRight?: () => void;
 }
 
 function Row({ email, isSelected }: { email: EmailSummary; isSelected: boolean }) {
@@ -36,8 +34,6 @@ export function ThreadlistPanel({
   label,
   displayName,
   getToken,
-  onSwipeLeft = () => {},
-  onSwipeRight = () => {},
 }: ThreadlistPanelProps) {
   const [emails, setEmails] = useState<EmailSummary[]>([]);
   const [failed, setFailed] = useState(0);
@@ -76,7 +72,7 @@ export function ThreadlistPanel({
   if (!token) {
     return (
       <>
-        <PanelHeader title={displayName} onSwipeLeft={onSwipeLeft} onSwipeRight={onSwipeRight} />
+        <PanelHeader title={displayName} />
         <div className="panel__body" style={{ padding: '1rem' }}>
           <p>Sign in to view this panel.</p>
         </div>
@@ -88,8 +84,6 @@ export function ThreadlistPanel({
     <>
       <PanelHeader
         title={displayName}
-        onSwipeLeft={onSwipeLeft}
-        onSwipeRight={onSwipeRight}
         actions={
           <button onClick={() => void load()} disabled={loading} aria-label="Refresh">
             {loading ? '…' : '↻'}

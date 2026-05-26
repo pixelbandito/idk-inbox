@@ -1,46 +1,34 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import { PanelHeader } from './PanelHeader';
+import { DispatchProvider } from '../state/DispatchProvider';
+import type { Panel } from './types';
+
+const initialPanels: Panel[] = [
+  { kind: 'settings' },
+  { kind: 'threadlist', label: 'INBOX' },
+  { kind: 'threadlist', label: 'idk-inbox/Snoozed' },
+];
 
 describe('PanelHeader', () => {
   it('renders the title', () => {
-    render(<PanelHeader title="Inbox" onSwipeLeft={() => {}} onSwipeRight={() => {}} />);
+    render(
+      <DispatchProvider initialPanels={initialPanels}>
+        <PanelHeader title="Inbox" />
+      </DispatchProvider>,
+    );
     expect(screen.getByRole('heading', { name: 'Inbox' })).toBeInTheDocument();
   });
 
-  it('fires onSwipeLeft when the user drags far enough leftward', () => {
-    const left = vi.fn();
-    const right = vi.fn();
-    render(<PanelHeader title="Inbox" onSwipeLeft={left} onSwipeRight={right} />);
-    const header = screen.getByRole('banner');
-    fireEvent.pointerDown(header, { clientX: 300, pointerId: 1 });
-    fireEvent.pointerMove(header, { clientX: 100, pointerId: 1 });
-    fireEvent.pointerUp(header, { clientX: 100, pointerId: 1 });
-    expect(left).toHaveBeenCalledTimes(1);
-    expect(right).not.toHaveBeenCalled();
+  it('renders actions when provided', () => {
+    render(
+      <DispatchProvider initialPanels={initialPanels}>
+        <PanelHeader title="Inbox" actions={<button>Refresh</button>} />
+      </DispatchProvider>,
+    );
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
   });
 
-  it('fires onSwipeRight when the user drags far enough rightward', () => {
-    const left = vi.fn();
-    const right = vi.fn();
-    render(<PanelHeader title="Inbox" onSwipeLeft={left} onSwipeRight={right} />);
-    const header = screen.getByRole('banner');
-    fireEvent.pointerDown(header, { clientX: 100, pointerId: 1 });
-    fireEvent.pointerMove(header, { clientX: 300, pointerId: 1 });
-    fireEvent.pointerUp(header, { clientX: 300, pointerId: 1 });
-    expect(right).toHaveBeenCalledTimes(1);
-    expect(left).not.toHaveBeenCalled();
-  });
-
-  it('does not fire when the drag is below threshold', () => {
-    const left = vi.fn();
-    const right = vi.fn();
-    render(<PanelHeader title="Inbox" onSwipeLeft={left} onSwipeRight={right} />);
-    const header = screen.getByRole('banner');
-    fireEvent.pointerDown(header, { clientX: 100, pointerId: 1 });
-    fireEvent.pointerMove(header, { clientX: 130, pointerId: 1 });
-    fireEvent.pointerUp(header, { clientX: 130, pointerId: 1 });
-    expect(left).not.toHaveBeenCalled();
-    expect(right).not.toHaveBeenCalled();
-  });
+  // Note: integration of swipe -> focus change via the binding system is
+  // covered by the useGestureBindings tests and higher-level layout tests.
 });
