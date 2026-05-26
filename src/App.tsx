@@ -52,7 +52,6 @@ export default function App() {
           label={panel.label}
           displayName={displayName(panel.label)}
           getToken={getToken}
-          onOpenThread={props.onOpenThread}
           onSwipeLeft={props.onSwipeLeft}
           onSwipeRight={props.onSwipeRight}
         />

@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { PanelHeader } from '../layout/PanelHeader';
+import { useGestureBindings } from '../input/useGestureBindings';
+import { useDispatchContext } from '../state/useDispatch';
 import { fetchByLabel } from '../lib/gmail/fetchByLabel';
 import type { EmailSummary } from '../lib/gmail/types';
 
@@ -7,16 +9,33 @@ export interface ThreadlistPanelProps {
   label: string;
   displayName: string;
   getToken: () => string | null;
-  onOpenThread: (sourceLabel: string, threadId: string) => void;
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
+}
+
+function Row({ email, isSelected }: { email: EmailSummary; isSelected: boolean }) {
+  const ref = useRef<HTMLLIElement>(null);
+  useGestureBindings('row', ref);
+  const className = [
+    'email',
+    email.unread ? 'email--unread' : null,
+    isSelected ? 'email--selected' : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return (
+    <li ref={ref} data-thread-id={email.threadId} className={className}>
+      <span className="email__from">{email.from}</span>
+      <span className="email__subject">{email.subject}</span>
+      <span className="email__snippet">{email.snippet}</span>
+    </li>
+  );
 }
 
 export function ThreadlistPanel({
   label,
   displayName,
   getToken,
-  onOpenThread,
   onSwipeLeft = () => {},
   onSwipeRight = () => {},
 }: ThreadlistPanelProps) {
@@ -24,6 +43,8 @@ export function ThreadlistPanel({
   const [failed, setFailed] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const ctx = useDispatchContext();
+  const selectionSet = new Set(ctx.selection);
 
   const load = useCallback(async () => {
     const token = getToken();
@@ -89,15 +110,7 @@ export function ThreadlistPanel({
         ) : (
           <ul className="inbox-list">
             {emails.map((e) => (
-              <li
-                key={e.id}
-                className={e.unread ? 'email email--unread' : 'email'}
-                onClick={() => onOpenThread(label, e.threadId)}
-              >
-                <span className="email__from">{e.from}</span>
-                <span className="email__subject">{e.subject}</span>
-                <span className="email__snippet">{e.snippet}</span>
-              </li>
+              <Row key={e.id} email={e} isSelected={selectionSet.has(e.threadId)} />
             ))}
           </ul>
         )}
