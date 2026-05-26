@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type {
   ActionCategory,
+  ActionId,
   ActionRegistry,
   ActionResult,
   DispatchRequest,
@@ -30,8 +31,11 @@ import {
   DispatchContext,
   DispatcherContext,
   LayoutStateContext,
+  PendingStateContext,
   UndoStateContext,
   type LayoutState,
+  type PendingRequest,
+  type PendingState,
   type UndoState,
 } from './dispatchContexts';
 
@@ -39,6 +43,24 @@ export interface DispatchProviderProps {
   children: ReactNode;
   signedIn?: boolean;
   initialPanels?: Panel[];
+}
+
+/**
+ * Returns the picker mode if the action declares `elicitVia` and the
+ * elicitable arg is missing; otherwise null. Encodes the per-picker arg
+ * requirement: snooze-thread needs `until`; add/remove-label-thread need
+ * `label`.
+ */
+function needsElicitation(
+  registry: ActionRegistry,
+  actionId: ActionId,
+  args: Record<string, unknown>,
+): PickerId | null {
+  const action = registry[actionId];
+  if (!action || !action.elicitVia) return null;
+  if (action.elicitVia === 'picker-snooze' && args.until == null) return 'picker-snooze';
+  if (action.elicitVia === 'picker-label' && args.label == null) return 'picker-label';
+  return null;
 }
 
 function asAction(
@@ -64,6 +86,7 @@ export function DispatchProvider({ children, signedIn = false, initialPanels }: 
   const [mode, setModeState]           = useState<Mode>('idle');
   const [undoStack, setUndoStack]      = useState<UndoEntry[]>([]);
   const [redoStack, setRedoStack]      = useState<UndoEntry[]>([]);
+  const [pending, setPending]          = useState<PendingRequest | null>(null);
 
   const [panels, setPanelsRaw] = useState<Panel[]>(initialPanels ?? []);
   const defaultFocus = useMemo(() => {
@@ -247,6 +270,12 @@ export function DispatchProvider({ children, signedIn = false, initialPanels }: 
   const dispatcher = useMemo(() => {
     const inner = createDispatcher(registry);
     return async (req: DispatchRequest): Promise<ActionResult> => {
+      const elicit = needsElicitation(registry, req.action, req.args);
+      if (elicit) {
+        setPending({ action: req.action, args: req.args });
+        setModeState(elicit);
+        return { ok: true, description: 'Picker opened' };
+      }
       const result = await inner(req);
       if (result.ok && result.inverse) {
         pushUndo({
@@ -258,6 +287,10 @@ export function DispatchProvider({ children, signedIn = false, initialPanels }: 
     };
   }, [registry, pushUndo]);
 
+  const pendingState: PendingState = useMemo(() => ({
+    pending, setPending,
+  }), [pending]);
+
   useEffect(() => { dispatchRef.current = dispatcher; }, [dispatcher]);
 
   return (
@@ -265,7 +298,9 @@ export function DispatchProvider({ children, signedIn = false, initialPanels }: 
       <DispatcherContext.Provider value={dispatcher}>
         <UndoStateContext.Provider value={undoState}>
           <LayoutStateContext.Provider value={layoutState}>
-            {children}
+            <PendingStateContext.Provider value={pendingState}>
+              {children}
+            </PendingStateContext.Provider>
           </LayoutStateContext.Provider>
         </UndoStateContext.Provider>
       </DispatcherContext.Provider>

@@ -1,5 +1,5 @@
 import { createContext } from 'react';
-import type { ReadonlyContext, DispatchRequest, ActionResult, UndoEntry } from '../input/types';
+import type { ActionId, ReadonlyContext, DispatchRequest, ActionResult, UndoEntry } from '../input/types';
 import type { Panel } from '../layout/types';
 
 export const noopDispatcher = async (_req: DispatchRequest): Promise<ActionResult> => ({
@@ -46,3 +46,17 @@ const noopLayoutState: LayoutState = {
 };
 
 export const LayoutStateContext = createContext<LayoutState>(noopLayoutState);
+
+export interface PendingRequest {
+  action: ActionId;
+  args:   Record<string, unknown>;
+}
+
+export interface PendingState {
+  pending: PendingRequest | null;
+  setPending: (req: PendingRequest | null) => void;
+}
+
+const noopPendingState: PendingState = { pending: null, setPending: () => {} };
+
+export const PendingStateContext = createContext<PendingState>(noopPendingState);
