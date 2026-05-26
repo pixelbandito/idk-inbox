@@ -1,12 +1,36 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { Mode, ReadonlyContext, ThreadRef, UndoEntry } from '../input/types';
+import type {
+  ActionCategory,
+  ActionRegistry,
+  ActionResult,
+  DispatchRequest,
+  Mode,
+  PickerId,
+  ReadonlyContext,
+  RegisteredAction,
+  ThreadRef,
+  UndoEntry,
+} from '../input/types';
 import type { Panel } from '../layout/types';
+import {
+  modifyThreadLabelsStub,
+  archiveThreadStub,
+  deleteThreadStub,
+  spamThreadStub,
+  addLabelThreadStub,
+  removeLabelThreadStub,
+  snoozeThreadStub,
+  unsubscribeThreadStub,
+} from '../actions/threadWrites';
+import { createSelectionActions } from '../actions/selection';
+import { createLayoutActions } from '../actions/layout';
+import { createAppActions } from '../actions/app';
+import { createDispatcher } from '../input/dispatch';
 import {
   DispatchContext,
   DispatcherContext,
   LayoutStateContext,
   UndoStateContext,
-  noopDispatcher,
   type LayoutState,
   type UndoState,
 } from './dispatchContexts';
@@ -17,11 +41,29 @@ export interface DispatchProviderProps {
   initialPanels?: Panel[];
 }
 
+function asAction(
+  id: string,
+  label: string,
+  category: ActionCategory,
+  // The dispatcher passes args as Record<string, unknown>; per-handler signatures
+  // are narrower for ergonomics. The cast happens here at the boundary.
+  handler: (args: never, ctx: ReadonlyContext) => Promise<ActionResult>,
+  opts: { requiresAuth?: boolean; destructive?: boolean; elicitVia?: PickerId } = {},
+): RegisteredAction {
+  return {
+    id,
+    label,
+    category,
+    handler: handler as RegisteredAction['handler'],
+    ...opts,
+  };
+}
+
 export function DispatchProvider({ children, signedIn = false, initialPanels }: DispatchProviderProps) {
-  const [selection, _setSelection] = useState<ThreadRef[]>([]);
-  const [mode, _setMode]           = useState<Mode>('idle');
-  const [undoStack, setUndoStack]  = useState<UndoEntry[]>([]);
-  const [redoStack, setRedoStack]  = useState<UndoEntry[]>([]);
+  const [selection, setSelectionState] = useState<ThreadRef[]>([]);
+  const [mode, setModeState]           = useState<Mode>('idle');
+  const [undoStack, setUndoStack]      = useState<UndoEntry[]>([]);
+  const [redoStack, setRedoStack]      = useState<UndoEntry[]>([]);
 
   const [panels, setPanelsRaw] = useState<Panel[]>(initialPanels ?? []);
   const defaultFocus = useMemo(() => {
@@ -30,8 +72,18 @@ export function DispatchProvider({ children, signedIn = false, initialPanels }: 
   }, [initialPanels]);
   const [focusIndex, setFocusIndexRaw] = useState<number>(defaultFocus);
 
-  const setPanels       = useCallback((updater: (p: Panel[]) => Panel[]) => setPanelsRaw(updater), []);
-  const setFocusIndex   = useCallback((updater: (i: number) => number) => setFocusIndexRaw(updater), []);
+  const setPanels     = useCallback((updater: (p: Panel[]) => Panel[]) => setPanelsRaw(updater), []);
+  const setFocusIndex = useCallback((updater: (i: number) => number) => setFocusIndexRaw(updater), []);
+
+  // Plain value setters matching the factory signatures.
+  const setMode      = useCallback((m: Mode) => setModeState(m), []);
+  const setSelection = useCallback((sel: ThreadRef[]) => setSelectionState(sel), []);
+
+  // Refresh counter map for panels. bumpRefresh increments the counter for a key.
+  const [, setRefreshCounters] = useState<Record<string, number>>({});
+  const bumpRefresh = useCallback((key: string) => {
+    setRefreshCounters((c) => ({ ...c, [key]: (c[key] ?? 0) + 1 }));
+  }, []);
 
   // Refs mirror the stacks so popUndo/popRedo can return the popped entry
   // synchronously even when React defers the setState updater.
@@ -39,6 +91,13 @@ export function DispatchProvider({ children, signedIn = false, initialPanels }: 
   const redoRef = useRef<UndoEntry[]>(redoStack);
   useEffect(() => { undoRef.current = undoStack; }, [undoStack]);
   useEffect(() => { redoRef.current = redoStack; }, [redoStack]);
+
+  // Refs mirror panels / focusIndex so action handlers can read the latest
+  // values without depending on closures.
+  const panelsRef     = useRef<Panel[]>(panels);
+  const focusIndexRef = useRef<number>(focusIndex);
+  useEffect(() => { panelsRef.current = panels; }, [panels]);
+  useEffect(() => { focusIndexRef.current = focusIndex; }, [focusIndex]);
 
   const layoutState: LayoutState = useMemo(() => ({
     panels, focusIndex, setPanels, setFocusIndex,
@@ -52,6 +111,11 @@ export function DispatchProvider({ children, signedIn = false, initialPanels }: 
     mode,
     signedIn,
   }), [selection, mode, signedIn]);
+
+  // Mirror ctx in a ref so the redispatch indirection in undo/redo can pass
+  // the latest context without depending on stale closures.
+  const ctxRef = useRef<ReadonlyContext>(ctx);
+  useEffect(() => { ctxRef.current = ctx; }, [ctx]);
 
   const pushUndo = useCallback((entry: UndoEntry) => {
     const next = [...undoRef.current, entry];
@@ -104,8 +168,97 @@ export function DispatchProvider({ children, signedIn = false, initialPanels }: 
     clearStacks,
   }), [undoStack, redoStack, pushUndo, popUndo, pushRedo, popRedo, clearStacks]);
 
-  // Real dispatcher wired in Task 12. For now: noop.
-  const dispatcher = noopDispatcher;
+  // Dispatcher ref: undo/redo need to re-dispatch through the wrapping
+  // dispatcher (which handles undo-stack pushes), so we expose it via ref.
+  const dispatchRef = useRef<((req: DispatchRequest) => Promise<ActionResult>) | null>(null);
+
+  // Ref-backed accessors live as stable useCallbacks so they don't read refs
+  // during render and don't churn the action-factory memos every render.
+  const getPanels       = useCallback(() => panelsRef.current, []);
+  const getFocusIndex   = useCallback(() => focusIndexRef.current, []);
+  const redispatch      = useCallback(async (req: { action: string; args: Record<string, unknown> }): Promise<ActionResult> => {
+    const dispatch = dispatchRef.current;
+    if (!dispatch) return { ok: false, error: 'Dispatcher not initialised.' };
+    return dispatch({ action: req.action, args: req.args, context: ctxRef.current });
+  }, []);
+  const externalSignIn  = useCallback(async () => {}, []);
+  const externalSignOut = useCallback(() => {}, []);
+
+  const selectionActions = createSelectionActions({ setMode, setSelection });
+
+  // The getPanels/getFocusIndex/redispatch callbacks read refs only when
+  // invoked at action-dispatch time, never during render. The lint rule's
+  // static analysis cannot see through useCallback, so disable for these.
+  // eslint-disable-next-line react-hooks/refs
+  const layoutActions = createLayoutActions({
+    setPanels,
+    setFocusIndex,
+    getPanels,
+    getFocusIndex,
+    bumpRefresh,
+  });
+
+  // eslint-disable-next-line react-hooks/refs
+  const appActions = createAppActions({
+    setMode,
+    clearStacks,
+    popUndo,
+    popRedo,
+    pushUndo,
+    pushRedo,
+    // No-ops for Part 1; App.tsx will wire real callbacks in Task 23.
+    externalSignIn,
+    externalSignOut,
+    redispatch,
+  });
+
+  const registry: ActionRegistry = useMemo(() => ({
+    // Thread-write stubs:
+    'modify-thread-labels': asAction('modify-thread-labels', 'Modify labels',  'thread-write', modifyThreadLabelsStub, { requiresAuth: true }),
+    'archive-thread':       asAction('archive-thread',       'Archive',        'thread-write', archiveThreadStub,      { requiresAuth: true }),
+    'delete-thread':        asAction('delete-thread',        'Delete',         'thread-write', deleteThreadStub,       { requiresAuth: true, destructive: true }),
+    'spam-thread':          asAction('spam-thread',          'Mark as spam',   'thread-write', spamThreadStub,         { requiresAuth: true, destructive: true }),
+    'add-label-thread':     asAction('add-label-thread',     'Apply label',    'thread-write', addLabelThreadStub,     { requiresAuth: true, elicitVia: 'picker-label' }),
+    'remove-label-thread':  asAction('remove-label-thread',  'Remove label',   'thread-write', removeLabelThreadStub,  { requiresAuth: true, elicitVia: 'picker-label' }),
+    'snooze-thread':        asAction('snooze-thread',        'Snooze',         'thread-write', snoozeThreadStub,       { requiresAuth: true, elicitVia: 'picker-snooze' }),
+    'unsubscribe-thread':   asAction('unsubscribe-thread',   'Unsubscribe',    'thread-write', unsubscribeThreadStub,  { requiresAuth: true, destructive: true }),
+
+    // Layout (real):
+    'open-panel':           asAction('open-panel',           'Open thread',    'layout',       layoutActions.openPanel),
+    'close-panel':          asAction('close-panel',          'Close panel',    'layout',       layoutActions.closePanel),
+    'nav-panel-prev':       asAction('nav-panel-prev',       'Previous panel', 'layout',       layoutActions.navPanelPrev),
+    'nav-panel-next':       asAction('nav-panel-next',       'Next panel',     'layout',       layoutActions.navPanelNext),
+    'refresh-panel':        asAction('refresh-panel',        'Refresh',        'layout',       layoutActions.refreshPanel),
+
+    // Selection:
+    'enter-selection':      asAction('enter-selection',      'Select',           'selection', selectionActions.enterSelection),
+    'exit-selection':       asAction('exit-selection',       'Exit selection',   'selection', selectionActions.exitSelection),
+    'toggle-selection':     asAction('toggle-selection',     'Toggle selection', 'selection', selectionActions.toggleSelection),
+
+    // App:
+    'undo':                 asAction('undo',                 'Undo',            'app',        appActions.undo),
+    'redo':                 asAction('redo',                 'Redo',            'app',        appActions.redo),
+    'open-command-palette': asAction('open-command-palette', 'Command palette', 'app',        appActions.openCommandPalette),
+    'exit-mode':            asAction('exit-mode',            'Cancel',          'app',        appActions.exitMode),
+    'sign-in':              asAction('sign-in',              'Sign in',         'app',        appActions.signIn),
+    'sign-out':             asAction('sign-out',             'Sign out',        'app',        appActions.signOut),
+  }), [layoutActions, selectionActions, appActions]);
+
+  const dispatcher = useMemo(() => {
+    const inner = createDispatcher(registry);
+    return async (req: DispatchRequest): Promise<ActionResult> => {
+      const result = await inner(req);
+      if (result.ok && result.inverse) {
+        pushUndo({
+          original: { action: req.action, args: req.args, description: result.description },
+          inverse: result.inverse,
+        });
+      }
+      return result;
+    };
+  }, [registry, pushUndo]);
+
+  useEffect(() => { dispatchRef.current = dispatcher; }, [dispatcher]);
 
   return (
     <DispatchContext.Provider value={ctx}>
