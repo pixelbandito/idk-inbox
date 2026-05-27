@@ -65,6 +65,10 @@ export function useGesture(
       startX = ev.clientX;
       startY = ev.clientY;
       startT = Date.now();
+      // Capture the pointer so subsequent move/up events fire on this element
+      // even if the cursor leaves its bounds. Without this, horizontal mouse
+      // drags are eaten by the panel container's scroll-snap.
+      try { el.setPointerCapture(ev.pointerId); } catch { /* not supported in some test envs */ }
 
       const o = optsRef.current;
       if (o.onLongPress) {
@@ -125,6 +129,7 @@ export function useGesture(
       if (ev.pointerId === pointerId) {
         clearLongPress();
         pointerId = null;
+        try { el.releasePointerCapture(ev.pointerId); } catch { /* not held */ }
       }
     };
 
