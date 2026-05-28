@@ -48,6 +48,14 @@ export function useGestureBindings(scope: Scope, ref: RefObject<HTMLElement | nu
         x.trigger.kind === 'swipe' && x.trigger.direction === e.direction &&
         Math.abs(e.direction === 'left' || e.direction === 'right' ? e.dx : e.dy) >= x.trigger.minPx,
       );
+      // TEMP DIAGNOSTIC
+      console.info('[bind:swipe]', {
+        direction: e.direction, dx: e.dx, dy: e.dy,
+        scopeBindings: touchBindings.filter((x) => x.trigger.kind === 'swipe').length,
+        matched: b ? { action: b.action, defaultMinPx: b.trigger.kind === 'swipe' ? b.trigger.minPx : null } : null,
+        ctxMode: ctx.mode,
+        ctxSelectionLen: ctx.selection.length,
+      });
       if (!b) return;
       const action = pickSwipeStageAction(b, e);
       // Override the binding's action with the stage-picked one:
