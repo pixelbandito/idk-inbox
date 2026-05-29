@@ -1,0 +1,40 @@
+:root {
+  /* Colors */
+  --isThemeLight: false;
+  --isThemeDark: false;
+  --colorScheme: normal;
+  
+  /* Generic sizes */
+  --baseSize: 1rem;
+  --borderSize: 1px;
+
+  /* Fonts */
+  --fontFamily: system-ui, sans-serif;
+  --lineHeight: 1.5;
+
+  /* Map color preferences to themes */
+  @media (prefers-color-scheme: light) {
+    --isThemeLight: true;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    --isThemeDark: true;
+  }
+}
+
+@container theme style(--isThemeLight: true) {
+  body {
+    /* --backgroundColor: #F4F5FA; */
+    --backgroundColor: lightblue;
+    --foregroundColor: #16161d;
+    --colorScheme: light dark;
+  }
+}
+
+@container theme style(--isThemeDark: true) {
+  body {
+    --backgroundColor: #16161d;
+    --foregroundColor: #F4F5FA;
+    --colorScheme: dark light;
+  }
+}

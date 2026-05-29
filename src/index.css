@@ -1,97 +1,108 @@
-:root {
-  font-family: system-ui, sans-serif;
-  line-height: 1.5;
-  color-scheme: light;
-}
+@layer reset, themes, app;
 
-* { box-sizing: border-box; }
+@import "./reset.css" layer(reset);
+@import "./theme.css" layer(themes);
 
-body { margin: 0; }
+@layer app {
+  :root {
+    font-family: var(--fontFamily);
+    line-height: var(--lineHeight);
+    color-scheme: var(--colorScheme);
+    container-type: normal;
+    container-name: theme;
+  }
 
-/* ----- Layout primitive ----- */
+  body {
+    background-color: var(--backgroundColor);
+    color: var(--foregroundColor);
+  }
 
-.panels {
-  display: flex;
-  flex-direction: row;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scroll-behavior: smooth;
-  height: 100dvh;
-}
+  /* ----- Layout primitive ----- */
 
-.panel {
-  flex: 0 0 var(--w, 100dvw);
-  scroll-snap-align: start;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  border-right: 1px solid #eee;
-}
+  .panels {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    scroll-snap-type: inline mandatory;
+    scroll-behavior: smooth;
+    scroll-snap-stop: always;
+    height: 100dvh;
+  }
 
-.panel__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #eee;
-  background: #fafafa;
-  touch-action: pan-y;
-  user-select: none;
-}
+  .panel {
+    flex: 0 0 var(--w, 100dvw);
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-right: var(--borderSize) solid #eee;
+  }
 
-.panel__title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-}
+  .panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-bottom: var(--borderSize) solid #eee;
+    background: var(--backgroundColor);
+    touch-action: pan-y pinch-zoom;
+    user-select: none;
+  }
 
-.panel__actions {
-  display: flex;
-  gap: 0.5rem;
-}
+  .panel__title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+  }
 
-.panel__body {
-  flex: 1;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-  min-height: 0;
-}
+  .panel__actions {
+    display: flex;
+    gap: 0.5rem;
+  }
 
-@media (min-width: 768px) {
-  .panel { --w: 420px; }
-  .panel[data-kind="thread"] { --w: 560px; }
-}
+  .panel__body {
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    min-height: 0;
+  }
 
-/* ----- Inbox list rows (carried from 0a) ----- */
+  @media (min-width: 768px) {
+    .panel { --w: 420px; }
+    .panel[data-kind="thread"] { --w: 560px; }
+  }
 
-.inbox-list { list-style: none; padding: 0; margin: 0; }
-.email {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  padding: 0.75rem 0.75rem;
-  border-bottom: 1px solid #eee;
-}
-.email--unread { font-weight: 600; background: #f6f9ff; }
-.email__from { font-size: 0.85rem; color: #555; }
-.email__snippet { font-size: 0.85rem; color: #888; }
+  /* ----- Inbox list rows (carried from 0a) ----- */
 
-.error { color: #c0392b; padding: 0 1rem; }
+  .inbox-list { list-style: none; padding: 0; margin: 0; }
+  .email {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.75rem 0.75rem;
+    border-bottom: var(--borderSize) solid #eee;
+  }
+  .email--unread { font-weight: 600; background: #f6f9ff; }
+  .email__from { font-size: 0.85rem; color: #555; }
+  .email__snippet { font-size: 0.85rem; color: #888; }
 
-/* ----- Stash column (Task 13) ----- */
+  .error { color: #c0392b; padding: 0 1rem; }
 
-.stash-column {
-  flex: 0 0 44px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: #f3f3f3;
-  border-right: 1px solid #ddd;
-  font-size: 0.85rem;
-  color: #555;
-  cursor: pointer;
-}
-.stash-column__count {
-  font-weight: 600;
+  /* ----- Stash column (Task 13) ----- */
+
+  .stash-column {
+    flex: 0 0 44px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #f3f3f3;
+    border-right: var(--borderSize) solid #ddd;
+    font-size: 0.85rem;
+    color: #555;
+    cursor: pointer;
+  }
+  .stash-column__count {
+    font-weight: 600;
+  }
 }
