@@ -35,20 +35,7 @@ export async function fireBinding(
   ctx: ReadonlyContext,
   dispatch: DispatchFn,
 ): Promise<ActionResult | null> {
-  const whenOk = evaluateWhen(binding.when, ctx);
-  // TEMP DIAGNOSTIC
-  console.info('[fire]', {
-    action: binding.action,
-    when: binding.when ?? null,
-    whenOk,
-    ctxMode: ctx.mode,
-    ctxSelectionLen: ctx.selection.length,
-    ctxSignedIn: ctx.signedIn,
-  });
-  if (!whenOk) return null;
+  if (!evaluateWhen(binding.when, ctx)) return null;
   const args = resolveArgs(binding, event, ctx);
-  console.info('[fire:dispatch]', { action: binding.action, args });
-  const result = await dispatch({ action: binding.action, args, context: ctx });
-  console.info('[fire:result]', result);
-  return result;
+  return dispatch({ action: binding.action, args, context: ctx });
 }

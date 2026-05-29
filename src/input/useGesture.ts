@@ -69,8 +69,6 @@ export function useGesture(
       // even if the cursor leaves its bounds. Without this, horizontal mouse
       // drags are eaten by the panel container's scroll-snap.
       try { el.setPointerCapture(ev.pointerId); } catch { /* not supported in some test envs */ }
-      // TEMP DIAGNOSTIC — remove once gestures are confirmed working.
-      console.info('[gesture:down]', { scope: _scope, x: ev.clientX, y: ev.clientY, pointerType: ev.pointerType });
 
       const o = optsRef.current;
       if (o.onLongPress) {
@@ -112,15 +110,6 @@ export function useGesture(
       const target = ev.target as Element | null;
       pointerId = null;
 
-      // TEMP DIAGNOSTIC — remove once gestures are confirmed working.
-      console.info('[gesture:up]', {
-        scope: _scope, dx, dy, dt, absDx, absDy,
-        swipeMin, clickMax,
-        decision: absDx >= swipeMin || absDy >= swipeMin
-          ? `swipe ${absDx >= absDy ? (dx >= 0 ? 'right' : 'left') : (dy >= 0 ? 'down' : 'up')}`
-          : (absDx <= clickMax && absDy <= clickMax) ? 'click' : 'ambiguous',
-      });
-
       if (absDx >= swipeMin || absDy >= swipeMin) {
         const direction: SwipeEvent['direction'] =
           absDx >= absDy
@@ -156,5 +145,5 @@ export function useGesture(
       el.removeEventListener('pointercancel', onCancel as EventListener);
       clearLongPress();
     };
-  }, [ref, _scope]);
+  }, [ref]);
 }
