@@ -8,6 +8,11 @@ A mobile-first, lightweight Gmail PWA wrapper. Sign in with Google and view your
 
 ## Setup
 
+See **[docs/SETUP.md](docs/SETUP.md)** for the full walkthrough — creating
+the Google Cloud project, enabling the Gmail API, configuring the OAuth
+consent screen + scopes, creating the client ID, and populating
+`.env.local`. The short version:
+
 1. Install dependencies:
 
    ```sh
