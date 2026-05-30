@@ -9,45 +9,45 @@ describe('ensureAppLabels', () => {
   beforeEach(() => vi.restoreAllMocks());
 
   it('exports the canonical label names', () => {
-    expect(APP_LABEL).toBe('InboxZero');
-    expect(SNOOZED_LABEL).toBe('InboxZero/Snoozed');
+    expect(APP_LABEL).toBe('idk-inbox');
+    expect(SNOOZED_LABEL).toBe('idk-inbox/Snoozed');
   });
 
   it('creates both labels when neither exists', async () => {
     const fetchMock = vi.fn();
     fetchMock.mockResolvedValueOnce(jsonResponse({ labels: [{ id: 'l1', name: 'INBOX' }] }));
-    fetchMock.mockResolvedValueOnce(jsonResponse({ id: 'lz', name: 'InboxZero' }));
-    fetchMock.mockResolvedValueOnce(jsonResponse({ id: 'lzs', name: 'InboxZero/Snoozed' }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ id: 'lz', name: 'idk-inbox' }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ id: 'lzs', name: 'idk-inbox/Snoozed' }));
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await ensureAppLabels('token');
 
-    expect(result.created.sort()).toEqual(['InboxZero', 'InboxZero/Snoozed']);
+    expect(result.created.sort()).toEqual(['idk-inbox', 'idk-inbox/Snoozed']);
     expect(fetchMock.mock.calls).toHaveLength(3); // list + 2 creates
     expect(fetchMock.mock.calls[1][1].method).toBe('POST');
     const body1 = JSON.parse(fetchMock.mock.calls[1][1].body as string);
-    expect(body1.name).toBe('InboxZero');
+    expect(body1.name).toBe('idk-inbox');
   });
 
   it('creates only the missing label when one exists', async () => {
     const fetchMock = vi.fn();
     fetchMock.mockResolvedValueOnce(jsonResponse({
-      labels: [{ id: 'l1', name: 'INBOX' }, { id: 'lz', name: 'InboxZero' }],
+      labels: [{ id: 'l1', name: 'INBOX' }, { id: 'lz', name: 'idk-inbox' }],
     }));
-    fetchMock.mockResolvedValueOnce(jsonResponse({ id: 'lzs', name: 'InboxZero/Snoozed' }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ id: 'lzs', name: 'idk-inbox/Snoozed' }));
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await ensureAppLabels('token');
 
-    expect(result.created).toEqual(['InboxZero/Snoozed']);
+    expect(result.created).toEqual(['idk-inbox/Snoozed']);
     expect(fetchMock.mock.calls).toHaveLength(2);
   });
 
   it('returns empty created when both labels already exist (idempotent)', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
       labels: [
-        { id: 'lz', name: 'InboxZero' },
-        { id: 'lzs', name: 'InboxZero/Snoozed' },
+        { id: 'lz', name: 'idk-inbox' },
+        { id: 'lzs', name: 'idk-inbox/Snoozed' },
       ],
     }));
     vi.stubGlobal('fetch', fetchMock);
