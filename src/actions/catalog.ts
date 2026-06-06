@@ -141,6 +141,36 @@ export const labelByActionName: Record<ActionName, string> = {
   [exitModeAction]:           'Cancel',
 };
 
+// ----- Side-map: Cmd-K preview (context-aware string) per action -----
+// Only thread-targeted actions have meaningful previews right now; layout and
+// app actions are listed verbatim by their label.
+
+export const previewByActionName: Partial<Record<ActionName, (ctx: ReadonlyContext) => string>> = {
+  [archiveThreadAction]:     previewTargets('Archive'),
+  [deleteThreadAction]:      previewTargets('Delete'),
+  [spamThreadAction]:        previewTargets('Mark as spam'),
+  [snoozeThreadAction]:      previewTargets('Snooze'),
+  [addLabelThreadAction]:    previewTargets('Apply label to'),
+  [removeLabelThreadAction]: previewTargets('Remove label from'),
+  [unsubscribeThreadAction]: previewTargets('Unsubscribe from'),
+};
+
+// ----- Side-map: keyboard shortcut cue (display only) per action -----
+// The actual binding lives in defaultBindings.ts; this is the human-readable
+// hint for the Cmd-K palette. Anticipates being auto-derived from the binding
+// registry once the trigger-redesign lands; static for now.
+
+export const shortcutCueByActionName: Partial<Record<ActionName, string>> = {
+  [archiveThreadAction]:      'J',
+  [deleteThreadAction]:       '#',
+  [spamThreadAction]:         '!',
+  [snoozeThreadAction]:       'B',
+  [undoAction]:               '⌘Z',
+  [redoAction]:               '⌘⇧Z',
+  [openCommandPaletteAction]: '⌘K',
+  [exitModeAction]:           'Esc',
+};
+
 export const ACTION_CATALOG: ActionCatalogEntry[] = [
   // Thread-write
   { id: 'archive-thread',      label: 'Archive',          category: 'thread-write', requiresAuth: true, keyboardCue: 'J', previewFor: previewTargets('Archive') },
