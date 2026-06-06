@@ -1,4 +1,47 @@
 import type { ActionId, ActionCategory, PickerId, PredicateId, ReadonlyContext } from '../input/types';
+import {
+  // Thread-targeted
+  archiveThreadAction,
+  deleteThreadAction,
+  spamThreadAction,
+  snoozeThreadAction,
+  addLabelThreadAction,
+  removeLabelThreadAction,
+  unsubscribeThreadAction,
+  modifyThreadLabelsAction,
+  // Layout
+  openPanelAction,
+  closePanelAction,
+  navPanelPrevAction,
+  navPanelNextAction,
+  refreshPanelAction,
+  // Selection
+  enterSelectionAction,
+  exitSelectionAction,
+  toggleSelectionAction,
+  // App
+  signInAction,
+  signOutAction,
+  undoAction,
+  redoAction,
+  openCommandPaletteAction,
+  exitModeAction,
+  // Models
+  threadModel,
+  // Types
+  type Action,
+  type ActionName,
+} from './types';
+
+export type { Action, ActionName, ModelName } from './types';
+export {
+  archiveThreadAction, deleteThreadAction, spamThreadAction, snoozeThreadAction,
+  addLabelThreadAction, removeLabelThreadAction, unsubscribeThreadAction,
+  modifyThreadLabelsAction, openPanelAction, closePanelAction, navPanelPrevAction,
+  navPanelNextAction, refreshPanelAction, enterSelectionAction, exitSelectionAction,
+  toggleSelectionAction, signInAction, signOutAction, undoAction, redoAction,
+  openCommandPaletteAction, exitModeAction, threadModel,
+} from './types';
 
 export interface ActionCatalogEntry {
   id:           ActionId;
@@ -28,6 +71,75 @@ function previewTargets(verb: string) {
     return `${verb} focused ${targetWord(targetCount(ctx))}`;
   };
 }
+
+// ----- Source of truth -----
+
+export const ACTIONS: Action[] = [
+  // Thread-targeted
+  { name: archiveThreadAction,      modelName: threadModel },
+  { name: deleteThreadAction,       modelName: threadModel },
+  { name: spamThreadAction,         modelName: threadModel },
+  { name: snoozeThreadAction,       modelName: threadModel },
+  { name: addLabelThreadAction,     modelName: threadModel },
+  { name: removeLabelThreadAction,  modelName: threadModel },
+  { name: unsubscribeThreadAction,  modelName: threadModel },
+  { name: modifyThreadLabelsAction, modelName: threadModel },
+
+  // Layout (open-panel takes a threadId; the rest operate on the focused panel
+  // / app state and have no model target)
+  { name: openPanelAction,    modelName: threadModel },
+  { name: closePanelAction },
+  { name: navPanelPrevAction },
+  { name: navPanelNextAction },
+  { name: refreshPanelAction },
+
+  // Selection (toggle operates on a thread; enter/exit are UI mode)
+  { name: enterSelectionAction },
+  { name: exitSelectionAction },
+  { name: toggleSelectionAction, modelName: threadModel },
+
+  // App
+  { name: signInAction },
+  { name: signOutAction },
+  { name: undoAction },
+  { name: redoAction },
+  { name: openCommandPaletteAction },
+  { name: exitModeAction },
+];
+
+export const ACTION_BY_NAME_MAP = new Map<ActionName, Action>(
+  ACTIONS.map((action) => [action.name, action])
+);
+
+// ----- Side-map: human-readable label per action -----
+
+export const labelByActionName: Record<ActionName, string> = {
+  [archiveThreadAction]:      'Archive',
+  [deleteThreadAction]:       'Delete',
+  [spamThreadAction]:         'Mark as spam',
+  [snoozeThreadAction]:       'Snooze',
+  [addLabelThreadAction]:     'Apply label',
+  [removeLabelThreadAction]:  'Remove label',
+  [unsubscribeThreadAction]:  'Unsubscribe',
+  [modifyThreadLabelsAction]: 'Modify labels…',
+
+  [openPanelAction]:          'Open',
+  [closePanelAction]:         'Close panel',
+  [navPanelPrevAction]:       'Previous panel',
+  [navPanelNextAction]:       'Next panel',
+  [refreshPanelAction]:       'Refresh',
+
+  [enterSelectionAction]:     'Select',
+  [exitSelectionAction]:      'Exit selection',
+  [toggleSelectionAction]:    'Toggle selection',
+
+  [signInAction]:             'Sign in',
+  [signOutAction]:            'Sign out',
+  [undoAction]:               'Undo',
+  [redoAction]:               'Redo',
+  [openCommandPaletteAction]: 'Command palette',
+  [exitModeAction]:           'Cancel',
+};
 
 export const ACTION_CATALOG: ActionCatalogEntry[] = [
   // Thread-write

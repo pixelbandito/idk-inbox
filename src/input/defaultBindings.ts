@@ -19,7 +19,13 @@ export const DEFAULT_BINDINGS: Binding[] = [
     action: 'archive-thread', when: 'not-in-picker' },
 
   { scope: 'row', modality: 'touch',
-    trigger: { kind: 'swipe', direction: 'left', minPx: 60 },
+    trigger: { 
+      kind: 'swipe', direction: 'left', minPx: 60,
+      stages: [
+        { minPx: 60, action: 'snooze-thread' },
+        { minPx: 240, action: 'add-label-thread' },
+      ],
+    },
     action: 'snooze-thread', when: 'not-in-picker' },
 
   // ----- Panel-header scope (touch) -----
