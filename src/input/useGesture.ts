@@ -7,6 +7,14 @@ export interface SwipeEvent {
   dy: number;
   dt: number;
   target: Element | null;
+  /** clientX of the original pointerdown that began this swipe. */
+  startX: number;
+  /** clientY of the original pointerdown that began this swipe. */
+  startY: number;
+  /** clientX of the pointerup that ended this swipe. */
+  endX: number;
+  /** clientY of the pointerup that ended this swipe. */
+  endY: number;
 }
 
 export interface PressEvent {
@@ -115,7 +123,11 @@ export function useGesture(
           absDx >= absDy
             ? (dx >= 0 ? 'right' : 'left')
             : (dy >= 0 ? 'down' : 'up');
-        o.onSwipe?.({ direction, dx, dy, dt, target });
+        o.onSwipe?.({
+          direction, dx, dy, dt, target,
+          startX, startY,
+          endX: ev.clientX, endY: ev.clientY,
+        });
         return;
       }
 
