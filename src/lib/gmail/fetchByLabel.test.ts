@@ -36,10 +36,10 @@ describe('fetchByLabel', () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({}));
     vi.stubGlobal('fetch', fetchMock);
 
-    await fetchByLabel('t', 'InboxZero/Snoozed');
+    await fetchByLabel('t', 'idk-inbox/Snoozed');
 
     const listUrl = decodeURIComponent(fetchMock.mock.calls[0][0] as string);
-    expect(listUrl).toContain('label:"InboxZero/Snoozed"');
+    expect(listUrl).toContain('label:"idk-inbox/Snoozed"');
   });
 
   it('returns an empty result when no messages match', async () => {

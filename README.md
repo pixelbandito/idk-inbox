@@ -1,4 +1,4 @@
-# Inbox Zero
+# idk-inbox
 
 A mobile-first, lightweight Gmail PWA wrapper. Sign in with Google and view your inbox in a clean, read-only list.
 
@@ -7,6 +7,11 @@ A mobile-first, lightweight Gmail PWA wrapper. Sign in with Google and view your
 - Node 22.13+ — run `nvm use` to match the version pinned in `.nvmrc`.
 
 ## Setup
+
+See **[docs/SETUP.md](docs/SETUP.md)** for the full walkthrough — creating
+the Google Cloud project, enabling the Gmail API, configuring the OAuth
+consent screen + scopes, creating the client ID, and populating
+`.env.local`. The short version:
 
 1. Install dependencies:
 

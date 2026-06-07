@@ -4,7 +4,7 @@ import type { Panel } from './types';
 
 const settings: Panel = { kind: 'settings' };
 const inbox: Panel = { kind: 'threadlist', label: 'INBOX' };
-const snoozed: Panel = { kind: 'threadlist', label: 'InboxZero/Snoozed' };
+const snoozed: Panel = { kind: 'threadlist', label: 'idk-inbox/Snoozed' };
 const thread = (id: string, src: string): Panel => ({ kind: 'thread', threadId: id, sourceLabel: src });
 
 describe('openThread', () => {

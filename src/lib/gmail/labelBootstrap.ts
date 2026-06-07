@@ -1,5 +1,5 @@
-export const APP_LABEL = 'InboxZero';
-export const SNOOZED_LABEL = 'InboxZero/Snoozed';
+export const APP_LABEL = 'idk-inbox';
+export const SNOOZED_LABEL = 'idk-inbox/Snoozed';
 
 const BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
 

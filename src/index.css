@@ -81,8 +81,13 @@
     gap: 0.15rem;
     padding: 0.75rem 0.75rem;
     border-bottom: var(--borderSize) solid #eee;
+    /* Reserve horizontal motion for the row's gesture handlers — without this
+       a horizontal mouse drag is eaten by the panel container's scroll-snap. */
+    touch-action: pan-y pinch-zoom;
+    user-select: none;
   }
   .email--unread { font-weight: 600; background: #f6f9ff; }
+  .email--selected { background: #eef6ff; }
   .email__from { font-size: 0.85rem; color: #555; }
   .email__snippet { font-size: 0.85rem; color: #888; }
 
@@ -104,5 +109,141 @@
   }
   .stash-column__count {
     font-weight: 600;
+  }
+
+  /* ----- Overlay surfaces (pickers, palette, toast) ----- */
+
+  .snooze-picker,
+  .label-picker,
+  .command-palette {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 1.5rem;
+    background: rgba(20, 20, 25, 0.55);
+  }
+
+  .snooze-picker > *,
+  .label-picker > *,
+  .command-palette > * {
+    background: var(--backgroundColor);
+    color: var(--foregroundColor);
+  }
+
+  .snooze-picker > h2,
+  .label-picker > h2 {
+    margin: 0;
+    padding: 1rem;
+    font-size: 1.05rem;
+    border-radius: 8px 8px 0 0;
+  }
+
+  .snooze-picker > button,
+  .label-picker > button {
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    border: 0;
+    border-top: var(--borderSize) solid #eee;
+    text-align: left;
+    cursor: pointer;
+    color: var(--foregroundColor);
+  }
+  .snooze-picker > button:first-of-type,
+  .label-picker > button:first-of-type {
+    border-top: 0;
+  }
+  .snooze-picker > button:last-child,
+  .label-picker > button:last-child {
+    border-radius: 0 0 8px 8px;
+    opacity: 0.75;
+  }
+
+  .label-picker > ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .label-picker > ul > li > button {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 0;
+    border-top: var(--borderSize) solid #eee;
+    text-align: left;
+    background: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+  .label-picker > label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.75rem 1rem;
+    border-top: var(--borderSize) solid #eee;
+    font-size: 0.85rem;
+    color: #555;
+  }
+  .label-picker > label > input {
+    padding: 0.5rem 0.75rem;
+    font-size: 1rem;
+    border: var(--borderSize) solid #ddd;
+    border-radius: 4px;
+  }
+
+  .command-palette > input {
+    padding: 0.85rem 1rem;
+    font-size: 1rem;
+    border: 0;
+    border-radius: 8px 8px 0 0;
+    outline: none;
+    color: var(--foregroundColor);
+  }
+  .command-palette > ul[role="listbox"] {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 60dvh;
+    overflow-y: auto;
+    border-radius: 0 0 8px 8px;
+  }
+  .command-palette > ul[role="listbox"] > li {
+    padding: 0.65rem 1rem;
+    border-top: var(--borderSize) solid #eee;
+    display: flex;
+    align-items: baseline;
+  }
+  .command-palette > ul[role="listbox"] > li[aria-selected="true"] {
+    background: #eef6ff;
+  }
+
+  .undo-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 1rem;
+    transform: translateX(-50%);
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.6rem 1rem;
+    background: #16161d;
+    color: #f4f5fa;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    max-width: calc(100dvw - 2rem);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  }
+  .undo-toast > button {
+    padding: 0.4rem 0.75rem;
+    border: 0;
+    border-radius: 4px;
+    background: #4a8eff;
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
   }
 }

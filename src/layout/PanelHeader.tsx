@@ -1,37 +1,32 @@
-import { useRef, type PointerEvent, type ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
+import { useGestureProducer } from '../triggers/producers/fromGesture';
+import { useTriggerHandler } from '../triggers/useTriggerHandler';
+import { swipeInlineEnd, swipeInlineStart } from '../triggers/triggers';
+import type { TriggerName } from '../triggers/types';
 
-const SWIPE_THRESHOLD_PX = 60;
+// Panel-header swipes (next/prev nav) flow through the trigger pipeline.
+const PANEL_HEADER_NEW_PIPELINE: ReadonlySet<TriggerName> = new Set([
+  swipeInlineEnd,
+  swipeInlineStart,
+]);
 
 export interface PanelHeaderProps {
   title: string;
-  onSwipeLeft: () => void;
-  onSwipeRight: () => void;
   actions?: ReactNode;
 }
 
-export function PanelHeader({ title, onSwipeLeft, onSwipeRight, actions }: PanelHeaderProps) {
-  const startX = useRef<number | null>(null);
-
-  function handleDown(e: PointerEvent<HTMLElement>) {
-    startX.current = e.clientX;
-  }
-
-  function handleUp(e: PointerEvent<HTMLElement>) {
-    if (startX.current === null) return;
-    const dx = e.clientX - startX.current;
-    startX.current = null;
-    if (Math.abs(dx) < SWIPE_THRESHOLD_PX) return;
-    if (dx < 0) onSwipeLeft();
-    else onSwipeRight();
-  }
+export function PanelHeader({ title, actions }: PanelHeaderProps) {
+  const ref = useRef<HTMLElement>(null);
+  const onTrigger = useTriggerHandler(PANEL_HEADER_NEW_PIPELINE);
+  useGestureProducer('panel-header', ref, onTrigger);
 
   return (
     <header
+      ref={ref}
       className="panel__header"
       role="banner"
-      onPointerDown={handleDown}
-      onPointerUp={handleUp}
-      onPointerCancel={() => { startX.current = null; }}
+      data-surface="panel-header"
+      style={{ touchAction: 'pan-y' }}
     >
       <h2 className="panel__title">{title}</h2>
       {actions && <div className="panel__actions">{actions}</div>}

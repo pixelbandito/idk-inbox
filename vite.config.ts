@@ -9,8 +9,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Inbox Zero',
-        short_name: 'InboxZero',
+        name: 'idk-inbox',
+        short_name: 'idk-inbox',
         description: 'A lightweight, mobile-first Gmail wrapper',
         theme_color: '#1a1a1a',
         background_color: '#ffffff',
