@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useGoogleAuth } from './lib/auth/useGoogleAuth';
 import { LayoutContainer, type PanelRenderProps } from './layout/LayoutContainer';
 import { SettingsPanel } from './panels/SettingsPanel';
@@ -13,19 +13,38 @@ import { ensureAppLabels, SNOOZED_LABEL } from './lib/gmail/labelBootstrap';
 import { DispatchProvider } from './state/DispatchProvider';
 import { useDispatchContext, useDispatcher } from './state/useDispatch';
 import { useKeyboardProducer } from './triggers/producers/fromKeyboard';
-import { fireThrough, makeStringDispatchBridge } from './triggers/wireUp';
-import type { AbstractEvent } from './triggers/types';
+import { useTriggerHandler } from './triggers/useTriggerHandler';
+import {
+  keypressJ,
+  keypressE,
+  keypressHash,
+  keypressBang,
+  keypressB,
+  keypressModK,
+  keypressEscape,
+  keypressModZ,
+  keypressModShiftZ,
+} from './triggers/triggers';
+import type { TriggerName } from './triggers/types';
 import type { Panel } from './layout/types';
 import './index.css';
 
-/**
- * Feature flag for the new trigger pipeline (Step 2 of the trigger-system
- * redesign). When false, the producers are wired but their emitted events
- * are dropped — the legacy useDocumentKeyboard / useGestureBindings hooks
- * remain the only path that reaches the dispatcher. Step 3 (canary) is the
- * first time this needs to flip on for any particular trigger.
- */
-const USE_NEW_TRIGGERS = false;
+// Step 4 Task 14: every keyboard shortcut now flows through the new
+// pipeline. The legacy useDocumentKeyboard hook remains mounted but its
+// binding source (DEFAULT_BINDINGS) no longer has any keyboard entries,
+// so it harmlessly no-ops.
+// TODO: remove useDocumentKeyboard in Step 5.
+const DOCUMENT_NEW_PIPELINE: ReadonlySet<TriggerName> = new Set([
+  keypressJ,
+  keypressE,
+  keypressHash,
+  keypressBang,
+  keypressB,
+  keypressModK,
+  keypressEscape,
+  keypressModZ,
+  keypressModShiftZ,
+]);
 
 const INITIAL_PANELS: Panel[] = [
   { kind: 'settings' },
@@ -56,22 +75,14 @@ function SettingsPanelDispatching() {
 }
 
 function AppInner({ getToken }: { getToken: () => string | null }) {
+  // TODO: remove in Step 5 — DEFAULT_BINDINGS no longer has any keyboard
+  // entries, so this hook filters nothing and dispatches nothing.
   useDocumentKeyboard();
 
-  // --- New trigger pipeline (Step 2): producers parallel to legacy hooks.
-  // The keyboard producer is mounted unconditionally so its listener
-  // attach/detach lifecycle matches the legacy one; only the resolver call
-  // is gated by USE_NEW_TRIGGERS. Gesture-producer wiring is deferred to
-  // Step 3 (canary) where it lives alongside useGestureBindings inside the
-  // panels.
-  const ctx = useDispatchContext();
-  const dispatch = useDispatcher();
-  const bridge = makeStringDispatchBridge(dispatch);
-  const handleAbstractEvent = useCallback((event: AbstractEvent) => {
-    if (!USE_NEW_TRIGGERS) return;
-    void fireThrough(event, ctx, bridge);
-  }, [ctx, bridge]);
-  useKeyboardProducer(handleAbstractEvent);
+  // Document keyboard producer wired through the new pipeline, gated by an
+  // allowlist of the keypress triggers that have action-map entries today.
+  const onTrigger = useTriggerHandler(DOCUMENT_NEW_PIPELINE);
+  useKeyboardProducer(onTrigger);
 
   function renderPanel(panel: Panel, index: number, props: PanelRenderProps) {
     if (panel.kind === 'settings') {
