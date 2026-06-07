@@ -53,7 +53,7 @@ export function ThreadPanel({
         title={view?.subject ?? ''}
         actions={<button onClick={onClose} aria-label="Close thread">×</button>}
       />
-      <div className="panel__body" ref={bodyRef}>
+      <div className="panel__body" data-surface="panel-body" ref={bodyRef}>
         {error && <p className="error">{error}</p>}
         {view && (
           <ol style={{ listStyle: 'none', padding: 0, margin: 0 }}>

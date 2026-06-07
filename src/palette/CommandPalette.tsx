@@ -72,7 +72,7 @@ function CommandPaletteInner() {
   };
 
   return (
-    <div role="dialog" aria-label="Command palette" className="command-palette">
+    <div role="dialog" aria-label="Command palette" className="command-palette" data-surface="overlay">
       <input
         ref={inputRef}
         placeholder="Type a command…"

@@ -41,7 +41,7 @@ export function SnoozePicker() {
   };
 
   return (
-    <div role="dialog" aria-label="Snooze picker" className="snooze-picker">
+    <div role="dialog" aria-label="Snooze picker" className="snooze-picker" data-surface="overlay">
       <h2>Snooze until…</h2>
       <button onClick={() => void fire(later(4))}>Later today</button>
       <button onClick={() => void fire(nextMorningAt(9, 1))}>Tomorrow</button>

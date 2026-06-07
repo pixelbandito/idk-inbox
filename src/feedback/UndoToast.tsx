@@ -32,7 +32,7 @@ export function UndoToast({ dismissAfterMs = 6000 }: UndoToastProps) {
   };
 
   return (
-    <div role="status" aria-live="polite" className="undo-toast">
+    <div role="status" aria-live="polite" className="undo-toast" data-surface="overlay">
       <span>{top.original.description}</span>
       <button onClick={() => void onUndo()}>Undo</button>
     </div>

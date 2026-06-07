@@ -35,7 +35,7 @@ export function LabelPicker() {
   const verb = pending.action === 'add-label-thread' ? 'Apply label' : 'Remove label';
 
   return (
-    <div role="dialog" aria-label="Label picker" className="label-picker">
+    <div role="dialog" aria-label="Label picker" className="label-picker" data-surface="overlay">
       <h2>{verb}</h2>
       <ul>
         {SUGGESTED_SUBLABELS.map((s) => (

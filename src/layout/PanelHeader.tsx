@@ -15,6 +15,7 @@ export function PanelHeader({ title, actions }: PanelHeaderProps) {
       ref={ref}
       className="panel__header"
       role="banner"
+      data-surface="panel-header"
       style={{ touchAction: 'pan-y' }}
     >
       <h2 className="panel__title">{title}</h2>

@@ -22,7 +22,7 @@ function Row({ email, isSelected }: { email: EmailSummary; isSelected: boolean }
     .filter(Boolean)
     .join(' ');
   return (
-    <li ref={ref} data-thread-id={email.threadId} className={className}>
+    <li ref={ref} data-thread-id={email.threadId} data-surface="row" className={className}>
       <span className="email__from">{email.from}</span>
       <span className="email__subject">{email.subject}</span>
       <span className="email__snippet">{email.snippet}</span>
