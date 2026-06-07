@@ -35,13 +35,15 @@ ships, drop the bullet rather than checking it off — git history is the record
 
 ## Code cleanup (low priority)
 
-- **`ACTION_CATALOG.requiresAuth` / `.destructive`** are documentation-only
-  now — no runtime consults them. Either derive from `CONFIRMATION_REQUIREMENTS`
-  or strip. (`src/actions/catalog.ts`)
 - **Block-axis swipe triggers** (`swipeBlockEnd`, `swipeBlockStart`) are
   reserved in the registry but unassigned in any surface's action map.
 - **Overscroll producer's `OVERSCROLL_PX = 80`** is hard-coded. Parameterise
   if anyone ever wants a per-surface tuning knob. (`src/triggers/producers/fromOverscroll.ts`)
+- **`ACTION_CATALOG` is hand-maintained alongside `ACTIONS` + the side maps.**
+  Reasonable next step is to derive the catalog from those rather than keep
+  two parallel lists. Out of scope until the palette grows a real consumer
+  that needs more fields than today's `label` / `category` / `previewFor` /
+  `keyboardCue`.
 
 ## See also
 
