@@ -46,7 +46,6 @@ export interface RegisteredAction<TArgs = Record<string, unknown>> {
   label:        string;
   category:     ActionCategory;
   destructive?: boolean;
-  requiresAuth?: boolean;
   elicitVia?:   PickerId;
   /** Optional pure function that produces a context-aware preview string for Cmd-K. */
   previewFor?:  (ctx: ReadonlyContext, args: Partial<TArgs>) => string;

@@ -28,12 +28,16 @@ describe('createDispatcher', () => {
     if (!result.ok) expect(result.error).toMatch(/unknown action/i);
   });
 
-  it('refuses Gmail-write actions when not signed in', async () => {
+  it('refuses Gmail-write actions when not signed in (auth via confirmation lifecycle)', async () => {
     const handler = vi.fn();
+    // archive-thread's confirmation policy is requiresAuthOnly, so the
+    // dispatcher should reject it without invoking the handler when the
+    // context says signedIn: false. The registry entry itself no longer
+    // carries auth metadata — the side-map is the single source.
     const registry: ActionRegistry = {
       'archive-thread': {
         id: 'archive-thread', label: 'Archive', category: 'thread-write',
-        handler, requiresAuth: true,
+        handler,
       },
     };
     const dispatch = createDispatcher(registry);
@@ -44,5 +48,31 @@ describe('createDispatcher', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatch(/sign in/i);
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('allows sign-in itself when not signed in (its confirmation is noConfirmation)', async () => {
+    const handler = vi.fn().mockResolvedValue({ ok: true, description: 'signed in' });
+    const registry: ActionRegistry = {
+      'sign-in': { id: 'sign-in', label: 'Sign in', category: 'app', handler },
+    };
+    const dispatch = createDispatcher(registry);
+    const result = await dispatch({
+      action: 'sign-in', args: {}, context: makeCtx({ signedIn: false }),
+    });
+    expect(result).toEqual({ ok: true, description: 'signed in' });
+    expect(handler).toHaveBeenCalled();
+  });
+
+  it('allows layout actions like open-panel even when not signed in', async () => {
+    const handler = vi.fn().mockResolvedValue({ ok: true, description: 'opened' });
+    const registry: ActionRegistry = {
+      'open-panel': { id: 'open-panel', label: 'Open', category: 'layout', handler },
+    };
+    const dispatch = createDispatcher(registry);
+    const result = await dispatch({
+      action: 'open-panel', args: {}, context: makeCtx({ signedIn: false }),
+    });
+    expect(result.ok).toBe(true);
+    expect(handler).toHaveBeenCalled();
   });
 });

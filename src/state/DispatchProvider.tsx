@@ -74,7 +74,7 @@ function asAction(
   // The dispatcher passes args as Record<string, unknown>; per-handler signatures
   // are narrower for ergonomics. The cast happens here at the boundary.
   handler: (args: never, ctx: ReadonlyContext) => Promise<ActionResult>,
-  opts: { requiresAuth?: boolean; destructive?: boolean; elicitVia?: PickerId } = {},
+  opts: { destructive?: boolean; elicitVia?: PickerId } = {},
 ): RegisteredAction {
   return {
     id,
@@ -267,14 +267,14 @@ export function DispatchProvider({
 
   const registry: ActionRegistry = useMemo(() => ({
     // Thread-write stubs:
-    'modify-thread-labels': asAction('modify-thread-labels', 'Modify labels',  'thread-write', modifyThreadLabelsStub, { requiresAuth: true }),
-    'archive-thread':       asAction('archive-thread',       'Archive',        'thread-write', archiveThreadStub,      { requiresAuth: true }),
-    'delete-thread':        asAction('delete-thread',        'Delete',         'thread-write', deleteThreadStub,       { requiresAuth: true, destructive: true }),
-    'spam-thread':          asAction('spam-thread',          'Mark as spam',   'thread-write', spamThreadStub,         { requiresAuth: true, destructive: true }),
-    'add-label-thread':     asAction('add-label-thread',     'Apply label',    'thread-write', addLabelThreadStub,     { requiresAuth: true, elicitVia: 'picker-label' }),
-    'remove-label-thread':  asAction('remove-label-thread',  'Remove label',   'thread-write', removeLabelThreadStub,  { requiresAuth: true, elicitVia: 'picker-label' }),
-    'snooze-thread':        asAction('snooze-thread',        'Snooze',         'thread-write', snoozeThreadStub,       { requiresAuth: true, elicitVia: 'picker-snooze' }),
-    'unsubscribe-thread':   asAction('unsubscribe-thread',   'Unsubscribe',    'thread-write', unsubscribeThreadStub,  { requiresAuth: true, destructive: true }),
+    'modify-thread-labels': asAction('modify-thread-labels', 'Modify labels',  'thread-write', modifyThreadLabelsStub),
+    'archive-thread':       asAction('archive-thread',       'Archive',        'thread-write', archiveThreadStub),
+    'delete-thread':        asAction('delete-thread',        'Delete',         'thread-write', deleteThreadStub,       { destructive: true }),
+    'spam-thread':          asAction('spam-thread',          'Mark as spam',   'thread-write', spamThreadStub,         { destructive: true }),
+    'add-label-thread':     asAction('add-label-thread',     'Apply label',    'thread-write', addLabelThreadStub,     { elicitVia: 'picker-label' }),
+    'remove-label-thread':  asAction('remove-label-thread',  'Remove label',   'thread-write', removeLabelThreadStub,  { elicitVia: 'picker-label' }),
+    'snooze-thread':        asAction('snooze-thread',        'Snooze',         'thread-write', snoozeThreadStub,       { elicitVia: 'picker-snooze' }),
+    'unsubscribe-thread':   asAction('unsubscribe-thread',   'Unsubscribe',    'thread-write', unsubscribeThreadStub,  { destructive: true }),
 
     // Layout (real):
     'open-panel':           asAction('open-panel',           'Open thread',    'layout',       layoutActions.openPanel),
