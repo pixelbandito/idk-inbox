@@ -29,6 +29,6 @@ describe('PanelHeader', () => {
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
   });
 
-  // Note: integration of swipe -> focus change via the binding system is
-  // covered by the useGestureBindings tests and higher-level layout tests.
+  // Note: swipe -> focus change is covered by the trigger pipeline tests in
+  // src/triggers/ and higher-level layout tests.
 });

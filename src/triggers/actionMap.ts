@@ -1,7 +1,6 @@
 // The action map: surface → trigger → action.
 //
-// This mirrors the content of src/input/defaultBindings.ts in the new
-// action-centric, surface-keyed shape. The resolver looks up
+// The resolver looks up
 //   ACTION_MAP.get(event.surface)?.get(triggerName)
 // to find the assigned action (if any) for a matched trigger on the event's
 // surface.

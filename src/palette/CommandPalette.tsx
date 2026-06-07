@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { ACTION_CATALOG, type ActionCatalogEntry } from '../actions/catalog';
-import { evaluateWhen } from '../input/predicates';
 import { targetsFromSelection } from '../input/helpers';
 import { useDispatchContext, useDispatcher } from '../state/useDispatch';
 import type { ReadonlyContext } from '../input/types';
@@ -41,11 +40,10 @@ function CommandPaletteInner() {
   const filtered = useMemo<ActionCatalogEntry[]>(() => {
     const q = query.trim().toLowerCase();
     return ACTION_CATALOG.filter((e) => {
-      if (!evaluateWhen(e.when, ctx)) return false;
       if (!q) return true;
       return e.label.toLowerCase().includes(q);
     });
-  }, [query, ctx]);
+  }, [query]);
 
   const fire = async (entry: ActionCatalogEntry) => {
     // Close first to avoid "still in cmd-k" gating issues on the dispatched action.

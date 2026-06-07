@@ -15,10 +15,8 @@ import type { TriggerName } from '../triggers/types';
 import { fetchByLabel } from '../lib/gmail/fetchByLabel';
 import type { EmailSummary } from '../lib/gmail/types';
 
-// Step 4 Task 12: all row interactions now flow through the new pipeline —
-// click (canary), the four inline swipes, and long-press. The legacy
-// useGestureBindings call is gone; corresponding entries in
-// src/input/defaultBindings.ts have been removed.
+// All row interactions flow through the trigger pipeline:
+// click, the four inline swipes, and long-press.
 const ROW_NEW_PIPELINE: ReadonlySet<TriggerName> = new Set([
   click,
   swipeInlineEnd,

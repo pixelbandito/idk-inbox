@@ -8,7 +8,6 @@ import { SnoozePicker } from './pickers/SnoozePicker';
 import { LabelPicker } from './pickers/LabelPicker';
 import { CommandPalette } from './palette/CommandPalette';
 import { UndoToast } from './feedback/UndoToast';
-import { useDocumentKeyboard } from './input/useDocumentKeyboard';
 import { ensureAppLabels, SNOOZED_LABEL } from './lib/gmail/labelBootstrap';
 import { DispatchProvider } from './state/DispatchProvider';
 import { useDispatchContext, useDispatcher } from './state/useDispatch';
@@ -29,11 +28,7 @@ import type { TriggerName } from './triggers/types';
 import type { Panel } from './layout/types';
 import './index.css';
 
-// Step 4 Task 14: every keyboard shortcut now flows through the new
-// pipeline. The legacy useDocumentKeyboard hook remains mounted but its
-// binding source (DEFAULT_BINDINGS) no longer has any keyboard entries,
-// so it harmlessly no-ops.
-// TODO: remove useDocumentKeyboard in Step 5.
+// Every document-scope keyboard shortcut flows through the new pipeline.
 const DOCUMENT_NEW_PIPELINE: ReadonlySet<TriggerName> = new Set([
   keypressJ,
   keypressE,
@@ -75,10 +70,6 @@ function SettingsPanelDispatching() {
 }
 
 function AppInner({ getToken }: { getToken: () => string | null }) {
-  // TODO: remove in Step 5 — DEFAULT_BINDINGS no longer has any keyboard
-  // entries, so this hook filters nothing and dispatches nothing.
-  useDocumentKeyboard();
-
   // Document keyboard producer wired through the new pipeline, gated by an
   // allowlist of the keypress triggers that have action-map entries today.
   const onTrigger = useTriggerHandler(DOCUMENT_NEW_PIPELINE);

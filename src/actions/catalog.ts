@@ -1,4 +1,4 @@
-import type { ActionId, ActionCategory, PickerId, PredicateId, ReadonlyContext } from '../input/types';
+import type { ActionId, ActionCategory, PickerId, ReadonlyContext } from '../input/types';
 import {
   // Thread-targeted
   archiveThreadAction,
@@ -54,8 +54,6 @@ export interface ActionCatalogEntry {
   previewFor?:  (ctx: ReadonlyContext) => string;
   /** Optional default keyboard combo to display in the palette. */
   keyboardCue?: string;
-  /** Optional predicate id (or array) listed for the palette to filter ineligible entries. */
-  when?:        PredicateId | PredicateId[];
 }
 
 function targetCount(ctx: ReadonlyContext): number {
@@ -156,9 +154,8 @@ export const previewByActionName: Partial<Record<ActionName, (ctx: ReadonlyConte
 };
 
 // ----- Side-map: keyboard shortcut cue (display only) per action -----
-// The actual binding lives in defaultBindings.ts; this is the human-readable
-// hint for the Cmd-K palette. Anticipates being auto-derived from the binding
-// registry once the trigger-redesign lands; static for now.
+// The actual keypress trigger → action wiring lives in src/triggers/. This
+// side-map is the human-readable hint for the Cmd-K palette; static for now.
 
 export const shortcutCueByActionName: Partial<Record<ActionName, string>> = {
   [archiveThreadAction]:      'J',

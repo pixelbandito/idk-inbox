@@ -1,9 +1,7 @@
 // argsFor — derive the dispatcher args payload for a given action + event +
-// readonly context. This is the analog of resolveArgs() in the legacy
-// src/input/fireBinding.ts but driven by the new symbol-based Action shape
-// rather than string ids.
+// readonly context. Driven by the symbol-based Action shape.
 //
-// Rules (carried over from the legacy resolver):
+// Rules:
 //
 //   1. openPanelAction → { kind: 'thread', threadId } from the row's
 //      data-thread-id (walked up from event.target). Empty object if no row.

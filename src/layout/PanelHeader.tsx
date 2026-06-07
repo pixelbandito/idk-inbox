@@ -4,9 +4,7 @@ import { useTriggerHandler } from '../triggers/useTriggerHandler';
 import { swipeInlineEnd, swipeInlineStart } from '../triggers/triggers';
 import type { TriggerName } from '../triggers/types';
 
-// Step 4 Task 13: panel-header swipes (next/prev nav) flow through the new
-// pipeline. Legacy useGestureBindings is gone for this surface; the
-// corresponding entries in src/input/defaultBindings.ts are removed.
+// Panel-header swipes (next/prev nav) flow through the trigger pipeline.
 const PANEL_HEADER_NEW_PIPELINE: ReadonlySet<TriggerName> = new Set([
   swipeInlineEnd,
   swipeInlineStart,
