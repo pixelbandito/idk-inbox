@@ -6,12 +6,8 @@ export const DEFAULT_BINDINGS: Binding[] = [
   // see src/panels/ThreadlistPanel.tsx for the ROW_NEW_PIPELINE allowlist.)
 
   // ----- Panel-header scope (touch) -----
-  { scope: 'panel-header', modality: 'touch',
-    trigger: { kind: 'swipe', direction: 'left', minPx: 60 },
-    action: 'nav-panel-next' },
-  { scope: 'panel-header', modality: 'touch',
-    trigger: { kind: 'swipe', direction: 'right', minPx: 60 },
-    action: 'nav-panel-prev' },
+  // (Migrated to the new pipeline in Step 4 Task 13; see
+  // src/layout/PanelHeader.tsx for the PANEL_HEADER_NEW_PIPELINE allowlist.)
 
   // ----- Document scope (keyboard) -----
   { scope: 'document', modality: 'keyboard',

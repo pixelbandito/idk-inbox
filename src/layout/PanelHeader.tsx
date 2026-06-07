@@ -1,5 +1,16 @@
 import { useRef, type ReactNode } from 'react';
-import { useGestureBindings } from '../input/useGestureBindings';
+import { useGestureProducer } from '../triggers/producers/fromGesture';
+import { useTriggerHandler } from '../triggers/useTriggerHandler';
+import { swipeInlineEnd, swipeInlineStart } from '../triggers/triggers';
+import type { TriggerName } from '../triggers/types';
+
+// Step 4 Task 13: panel-header swipes (next/prev nav) flow through the new
+// pipeline. Legacy useGestureBindings is gone for this surface; the
+// corresponding entries in src/input/defaultBindings.ts are removed.
+const PANEL_HEADER_NEW_PIPELINE: ReadonlySet<TriggerName> = new Set([
+  swipeInlineEnd,
+  swipeInlineStart,
+]);
 
 export interface PanelHeaderProps {
   title: string;
@@ -8,7 +19,8 @@ export interface PanelHeaderProps {
 
 export function PanelHeader({ title, actions }: PanelHeaderProps) {
   const ref = useRef<HTMLElement>(null);
-  useGestureBindings('panel-header', ref);
+  const onTrigger = useTriggerHandler(PANEL_HEADER_NEW_PIPELINE);
+  useGestureProducer('panel-header', ref, onTrigger);
 
   return (
     <header
