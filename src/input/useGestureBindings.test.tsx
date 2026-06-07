@@ -31,32 +31,7 @@ describe('useGestureBindings', () => {
     expect(document.querySelectorAll('[data-thread-id="tA"]').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('a right-swipe fires archive-thread (stage 1) via the registered stub', async () => {
-    render(<DispatchProvider signedIn initialPanels={[{kind:'settings'},{kind:'threadlist', label:'INBOX'}]}><Row /></DispatchProvider>);
-    const el = screen.getByTestId('row');
-    fireEvent.pointerDown(el, { pointerId: 1, clientX: 50, clientY: 50 });
-    fireEvent.pointerUp(el,   { pointerId: 1, clientX: 200, clientY: 55 });
-    await Promise.resolve();
-    expect(console.info).toHaveBeenCalledWith('[stub:archive-thread]', expect.any(Object));
-  });
-
-  it('a right-swipe past the second stage threshold fires delete-thread', async () => {
-    render(<DispatchProvider signedIn initialPanels={[{kind:'settings'},{kind:'threadlist', label:'INBOX'}]}><Row /></DispatchProvider>);
-    const el = screen.getByTestId('row');
-    fireEvent.pointerDown(el, { pointerId: 1, clientX: 50, clientY: 50 });
-    fireEvent.pointerUp(el,   { pointerId: 1, clientX: 360, clientY: 55 });
-    await Promise.resolve();
-    expect(console.info).toHaveBeenCalledWith('[stub:delete-thread]', expect.any(Object));
-  });
-
-  it('a left-swipe fires snooze-thread (which returns ok:false without `until` — that is the picker integration in Task 17)', async () => {
-    render(<DispatchProvider signedIn initialPanels={[{kind:'settings'},{kind:'threadlist', label:'INBOX'}]}><Row /></DispatchProvider>);
-    const el = screen.getByTestId('row');
-    fireEvent.pointerDown(el, { pointerId: 1, clientX: 250, clientY: 50 });
-    fireEvent.pointerUp(el,   { pointerId: 1, clientX: 50,  clientY: 55 });
-    await Promise.resolve();
-    // snooze-thread early-returns ok:false (Snooze duration required), so the stub doesn't log.
-    // We assert the *attempt* by checking nothing else logged (e.g. archive).
-    expect(console.info).not.toHaveBeenCalledWith('[stub:archive-thread]', expect.any(Object));
-  });
+  // Row swipe tests removed in Step 4 Task 12: row swipes are now wired
+  // through the new trigger pipeline (see src/panels/ThreadlistPanel.tsx).
+  // ThreadlistPanel.test.tsx exercises the migrated paths end-to-end.
 });

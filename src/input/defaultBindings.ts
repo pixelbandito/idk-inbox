@@ -2,31 +2,8 @@ import type { Binding } from './types';
 
 export const DEFAULT_BINDINGS: Binding[] = [
   // ----- Row scope (touch) -----
-  // (row click → open-panel was migrated to the new pipeline in Step 3 of the
-  // trigger redesign; see src/panels/ThreadlistPanel.tsx.)
-
-  { scope: 'row', modality: 'touch', trigger: { kind: 'long-press', ms: 500 },
-    action: 'enter-selection', when: 'not-in-picker' },
-
-  { scope: 'row', modality: 'touch',
-    trigger: {
-      kind: 'swipe', direction: 'right', minPx: 60,
-      stages: [
-        { minPx: 60, action: 'archive-thread' },
-        { minPx: 240, action: 'delete-thread' },
-      ],
-    },
-    action: 'archive-thread', when: 'not-in-picker' },
-
-  { scope: 'row', modality: 'touch',
-    trigger: { 
-      kind: 'swipe', direction: 'left', minPx: 60,
-      stages: [
-        { minPx: 60, action: 'snooze-thread' },
-        { minPx: 240, action: 'add-label-thread' },
-      ],
-    },
-    action: 'snooze-thread', when: 'not-in-picker' },
+  // (All row interactions migrated to the new pipeline in Step 4 Task 12;
+  // see src/panels/ThreadlistPanel.tsx for the ROW_NEW_PIPELINE allowlist.)
 
   // ----- Panel-header scope (touch) -----
   { scope: 'panel-header', modality: 'touch',
