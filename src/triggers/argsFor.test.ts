@@ -121,12 +121,12 @@ describe('argsFor — openPanelAction', () => {
 });
 
 describe('argsFor — layout / app / selection actions', () => {
-  it('layout close-panel takes no args', () => {
+  it('layout close-panel targets ctx.focusedPanelIndex', () => {
     expect(argsFor(
       action(closePanelAction),
       clickEv(null),
-      baseCtx(),
-    )).toEqual({});
+      baseCtx({ focusedPanelIndex: 2 }),
+    )).toEqual({ panelIndex: 2 });
   });
 
   it('layout nav-panel-next takes no args', () => {

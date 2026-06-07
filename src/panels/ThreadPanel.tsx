@@ -1,27 +1,41 @@
 import { useEffect, useRef, useState } from 'react';
 import { PanelHeader } from '../layout/PanelHeader';
 import { fetchThread, type ThreadView } from '../lib/gmail/fetchThread';
-import { useOverscroll } from '../input/useOverscroll';
-import { useDispatchContext, useDispatcher } from '../state/useDispatch';
+import { useOverscrollProducer } from '../triggers/producers/fromOverscroll';
+import { useTriggerHandler } from '../triggers/useTriggerHandler';
+import { overscrollBlockEnd } from '../triggers/triggers';
+import type { TriggerName } from '../triggers/types';
 
 export interface ThreadPanelProps {
   threadId: string;
-  panelIndex: number;
+  /**
+   * Layout index of this panel. No longer consumed by ThreadPanel —
+   * close-panel reads the focused index from context via argsFor — but
+   * retained for callers that already pass it (e.g. App.tsx). Will be
+   * dropped in Step 5 once we're sure nothing relies on it.
+   */
+  panelIndex?: number;
   getToken: () => string | null;
   onClose: () => void;
 }
 
+// Step 4 Task 15: panel-body overscroll → close-panel flows through the new
+// pipeline. The legacy useOverscroll consumer that called dispatch directly
+// is gone; the producer below emits a gesture-overscroll AbstractEvent that
+// the resolver maps to closePanelAction via ACTION_MAP['panel-body'].
+const PANEL_BODY_NEW_PIPELINE: ReadonlySet<TriggerName> = new Set([
+  overscrollBlockEnd,
+]);
+
 export function ThreadPanel({
   threadId,
-  panelIndex,
   getToken,
   onClose,
 }: ThreadPanelProps) {
   const [view, setView] = useState<ThreadView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
-  const ctx = useDispatchContext();
-  const dispatch = useDispatcher();
+  const onTrigger = useTriggerHandler(PANEL_BODY_NEW_PIPELINE);
 
   useEffect(() => {
     // Defer to a microtask so the setState calls don't fire synchronously
@@ -39,13 +53,7 @@ export function ThreadPanel({
     });
   }, [threadId, getToken]);
 
-  useOverscroll(bodyRef, {
-    edge: 'bottom',
-    minPx: 80,
-    onFire: () => {
-      void dispatch({ action: 'close-panel', args: { panelIndex }, context: ctx });
-    },
-  });
+  useOverscrollProducer(bodyRef, onTrigger);
 
   return (
     <>

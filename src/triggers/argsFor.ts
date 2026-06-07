@@ -16,6 +16,7 @@
 //   3. Layout / app / selection / non-thread actions: empty args.
 
 import {
+  closePanelAction,
   openPanelAction,
   threadModel,
   type Action,
@@ -27,7 +28,8 @@ import type { AbstractEvent } from './types';
 export type ArgsForResult =
   | Record<string, never>
   | { targets: ThreadRef[] }
-  | { kind: 'thread'; threadId: ThreadRef };
+  | { kind: 'thread'; threadId: ThreadRef }
+  | { panelIndex: number };
 
 function eventTarget(event: AbstractEvent): Element | null {
   // Only gesture events carry a target. keypress events do not.
@@ -50,6 +52,13 @@ export function argsFor(
   if (action.name === openPanelAction) {
     const threadId = targetFromRow(eventTarget(event));
     return threadId ? { kind: 'thread', threadId } : {};
+  }
+
+  // Special-case: close-panel targets the currently focused panel. The
+  // event itself (typically a panel-body overscroll) doesn't carry an
+  // index — context does.
+  if (action.name === closePanelAction) {
+    return { panelIndex: ctx.focusedPanelIndex };
   }
 
   // Thread-targeted actions: prefer selection, fall back to event-derived row.
