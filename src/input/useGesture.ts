@@ -40,7 +40,7 @@ export interface GestureCallbacks {
 }
 
 export function useGesture(
-  // The scope is unused inside the hook but accepted so callers carry it consistently for binding lookup later (Task 14).
+  // The scope is unused inside the hook but accepted so callers carry it consistently for surface-aware trigger resolution downstream.
   _scope: Scope,
   ref: RefObject<HTMLElement | null>,
   opts: GestureCallbacks,
