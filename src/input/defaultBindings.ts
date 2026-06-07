@@ -2,8 +2,8 @@ import type { Binding } from './types';
 
 export const DEFAULT_BINDINGS: Binding[] = [
   // ----- Row scope (touch) -----
-  { scope: 'row', modality: 'touch', trigger: { kind: 'click' },
-    action: 'open-panel', when: 'not-in-picker' },
+  // (row click → open-panel was migrated to the new pipeline in Step 3 of the
+  // trigger redesign; see src/panels/ThreadlistPanel.tsx.)
 
   { scope: 'row', modality: 'touch', trigger: { kind: 'long-press', ms: 500 },
     action: 'enter-selection', when: 'not-in-picker' },

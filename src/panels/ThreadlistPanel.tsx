@@ -2,8 +2,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { PanelHeader } from '../layout/PanelHeader';
 import { useGestureBindings } from '../input/useGestureBindings';
 import { useDispatchContext } from '../state/useDispatch';
+import { useGestureProducer } from '../triggers/producers/fromGesture';
+import { useTriggerHandler } from '../triggers/useTriggerHandler';
+import { click } from '../triggers/triggers';
+import type { TriggerName } from '../triggers/types';
 import { fetchByLabel } from '../lib/gmail/fetchByLabel';
 import type { EmailSummary } from '../lib/gmail/types';
+
+// Step 3 canary: row click → open-panel is the first interaction migrated to
+// the new pipeline. The gesture producer is mounted alongside the legacy
+// useGestureBindings; the allowlist below restricts the new pipeline to the
+// `click` trigger only, so row swipes / long-press still flow through the
+// legacy path. The corresponding `row` `click` entry has been removed from
+// src/input/defaultBindings.ts.
+const ROW_NEW_PIPELINE: ReadonlySet<TriggerName> = new Set([click]);
 
 export interface ThreadlistPanelProps {
   label: string;
@@ -13,7 +25,12 @@ export interface ThreadlistPanelProps {
 
 function Row({ email, isSelected }: { email: EmailSummary; isSelected: boolean }) {
   const ref = useRef<HTMLLIElement>(null);
+  const onTrigger = useTriggerHandler(ROW_NEW_PIPELINE);
+  // Legacy pipeline still owns row swipes + long-press; the new pipeline owns
+  // only `click` (canary). Both hooks call useGesture independently so each
+  // attaches its own pointer listeners — no interference.
   useGestureBindings('row', ref);
+  useGestureProducer('row', ref, onTrigger);
   const className = [
     'email',
     email.unread ? 'email--unread' : null,
