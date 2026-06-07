@@ -35,6 +35,14 @@ export async function resolveAndFire(
   dispatch: TriggerDispatchFn,
   map:      Map<Surface, Map<TriggerName, ActionName>>,
   triggers: readonly Trigger[],
+  /**
+   * Optional allowlist for incremental migration: when defined, only triggers
+   * whose name is in this set can produce candidates. `undefined` means all
+   * triggers are eligible (production mode). See Step 3 of the trigger plan —
+   * the canary uses a one-element set to enable a single trigger end-to-end
+   * while the rest still route through the legacy pipeline.
+   */
+  enabledTriggers?: ReadonlySet<TriggerName>,
 ): Promise<ActionResult | null> {
   // 1. Match.
   const matched = triggers.filter((t) => t.match(event));
@@ -47,6 +55,7 @@ export async function resolveAndFire(
   type Candidate = { trigger: Trigger; action: ActionName };
   const candidates: Candidate[] = [];
   for (const trigger of matched) {
+    if (enabledTriggers && !enabledTriggers.has(trigger.name)) continue;
     const action = surfaceMap.get(trigger.name);
     if (action !== undefined) candidates.push({ trigger, action });
   }

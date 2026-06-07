@@ -18,7 +18,7 @@ import type { ActionResult, ReadonlyContext } from '../input/types';
 import { ACTION_MAP } from './actionMap';
 import { resolveAndFire, type TriggerDispatchFn, type TriggerDispatchRequest } from './resolve';
 import { TRIGGERS } from './triggers';
-import type { AbstractEvent } from './types';
+import type { AbstractEvent, TriggerName } from './types';
 
 /** Adapt the legacy string-keyed dispatcher to TriggerDispatchFn. */
 export function makeStringDispatchBridge(
@@ -40,11 +40,18 @@ export function makeStringDispatchBridge(
   };
 }
 
-/** One-shot helper: feed an AbstractEvent into the canonical pipeline. */
+/**
+ * One-shot helper: feed an AbstractEvent into the canonical pipeline.
+ *
+ * `enabledTriggers` is an optional allowlist for incremental migration — when
+ * supplied, only triggers in the set are eligible. Step 3 (the canary) uses
+ * a single-element set; Step 4 expands it batch-by-batch; Step 5 drops it.
+ */
 export function fireThrough(
   event:    AbstractEvent,
   ctx:      ReadonlyContext,
   dispatch: TriggerDispatchFn,
+  enabledTriggers?: ReadonlySet<TriggerName>,
 ): Promise<ActionResult | null> {
-  return resolveAndFire(event, ctx, dispatch, ACTION_MAP, TRIGGERS);
+  return resolveAndFire(event, ctx, dispatch, ACTION_MAP, TRIGGERS, enabledTriggers);
 }

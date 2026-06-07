@@ -203,6 +203,46 @@ describe('resolveAndFire', () => {
     expect(dispatch.mock.calls[0][0].action).toBe(archiveThreadAction);
   });
 
+  it('respects enabledTriggers allowlist: skips matched triggers not in the set', async () => {
+    const dispatch = vi.fn().mockResolvedValue({ ok: true, description: 'done' });
+    const map = new Map<Surface, Map<TriggerName, ActionName>>([
+      ['row', new Map<TriggerName, ActionName>([
+        [triggerA, archiveThreadAction],
+        [triggerB, deleteThreadAction],
+      ])],
+    ]);
+    await resolveAndFire(
+      clickEv('row'),
+      baseCtx(),
+      dispatch,
+      map,
+      [
+        trueTrigger(triggerA, 5),
+        trueTrigger(triggerB, 10),  // higher priority, but excluded from allowlist
+      ],
+      new Set([triggerA]),
+    );
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch.mock.calls[0][0].action).toBe(archiveThreadAction);
+  });
+
+  it('respects enabledTriggers allowlist: returns null when no matched trigger is allowed', async () => {
+    const dispatch = vi.fn();
+    const map = new Map<Surface, Map<TriggerName, ActionName>>([
+      ['row', new Map([[triggerA, archiveThreadAction]])],
+    ]);
+    const result = await resolveAndFire(
+      clickEv('row'),
+      baseCtx(),
+      dispatch,
+      map,
+      [trueTrigger(triggerA, 5)],
+      new Set<TriggerName>(),  // empty allowlist
+    );
+    expect(result).toBeNull();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
   it('end-to-end against the real registry: long swipe ending at edge fires delete', async () => {
     const dispatch = vi.fn().mockResolvedValue({ ok: true, description: 'deleted' });
     const map = new Map<Surface, Map<TriggerName, ActionName>>([
