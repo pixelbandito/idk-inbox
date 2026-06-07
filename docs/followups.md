@@ -5,13 +5,7 @@ ships, drop the bullet rather than checking it off — git history is the record
 
 ## Bugs
 
-- **`DispatchProvider.tsx` hardcodes `focusedPanelIndex: 1`.** Overscroll-close
-  and the thread "close" button both rely on this and always target panel 1.
-  Needs real focus tracking. (`src/state/DispatchProvider.tsx:140`)
-- **`useGesture` fires `onClick` after `onLongPress` on the same release.**
-  The primitive doesn't track whether long-press already fired, so a held tap
-  enters selection mode AND opens the thread. Fix at the primitive: suppress
-  `onClick` when `onLongPress` just fired. (`src/input/useGesture.ts`)
+(empty for now — both prior items shipped)
 
 ## UX / affordances (need design input — don't YOLO)
 
