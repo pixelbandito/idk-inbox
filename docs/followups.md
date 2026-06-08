@@ -3,10 +3,6 @@
 Things noted as needing work later. Add to / re-order freely. When something
 ships, drop the bullet rather than checking it off — git history is the record.
 
-## Bugs
-
-(empty for now — both prior items shipped)
-
 ## UX / affordances (need design input — don't YOLO)
 
 - **Selection-mode indicator.** Dispatch state has `mode`, nothing renders it.
