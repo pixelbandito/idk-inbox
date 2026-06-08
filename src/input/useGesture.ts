@@ -59,6 +59,11 @@ export function useGesture(
     let startT = 0;
     let pointerId: number | null = null;
     let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+    // True iff onLongPress fired during the current gesture cycle. When set,
+    // the matching pointerup suppresses onClick — long-press and click are
+    // mutually exclusive interpretations of the same gesture, so a held tap
+    // shouldn't also count as a tap.
+    let longPressFired = false;
 
     const clearLongPress = () => {
       if (longPressTimer !== null) {
@@ -73,6 +78,7 @@ export function useGesture(
       startX = ev.clientX;
       startY = ev.clientY;
       startT = Date.now();
+      longPressFired = false;
       // Capture the pointer so subsequent move/up events fire on this element
       // even if the cursor leaves its bounds. Without this, horizontal mouse
       // drags are eaten by the panel container's scroll-snap.
@@ -84,6 +90,7 @@ export function useGesture(
         const ms = o.longPressMs ?? 500;
         longPressTimer = setTimeout(() => {
           longPressTimer = null;
+          longPressFired = true;
           // long-press only fires if we still hold the pointer with negligible movement.
           // (Move handler clears the timer if motion exceeds tolerance.)
           o.onLongPress!({ target: ev.target as Element | null });
@@ -131,10 +138,11 @@ export function useGesture(
         return;
       }
 
-      if (absDx <= clickMax && absDy <= clickMax) {
+      if (absDx <= clickMax && absDy <= clickMax && !longPressFired) {
         o.onClick?.({ target });
       }
-      // else: ambiguous gesture (between clickMax and swipeMin) — no callback fires.
+      // else: ambiguous gesture (between clickMax and swipeMin), or long-press
+      // already fired this cycle — no callback fires.
     };
 
     const onCancel = (ev: PointerEvent) => {

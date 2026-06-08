@@ -69,7 +69,9 @@ export function LayoutContainer({ renderPanel }: LayoutContainerProps) {
         >
           {renderPanel(panel, i, {
             onOpenThread: noop,
-            onClose: noop,
+            onClose: () => {
+              void dispatch({ action: 'close-panel', args: { panelIndex: i }, context: ctx });
+            },
           })}
         </section>
       ))}

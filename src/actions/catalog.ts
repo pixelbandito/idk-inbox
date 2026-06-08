@@ -1,4 +1,4 @@
-import type { ActionId, ActionCategory, PickerId, ReadonlyContext } from '../input/types';
+import type { ActionId, ActionCategory, ReadonlyContext } from '../input/types';
 import {
   // Thread-targeted
   archiveThreadAction,
@@ -43,13 +43,23 @@ export {
   openCommandPaletteAction, exitModeAction, threadModel,
 } from './types';
 
+/**
+ * Display-only catalog entry consumed by the command palette.
+ *
+ * Authoritative metadata lives elsewhere:
+ *   - auth requirement: src/actions/confirmations.ts (CONFIRMATION_REQUIREMENTS)
+ *   - elicitation pickers: src/state/DispatchProvider.tsx (RegisteredAction.elicitVia)
+ *   - "destructive" semantics: derivable from CONFIRMATION_REQUIREMENTS
+ *     (confirmEach / irreversible flags)
+ *
+ * Do not re-add `requiresAuth` / `destructive` / `elicitVia` here without a
+ * concrete consumer; mirroring them on this entry caused confusion about
+ * which source was authoritative.
+ */
 export interface ActionCatalogEntry {
   id:           ActionId;
   label:        string;
   category:     ActionCategory;
-  destructive?: boolean;
-  requiresAuth?: boolean;
-  elicitVia?:   PickerId;
   /** Optional pure function producing a context-aware preview string for Cmd-K. */
   previewFor?:  (ctx: ReadonlyContext) => string;
   /** Optional default keyboard combo to display in the palette. */
@@ -170,14 +180,14 @@ export const shortcutCueByActionName: Partial<Record<ActionName, string>> = {
 
 export const ACTION_CATALOG: ActionCatalogEntry[] = [
   // Thread-write
-  { id: 'archive-thread',      label: 'Archive',          category: 'thread-write', requiresAuth: true, keyboardCue: 'J', previewFor: previewTargets('Archive') },
-  { id: 'delete-thread',       label: 'Delete',           category: 'thread-write', requiresAuth: true, destructive: true, keyboardCue: '#', previewFor: previewTargets('Delete') },
-  { id: 'spam-thread',         label: 'Mark as spam',     category: 'thread-write', requiresAuth: true, destructive: true, keyboardCue: '!', previewFor: previewTargets('Mark as spam') },
-  { id: 'snooze-thread',       label: 'Snooze',           category: 'thread-write', requiresAuth: true, elicitVia: 'picker-snooze', keyboardCue: 'B', previewFor: previewTargets('Snooze') },
-  { id: 'add-label-thread',    label: 'Apply label',      category: 'thread-write', requiresAuth: true, elicitVia: 'picker-label', previewFor: previewTargets('Apply label to') },
-  { id: 'remove-label-thread', label: 'Remove label',     category: 'thread-write', requiresAuth: true, elicitVia: 'picker-label', previewFor: previewTargets('Remove label from') },
-  { id: 'unsubscribe-thread',  label: 'Unsubscribe',      category: 'thread-write', requiresAuth: true, destructive: true, previewFor: previewTargets('Unsubscribe from') },
-  { id: 'modify-thread-labels',label: 'Modify labels…',   category: 'thread-write', requiresAuth: true },
+  { id: 'archive-thread',      label: 'Archive',          category: 'thread-write', keyboardCue: 'J', previewFor: previewTargets('Archive') },
+  { id: 'delete-thread',       label: 'Delete',           category: 'thread-write', keyboardCue: '#', previewFor: previewTargets('Delete') },
+  { id: 'spam-thread',         label: 'Mark as spam',     category: 'thread-write', keyboardCue: '!', previewFor: previewTargets('Mark as spam') },
+  { id: 'snooze-thread',       label: 'Snooze',           category: 'thread-write', keyboardCue: 'B', previewFor: previewTargets('Snooze') },
+  { id: 'add-label-thread',    label: 'Apply label',      category: 'thread-write', previewFor: previewTargets('Apply label to') },
+  { id: 'remove-label-thread', label: 'Remove label',     category: 'thread-write', previewFor: previewTargets('Remove label from') },
+  { id: 'unsubscribe-thread',  label: 'Unsubscribe',      category: 'thread-write', previewFor: previewTargets('Unsubscribe from') },
+  { id: 'modify-thread-labels',label: 'Modify labels…',   category: 'thread-write' },
 
   // Layout
   { id: 'open-panel',          label: 'Open',             category: 'layout' },

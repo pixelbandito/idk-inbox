@@ -5,13 +5,7 @@ ships, drop the bullet rather than checking it off — git history is the record
 
 ## Bugs
 
-- **`DispatchProvider.tsx` hardcodes `focusedPanelIndex: 1`.** Overscroll-close
-  and the thread "close" button both rely on this and always target panel 1.
-  Needs real focus tracking. (`src/state/DispatchProvider.tsx:140`)
-- **`useGesture` fires `onClick` after `onLongPress` on the same release.**
-  The primitive doesn't track whether long-press already fired, so a held tap
-  enters selection mode AND opens the thread. Fix at the primitive: suppress
-  `onClick` when `onLongPress` just fired. (`src/input/useGesture.ts`)
+(empty for now — both prior items shipped)
 
 ## UX / affordances (need design input — don't YOLO)
 
@@ -41,13 +35,15 @@ ships, drop the bullet rather than checking it off — git history is the record
 
 ## Code cleanup (low priority)
 
-- **`ACTION_CATALOG.requiresAuth` / `.destructive`** are documentation-only
-  now — no runtime consults them. Either derive from `CONFIRMATION_REQUIREMENTS`
-  or strip. (`src/actions/catalog.ts`)
 - **Block-axis swipe triggers** (`swipeBlockEnd`, `swipeBlockStart`) are
   reserved in the registry but unassigned in any surface's action map.
 - **Overscroll producer's `OVERSCROLL_PX = 80`** is hard-coded. Parameterise
   if anyone ever wants a per-surface tuning knob. (`src/triggers/producers/fromOverscroll.ts`)
+- **`ACTION_CATALOG` is hand-maintained alongside `ACTIONS` + the side maps.**
+  Reasonable next step is to derive the catalog from those rather than keep
+  two parallel lists. Out of scope until the palette grows a real consumer
+  that needs more fields than today's `label` / `category` / `previewFor` /
+  `keyboardCue`.
 
 ## See also
 

@@ -69,6 +69,29 @@ describe('useGesture', () => {
     expect(onLongPress).not.toHaveBeenCalled();
   });
 
+  it('suppresses onClick if onLongPress already fired during the same gesture cycle', () => {
+    const onClick = vi.fn();
+    const onLongPress = vi.fn();
+    const { getByTestId } = render(<Target onClick={onClick} onLongPress={onLongPress} longPressMs={500} />);
+    const el = getByTestId('target');
+    fireEvent.pointerDown(el, { pointerId: 1, clientX: 50, clientY: 50 });
+    vi.advanceTimersByTime(500);  // long-press fires
+    fireEvent.pointerUp(el,   { pointerId: 1, clientX: 51, clientY: 50 });  // release with no motion
+    expect(onLongPress).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('still fires onClick on a quick tap when onLongPress is also bound', () => {
+    const onClick = vi.fn();
+    const onLongPress = vi.fn();
+    const { getByTestId } = render(<Target onClick={onClick} onLongPress={onLongPress} longPressMs={500} />);
+    const el = getByTestId('target');
+    fireEvent.pointerDown(el, { pointerId: 1, clientX: 50, clientY: 50 });
+    fireEvent.pointerUp(el,   { pointerId: 1, clientX: 52, clientY: 51 });  // release before timer
+    expect(onLongPress).not.toHaveBeenCalled();
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
   it('treats below-threshold drag as a click, not a swipe', () => {
     const onClick = vi.fn();
     const onSwipe = vi.fn();

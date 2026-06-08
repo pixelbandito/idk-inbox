@@ -136,14 +136,23 @@ export function DispatchProvider({
     panels, focusIndex, setPanels, setFocusIndex,
   }), [panels, focusIndex, setPanels, setFocusIndex]);
 
-  const ctx: ReadonlyContext = useMemo(() => ({
-    focusedPanelIndex: 1,
-    focusedPanelKind:  'threadlist',
-    focusedLabel:      'INBOX',
-    selection,
-    mode,
-    signedIn,
-  }), [selection, mode, signedIn]);
+  const ctx: ReadonlyContext = useMemo(() => {
+    // Derive focused-panel context from the live panels + focusIndex state.
+    // Previously hardcoded to index 1 / threadlist / INBOX, which silently
+    // broke any action whose args came from context (close-panel via
+    // overscroll; thread-scoped actions when the focused panel was a thread,
+    // not a list; refresh keyed on focused label).
+    const focused = panels[focusIndex];
+    return {
+      focusedPanelIndex: focusIndex,
+      focusedPanelKind:  focused?.kind ?? 'threadlist',
+      focusedThreadId:   focused?.kind === 'thread'      ? focused.threadId : undefined,
+      focusedLabel:      focused?.kind === 'threadlist'  ? focused.label    : undefined,
+      selection,
+      mode,
+      signedIn,
+    };
+  }, [panels, focusIndex, selection, mode, signedIn]);
 
   // Mirror ctx in a ref so the redispatch indirection in undo/redo can pass
   // the latest context without depending on stale closures.
