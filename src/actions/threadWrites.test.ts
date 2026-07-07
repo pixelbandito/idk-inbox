@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createThreadWriteActions } from './threadWrites';
+import { cacheThreadSummaries, resetThreadSummaryCache } from '../state/threadSummaryCache';
 import type { ThreadWriteClient, ThreadWriteOutcome } from '../lib/gmail/threadWriteClient';
 import type { ReadonlyContext } from '../input/types';
 
@@ -212,10 +213,58 @@ describe('createThreadWriteActions', () => {
     expect(result).toEqual({ ok: false, error: 'Gmail labels list failed: 500' });
   });
 
-  it('unsubscribe is honestly unimplemented', async () => {
+  it('apply-auto-archive reports and announces archived counts, quiet when none', async () => {
     const { client } = fakeClient();
-    const actions = actionsWith(client);
-    const result = await actions.unsubscribeThread({ targets: ['t1'] }, ctx);
-    expect(result.ok).toBe(false);
+    const autoArchive = vi.fn(async () => ({ archived: 2 }));
+    const actions = createThreadWriteActions({ getToken: () => 'tok', client, autoArchive });
+    expect(await actions.applyAutoArchive({}, ctx)).toEqual({
+      ok: true, description: 'Auto-archived 2 threads', announce: true,
+    });
+
+    const quiet = createThreadWriteActions({
+      getToken: () => 'tok', client, autoArchive: vi.fn(async () => ({ archived: 0 })),
+    });
+    expect(await quiet.applyAutoArchive({}, ctx)).toEqual({
+      ok: true, description: 'No mail matched auto-archive rules', mutated: false,
+    });
+  });
+
+  describe('unsubscribe', () => {
+    const summaryWithHeader = {
+      id: 'm1', threadId: 't1', from: 'Deals <deals@shop.example>',
+      subject: 's', snippet: '', date: '', unread: true,
+      listUnsubscribe: '<mailto:leave@shop.example>, <https://shop.example/unsub?u=1>',
+    };
+
+    beforeEach(() => resetThreadSummaryCache());
+
+    it('opens the https unsubscribe link and announces, without a Gmail write', async () => {
+      cacheThreadSummaries([summaryWithHeader]);
+      const { client, modifyThreadLabels } = fakeClient();
+      const openExternal = vi.fn();
+      const actions = createThreadWriteActions({ getToken: () => 'tok', client, openExternal });
+
+      const result = await actions.unsubscribeThread({ targets: ['t1'] }, ctx);
+
+      expect(openExternal).toHaveBeenCalledWith('https://shop.example/unsub?u=1');
+      expect(modifyThreadLabels).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        ok: true,
+        description: 'Opened unsubscribe for deals@shop.example',
+        announce: true,
+        mutated: false,
+      });
+    });
+
+    it('fails readably without a List-Unsubscribe header or with multiple targets', async () => {
+      cacheThreadSummaries([{ ...summaryWithHeader, listUnsubscribe: undefined }]);
+      const { client } = fakeClient();
+      const openExternal = vi.fn();
+      const actions = createThreadWriteActions({ getToken: () => 'tok', client, openExternal });
+
+      expect((await actions.unsubscribeThread({ targets: ['t1'] }, ctx)).ok).toBe(false);
+      expect((await actions.unsubscribeThread({ targets: ['t1', 't2'] }, ctx)).ok).toBe(false);
+      expect(openExternal).not.toHaveBeenCalled();
+    });
   });
 });

@@ -10,6 +10,7 @@ import {
   unsubscribeThreadAction,
   modifyThreadLabelsAction,
   wakeSnoozedAction,
+  applyAutoArchiveAction,
   // Layout
   openPanelAction,
   closePanelAction,
@@ -38,7 +39,8 @@ export type { Action, ActionName, ModelName } from './types';
 export {
   archiveThreadAction, deleteThreadAction, spamThreadAction, snoozeThreadAction,
   addLabelThreadAction, removeLabelThreadAction, unsubscribeThreadAction,
-  modifyThreadLabelsAction, wakeSnoozedAction, openPanelAction, closePanelAction, navPanelPrevAction,
+  modifyThreadLabelsAction, wakeSnoozedAction, applyAutoArchiveAction,
+  openPanelAction, closePanelAction, navPanelPrevAction,
   navPanelNextAction, refreshPanelAction, enterSelectionAction, exitSelectionAction,
   toggleSelectionAction, signInAction, signOutAction, undoAction, redoAction,
   openCommandPaletteAction, exitModeAction, threadModel,
@@ -93,8 +95,9 @@ export const ACTIONS: Action[] = [
   { name: removeLabelThreadAction,  modelName: threadModel },
   { name: unsubscribeThreadAction,  modelName: threadModel },
   { name: modifyThreadLabelsAction, modelName: threadModel },
-  // Operates on whatever is due, not on selected threads — no model target.
+  // Sweeps operate on whatever matches, not on selected threads — no model target.
   { name: wakeSnoozedAction },
+  { name: applyAutoArchiveAction },
 
   // Layout (open-panel takes a threadId; the rest operate on the focused panel
   // / app state and have no model target)
@@ -134,6 +137,7 @@ export const labelByActionName: Record<ActionName, string> = {
   [unsubscribeThreadAction]:  'Unsubscribe',
   [modifyThreadLabelsAction]: 'Modify labels…',
   [wakeSnoozedAction]:        'Wake due snoozes',
+  [applyAutoArchiveAction]:   'Apply auto-archive rules',
 
   [openPanelAction]:          'Open',
   [closePanelAction]:         'Close panel',
@@ -193,6 +197,7 @@ export const ACTION_CATALOG: ActionCatalogEntry[] = [
   { id: 'unsubscribe-thread',  label: 'Unsubscribe',      category: 'thread-write', previewFor: previewTargets('Unsubscribe from') },
   { id: 'modify-thread-labels',label: 'Modify labels…',   category: 'thread-write' },
   { id: 'wake-snoozed',        label: 'Wake due snoozes', category: 'thread-write' },
+  { id: 'apply-auto-archive',  label: 'Apply auto-archive rules', category: 'thread-write' },
 
   // Layout
   { id: 'open-panel',          label: 'Open',             category: 'layout' },

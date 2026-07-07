@@ -14,6 +14,8 @@ import {
 import type { TriggerName } from '../triggers/types';
 import { fetchByLabel } from '../lib/gmail/fetchByLabel';
 import { cacheThreadSummaries } from '../state/threadSummaryCache';
+import { recordSightings } from '../lib/heuristics/triageLog';
+import { SuggestionCard } from '../feedback/SuggestionCard';
 import type { EmailSummary } from '../lib/gmail/types';
 
 // All row interactions flow through the trigger pipeline:
@@ -86,6 +88,8 @@ export function ThreadlistPanel({
       const result = await fetchByLabel(token, label);
       if (seq !== loadSeq.current) return;
       cacheThreadSummaries(result.emails);
+      // Inbox arrivals feed the sender-fatigue heuristic.
+      if (label === 'INBOX') recordSightings(result.emails);
       setEmails(result.emails);
       setFailed(result.failed);
     } catch (e) {
@@ -128,6 +132,7 @@ export function ThreadlistPanel({
         }
       />
       <div className="panel__body">
+        {label === 'INBOX' && <SuggestionCard emails={emails} />}
         {error && <p className="error">{error}</p>}
         {failed > 0 && (
           <p className="error">

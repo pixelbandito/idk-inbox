@@ -19,6 +19,7 @@ import { createSelectionActions } from '../actions/selection';
 import { createLayoutActions } from '../actions/layout';
 import { createAppActions } from '../actions/app';
 import { createDispatcher } from '../input/dispatch';
+import { recordTriageForThreads, type TriageAction } from '../lib/heuristics/triageLog';
 import {
   DispatchContext,
   DispatcherContext,
@@ -67,6 +68,13 @@ function needsElicitation(
   if (action.elicitVia === 'picker-label' && args.label == null) return 'picker-label';
   return null;
 }
+
+// Discard-type writes feed the sender-fatigue heuristic.
+const TRIAGE_BY_ACTION: Record<string, TriageAction> = {
+  'archive-thread': 'archive',
+  'delete-thread':  'delete',
+  'spam-thread':    'spam',
+};
 
 function asAction(
   id: string,
@@ -307,6 +315,7 @@ export function DispatchProvider({
     'snooze-thread':        asAction('snooze-thread',        'Snooze',         'thread-write', threadWriteActions.snoozeThread,      { elicitVia: 'picker-snooze' }),
     'unsubscribe-thread':   asAction('unsubscribe-thread',   'Unsubscribe',    'thread-write', threadWriteActions.unsubscribeThread, { destructive: true }),
     'wake-snoozed':         asAction('wake-snoozed',         'Wake due snoozes', 'thread-write', threadWriteActions.wakeSnoozed),
+    'apply-auto-archive':   asAction('apply-auto-archive',   'Apply auto-archive rules', 'thread-write', threadWriteActions.applyAutoArchive),
 
     // Layout (real):
     'open-panel':           asAction('open-panel',           'Open thread',    'layout',       layoutActions.openPanel),
@@ -340,6 +349,10 @@ export function DispatchProvider({
       const isThreadWrite = registry[req.action]?.category === 'thread-write';
       if (result.ok && isThreadWrite && result.mutated !== false) {
         setThreadsVersion((v) => v + 1);
+        const triageAction = TRIAGE_BY_ACTION[req.action];
+        if (triageAction) {
+          recordTriageForThreads((req.args.targets as string[] | undefined) ?? [], triageAction);
+        }
       }
       return result;
     };

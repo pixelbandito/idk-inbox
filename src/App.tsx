@@ -79,8 +79,9 @@ function AppInner({ getToken }: { getToken: () => string | null }) {
   const bootstrapped = useRef(false);
 
   // Post-sign-in bootstrap: make sure the app labels exist, then wake any
-  // snoozed threads that came due while the app was closed. wake-snoozed is a
-  // thread-write, so its success refreshes the lists automatically.
+  // snoozed threads that came due while the app was closed and apply the
+  // user's auto-archive rules. Both are thread-writes, so their successes
+  // refresh the lists automatically.
   useEffect(() => {
     if (!ctx.signedIn || bootstrapped.current) return;
     const token = getToken();
@@ -93,6 +94,7 @@ function AppInner({ getToken }: { getToken: () => string | null }) {
         console.warn('label bootstrap failed:', e);
       }
       await dispatch({ action: 'wake-snoozed', args: {}, context: ctx });
+      await dispatch({ action: 'apply-auto-archive', args: {}, context: ctx });
     })();
   }, [ctx, dispatch, getToken]);
 

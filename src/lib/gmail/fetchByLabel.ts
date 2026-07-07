@@ -40,7 +40,8 @@ export async function fetchByLabel(
       gmailJson<RawGmailMessage>(
         token,
         `/messages/${encodeURIComponent(id)}?format=metadata` +
-          '&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date',
+          '&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date' +
+          '&metadataHeaders=List-Unsubscribe',
         'message get',
       ),
     ),

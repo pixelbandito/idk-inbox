@@ -6,6 +6,7 @@
 // stored. Never subjects or bodies.
 
 import { threadSummaryOf } from '../../state/threadSummaryCache';
+import { senderAddressOf } from '../gmail/address';
 import type { EmailSummary } from '../gmail/types';
 
 const STORAGE_KEY = 'idk-inbox:triage-log';
@@ -32,12 +33,6 @@ export interface SenderStats {
   sender: string;
   received: number;
   dismissedUnread: number;
-}
-
-/** "Name <a@b.c>" → "a@b.c"; bare addresses pass through. */
-export function senderAddressOf(from: string): string {
-  const bracketed = /<([^>]+)>/.exec(from);
-  return (bracketed ? bracketed[1] : from).trim().toLowerCase();
 }
 
 function readLog(): Log {

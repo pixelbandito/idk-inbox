@@ -10,8 +10,12 @@ import {
   type ThreadWriteClient,
 } from '../lib/gmail/threadWriteClient';
 import { SNOOZED_LABEL } from '../lib/gmail/labelBootstrap';
+import { senderAddressOf } from '../lib/gmail/address';
+import { unsubscribeUriOf } from '../lib/gmail/unsubscribe';
 import { snoozeBucketLabel } from '../lib/snooze/bucket';
 import { sweepDueSnoozes, type WakeSweepResult } from '../lib/snooze/wakeSweep';
+import { sweepAutoArchive, type AutoArchiveSweepResult } from '../lib/rules/autoArchive';
+import { threadSummaryOf } from '../state/threadSummaryCache';
 
 export interface ModifyArgs       { targets: ThreadRef[]; add: string[]; remove: string[]; }
 export interface SingleTargetArgs { targets: ThreadRef[]; }
@@ -23,15 +27,21 @@ export interface ThreadWriteDeps {
   client?: ThreadWriteClient;
   /** Test seam: overrides the real snooze wake-up sweep. */
   sweep?: (token: string, client: ThreadWriteClient) => Promise<WakeSweepResult>;
+  /** Test seam: overrides the real auto-archive rule sweep. */
+  autoArchive?: (token: string, client: ThreadWriteClient) => Promise<AutoArchiveSweepResult>;
+  /** Opens a URL outside the app; defaults to window.open. Test seam. */
+  openExternal?: (url: string) => void;
 }
 
 function summarize(n: number, verb: string): string {
   return `${verb} ${n} thread${n === 1 ? '' : 's'}`;
 }
 
-export function createThreadWriteActions({ getToken, client, sweep }: ThreadWriteDeps) {
+export function createThreadWriteActions({ getToken, client, sweep, autoArchive, openExternal }: ThreadWriteDeps) {
   const writes = client ?? createThreadWriteClient();
   const runSweep = sweep ?? sweepDueSnoozes;
+  const runAutoArchive = autoArchive ?? sweepAutoArchive;
+  const openUrl = openExternal ?? ((url: string) => { window.open(url, '_blank', 'noopener'); });
 
   /**
    * Shared write path: apply `change` to `targets`, report a human summary,
@@ -135,9 +145,46 @@ export function createThreadWriteActions({ getToken, client, sweep }: ThreadWrit
       }
     },
 
-    // Real unsubscribe (List-Unsubscribe header) is a later slice; failing
-    // honestly beats pretending it worked.
-    unsubscribeThread: async (_args: SingleTargetArgs, _ctx: ReadonlyContext): Promise<ActionResult> =>
-      ({ ok: false, error: 'Unsubscribe is not implemented yet.' }),
+    /** Applies the locally stored auto-archive rules; same refresh ride as wake-snoozed. */
+    applyAutoArchive: async (_args: Record<string, never>, _ctx: ReadonlyContext): Promise<ActionResult> => {
+      const token = getToken();
+      if (!token) return { ok: false, error: 'Not signed in.' };
+      try {
+        const { archived } = await runAutoArchive(token, writes);
+        if (archived === 0) {
+          return { ok: true, description: 'No mail matched auto-archive rules', mutated: false };
+        }
+        return {
+          ok: true,
+          description: `Auto-archived ${archived} thread${archived === 1 ? '' : 's'}`,
+          announce: true,
+        };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Auto-archive sweep failed.' };
+      }
+    },
+
+    /**
+     * Opens the sender's List-Unsubscribe page (or mailto). No Gmail write
+     * happens — the user finishes on the sender's side — so mutated:false
+     * and no inverse.
+     */
+    unsubscribeThread: async (args: SingleTargetArgs, _ctx: ReadonlyContext): Promise<ActionResult> => {
+      if (args.targets.length !== 1) {
+        return { ok: false, error: 'Unsubscribe works on one thread at a time.' };
+      }
+      const summary = threadSummaryOf(args.targets[0]);
+      const uri = summary?.listUnsubscribe ? unsubscribeUriOf(summary.listUnsubscribe) : null;
+      if (!summary || !uri) {
+        return { ok: false, error: 'No unsubscribe link found for this sender.' };
+      }
+      openUrl(uri);
+      return {
+        ok: true,
+        description: `Opened unsubscribe for ${senderAddressOf(summary.from)}`,
+        announce: true,
+        mutated: false,
+      };
+    },
   };
 }

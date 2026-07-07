@@ -11,4 +11,6 @@ export interface EmailSummary {
   snippet: string;
   date: string;
   unread: boolean;
+  /** Raw List-Unsubscribe header when the sender provides one. */
+  listUnsubscribe?: string;
 }

@@ -13,6 +13,7 @@ export const removeLabelThreadAction  = Symbol('remove-label-thread');
 export const unsubscribeThreadAction  = Symbol('unsubscribe-thread');
 export const modifyThreadLabelsAction = Symbol('modify-thread-labels');
 export const wakeSnoozedAction        = Symbol('wake-snoozed');
+export const applyAutoArchiveAction   = Symbol('apply-auto-archive');
 
 // Layout
 export const openPanelAction      = Symbol('open-panel');
@@ -44,6 +45,7 @@ export type ActionName =
   | typeof unsubscribeThreadAction
   | typeof modifyThreadLabelsAction
   | typeof wakeSnoozedAction
+  | typeof applyAutoArchiveAction
   | typeof openPanelAction
   | typeof closePanelAction
   | typeof navPanelPrevAction

@@ -1,0 +1,95 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { SuggestionCard } from './SuggestionCard';
+import { DispatchProvider } from '../state/DispatchProvider';
+import { spyThreadWriteClient } from '../test/spyThreadWriteClient';
+import { recordSightings, recordTriageForThreads, resetTriageLog } from '../lib/heuristics/triageLog';
+import { resetDismissals } from '../lib/heuristics/dismissals';
+import { autoArchiveRules, resetAutoArchiveRules } from '../lib/rules/autoArchive';
+import { cacheThreadSummaries, resetThreadSummaryCache } from '../state/threadSummaryCache';
+import type { EmailSummary } from '../lib/gmail/types';
+
+const SENDER = 'deals@shop.example';
+
+function email(i: number, unread = true): EmailSummary {
+  return {
+    id: `m${i}`, threadId: `t${i}`, from: `Deals <${SENDER}>`,
+    subject: 'sale!', snippet: '', date: '', unread,
+    listUnsubscribe: '<https://shop.example/unsub>',
+  };
+}
+
+/** 6 sightings, 5 dismissed unread → over the 5-in-14-days / 80% bar. */
+function seedFatigue() {
+  const emails = Array.from({ length: 6 }, (_, i) => email(i));
+  cacheThreadSummaries(emails);
+  recordSightings(emails);
+  recordTriageForThreads(emails.slice(0, 5).map((e) => e.threadId), 'archive');
+  return emails;
+}
+
+function renderCard(emails: EmailSummary[]) {
+  const { client } = spyThreadWriteClient();
+  const openExternal = vi.fn();
+  render(
+    <DispatchProvider signedIn getToken={() => 'tok'} threadWriteClient={client}>
+      <SuggestionCard emails={emails} />
+    </DispatchProvider>,
+  );
+  return { openExternal };
+}
+
+describe('SuggestionCard', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    resetTriageLog();
+    resetDismissals();
+    resetAutoArchiveRules();
+    resetThreadSummaryCache();
+  });
+
+  it('stays hidden without a fatigued sender', async () => {
+    renderCard([email(1)]);
+    await act(async () => {}); // flush the microtask
+    expect(screen.queryByRole('region', { name: /suggestion/i })).toBeNull();
+  });
+
+  it('surfaces the fatigued sender with its stats', async () => {
+    const emails = seedFatigue();
+    renderCard(emails);
+    const card = await screen.findByRole('region', { name: /suggestion/i });
+    expect(card).toHaveTextContent('5 of 6');
+    expect(card).toHaveTextContent(SENDER);
+  });
+
+  it('Dismiss hides the card and persists across re-renders', async () => {
+    const emails = seedFatigue();
+    renderCard(emails);
+    const dismiss = await screen.findByRole('button', { name: /dismiss/i });
+    await act(async () => { fireEvent.click(dismiss); });
+    expect(screen.queryByRole('region', { name: /suggestion/i })).toBeNull();
+
+    // A fresh mount stays quiet: the dismissal is stored.
+    renderCard(emails);
+    await act(async () => {});
+    expect(screen.queryByRole('region', { name: /suggestion/i })).toBeNull();
+  });
+
+  it('Auto-archive stores a rule and settles the suggestion', async () => {
+    const emails = seedFatigue();
+    renderCard(emails);
+    const button = await screen.findByRole('button', { name: /auto-archive/i });
+    await act(async () => { fireEvent.click(button); });
+
+    expect(autoArchiveRules().map((r) => r.sender)).toEqual([SENDER]);
+    await waitFor(() =>
+      expect(screen.queryByRole('region', { name: /suggestion/i })).toBeNull());
+  });
+
+  it('offers Unsubscribe only when a row carries a List-Unsubscribe header', async () => {
+    const bare = seedFatigue().map((e) => ({ ...e, listUnsubscribe: undefined }));
+    renderCard(bare);
+    await screen.findByRole('region', { name: /suggestion/i });
+    expect(screen.queryByRole('button', { name: /unsubscribe/i })).toBeNull();
+  });
+});
