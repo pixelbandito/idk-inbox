@@ -72,13 +72,33 @@ function rowWithThreadId(id: string): HTMLElement {
 // ----- Tests -----
 
 describe('argsFor — thread-targeted actions', () => {
-  it('uses ctx.selection when non-empty', () => {
+  it('uses ctx.selection when the gesture lands on a selected row', () => {
+    const args = argsFor(
+      action(archiveThreadAction, threadModel),
+      swipeEv(rowWithThreadId('b')),
+      baseCtx({ selection: ['a', 'b', 'c'] }),
+    );
+    expect(args).toEqual({ targets: ['a', 'b', 'c'] });
+  });
+
+  it('targets ONLY the swiped row when it is outside the selection', () => {
+    // Swiping an unselected row must never fan a destructive action out to
+    // the whole selection.
     const args = argsFor(
       action(archiveThreadAction, threadModel),
       swipeEv(rowWithThreadId('t-1')),
       baseCtx({ selection: ['a', 'b', 'c'] }),
     );
-    expect(args).toEqual({ targets: ['a', 'b', 'c'] });
+    expect(args).toEqual({ targets: ['t-1'] });
+  });
+
+  it('uses ctx.selection for keyboard events (no row target)', () => {
+    const args = argsFor(
+      action(archiveThreadAction, threadModel),
+      keyEv('e'),
+      baseCtx({ selection: ['a', 'b'] }),
+    );
+    expect(args).toEqual({ targets: ['a', 'b'] });
   });
 
   it('falls back to data-thread-id walked up from event.target', () => {

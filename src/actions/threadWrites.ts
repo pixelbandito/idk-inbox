@@ -55,7 +55,7 @@ export function createThreadWriteActions({ getToken, client, sweep }: ThreadWrit
 
     const { succeeded, failed } = outcome;
     if (succeeded.length === 0) {
-      return { ok: false, error: `${verbs.done} failed for all ${targets.length} thread${targets.length === 1 ? '' : 's'}.` };
+      return { ok: false, error: `${summarize(0, verbs.done)} of ${targets.length} — nothing changed.` };
     }
 
     const suffix = failed.length > 0 ? ` (${failed.length} failed)` : '';
@@ -99,6 +99,11 @@ export function createThreadWriteActions({ getToken, client, sweep }: ThreadWrit
       if (!args.until) return { ok: false, error: 'Snooze duration required.' };
       const until = new Date(args.until);
       if (Number.isNaN(until.getTime())) return { ok: false, error: 'Invalid snooze date.' };
+      // A past wake time would file the thread into an already-due bucket —
+      // hidden until the next sweep. Beyond 9999 the bucket codec can't
+      // represent the date at all.
+      if (until.getTime() <= Date.now()) return { ok: false, error: 'Snooze time must be in the future.' };
+      if (until.getUTCFullYear() > 9999) return { ok: false, error: 'Snooze time is too far out.' };
       return applyChange(
         args.targets,
         { add: [SNOOZED_LABEL, snoozeBucketLabel(until)], remove: ['INBOX'] },
@@ -116,11 +121,14 @@ export function createThreadWriteActions({ getToken, client, sweep }: ThreadWrit
       if (!token) return { ok: false, error: 'Not signed in.' };
       try {
         const { woken } = await runSweep(token, writes);
+        if (woken === 0) {
+          // Nothing changed: skip the list refresh and stay quiet.
+          return { ok: true, description: 'No snoozed threads due', mutated: false };
+        }
         return {
           ok: true,
-          description: woken > 0
-            ? `Woke ${woken} snoozed thread${woken === 1 ? '' : 's'}`
-            : 'No snoozed threads due',
+          description: `Woke ${woken} snoozed thread${woken === 1 ? '' : 's'}`,
+          announce: true,
         };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Snooze sweep failed.' };

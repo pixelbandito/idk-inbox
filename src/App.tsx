@@ -9,6 +9,7 @@ import { SnoozePicker } from './pickers/SnoozePicker';
 import { LabelPicker } from './pickers/LabelPicker';
 import { CommandPalette } from './palette/CommandPalette';
 import { UndoToast } from './feedback/UndoToast';
+import { FeedbackToast } from './feedback/FeedbackToast';
 import { ensureAppLabels, SNOOZED_LABEL } from './lib/gmail/labelBootstrap';
 import { displayNameOf } from './lib/gmail/labelDisplay';
 import { DispatchProvider } from './state/DispatchProvider';
@@ -128,6 +129,7 @@ function AppInner({ getToken }: { getToken: () => string | null }) {
       <LabelPicker getToken={getToken} />
       <CommandPalette />
       <UndoToast />
+      <FeedbackToast />
     </>
   );
 }

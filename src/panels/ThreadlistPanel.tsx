@@ -66,23 +66,32 @@ export function ThreadlistPanel({
   const { threadsVersion, labelVersions } = useRefreshState();
   // Any thread write (or a refresh-panel aimed at this label) invalidates the
   // list; combining the two versions gives the effect one number to watch.
-  const refreshTick = threadsVersion + (labelVersions[label] ?? 0);
+  // hasOwn guards against a label literally named "toString" etc.
+  const labelVersion = Object.hasOwn(labelVersions, label) ? labelVersions[label] : 0;
+  const refreshTick = threadsVersion + labelVersion;
+
+  // Loads can overlap (write-triggered refetch + manual ↻); only the newest
+  // may set state, or a slow stale response would resurrect old rows.
+  const loadSeq = useRef(0);
 
   const load = useCallback(async () => {
     const token = getToken();
     if (!token) return;
+    const seq = ++loadSeq.current;
     setLoading(true);
     setError(null);
     setFailed(0);
     try {
       const result = await fetchByLabel(token, label);
+      if (seq !== loadSeq.current) return;
       setEmails(result.emails);
       setFailed(result.failed);
     } catch (e) {
+      if (seq !== loadSeq.current) return;
       console.error(e);
       setError(e instanceof Error ? e.message : 'Failed to load.');
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }, [getToken, label]);
 

@@ -29,6 +29,25 @@ ships, drop the bullet rather than checking it off — git history is the record
   no sample/demo data path exists, so the signed-out flow can't be exercised
   without re-auth.
 
+## Deferred from the functional-triage review (2026-07-07)
+
+- **No optimistic row removal / swipe visual.** Between finger-lift and the
+  refetch completing, the UI is inert. List reads are consistent now
+  (`labelIds=`), so the row does vanish on refetch — but a brief optimistic
+  hide would feel snappier on cellular.
+- **Wake sweep runs once per page load.** A long-lived PWA tab never
+  re-sweeps; threads coming due mid-session wake on next reload. Consider a
+  `visibilitychange` re-sweep.
+- **Thread-write inverses assume INBOX provenance.** Undoing a delete made
+  from a tag list restores INBOX, which the thread may never have had.
+  Proper fix: capture prior labelIds per thread at write time.
+- **`fetchThread.ts` still hand-rolls BASE/auth** — fold into
+  `lib/gmail/http.ts` on next touch.
+- **SnoozePicker "This weekend" on a Saturday means next Saturday**
+  (`nextWeekday`'s `|| 7`). Unspecified; decide and test.
+- **`labelVersions` is keyed by focusedLabel.** refresh-panel on a non-label
+  panel bumps an `idx:N` key no panel watches — refresh is a no-op there.
+
 ## Code cleanup (low priority)
 
 - **Block-axis swipe triggers** (`swipeBlockEnd`, `swipeBlockStart`) are

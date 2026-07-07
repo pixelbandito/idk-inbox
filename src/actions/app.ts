@@ -30,20 +30,30 @@ export function createAppActions(s: AppSetters) {
       const entry = s.popUndo();
       if (!entry) return { ok: false, error: 'Nothing to undo.' };
       const result = await s.redispatch({ action: entry.inverse.action, args: entry.inverse.args });
-      if (result.ok) s.pushRedo(entry);
-      return result.ok
-        ? { ok: true, description: entry.inverse.description }
-        : result;
+      if (!result.ok) {
+        // A failed inverse (offline, expired token) must not eat the entry —
+        // restore it so the user can retry.
+        s.pushUndo(entry);
+        return result;
+      }
+      s.pushRedo(entry);
+      return { ok: true, description: entry.inverse.description };
     },
 
     redo: async (_args: Record<string, unknown>, _ctx: ReadonlyContext): Promise<ActionResult> => {
       const entry = s.popRedo();
       if (!entry) return { ok: false, error: 'Nothing to redo.' };
       const result = await s.redispatch({ action: entry.original.action, args: entry.original.args });
-      if (result.ok) s.pushUndo(entry);
-      return result.ok
-        ? { ok: true, description: entry.original.description }
-        : result;
+      if (!result.ok) {
+        s.pushRedo(entry);
+        return result;
+      }
+      // Prefer the fresh inverse: the redo may have succeeded for threads the
+      // original run failed on, and the stale inverse would skip them on undo.
+      s.pushUndo(result.inverse
+        ? { original: { ...entry.original, description: result.description }, inverse: result.inverse }
+        : entry);
+      return { ok: true, description: entry.original.description };
     },
 
     openCommandPalette: async (_args: Record<string, unknown>, _ctx: ReadonlyContext): Promise<ActionResult> => {

@@ -98,6 +98,16 @@ describe('createAppActions', () => {
       expect(s.pushRedo).not.toHaveBeenCalled();
       expect(result.ok).toBe(false);
     });
+
+    it('restores the entry when the inverse fails, so undo can be retried', async () => {
+      const s = makeSetters({
+        popUndo: vi.fn(() => sampleEntry),
+        redispatch: vi.fn(async (): Promise<ActionResult> => ({ ok: false, error: 'offline' })),
+      });
+      const actions = createAppActions(s);
+      await actions.undo({}, ctx);
+      expect(s.pushUndo).toHaveBeenCalledWith(sampleEntry);
+    });
   });
 
   describe('redo', () => {
@@ -123,6 +133,38 @@ describe('createAppActions', () => {
       expect(s.pushUndo).toHaveBeenCalledWith(sampleEntry);
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.description).toBe(sampleEntry.original.description);
+    });
+
+    it('prefers the fresh inverse from the redo run over the stale entry', async () => {
+      // The redo may succeed for threads the original run failed on; the
+      // stale inverse would skip them on the next undo.
+      const freshInverse = {
+        action: 'modify-thread-labels',
+        args: { targets: ['t1', 't2'], add: ['INBOX'], remove: [] },
+        description: 'Restored 2 threads',
+      };
+      const s = makeSetters({
+        popRedo: vi.fn(() => sampleEntry),
+        redispatch: vi.fn(async (): Promise<ActionResult> =>
+          ({ ok: true, description: 'Archived 2 threads', inverse: freshInverse })),
+      });
+      const actions = createAppActions(s);
+      await actions.redo({}, ctx);
+      expect(s.pushUndo).toHaveBeenCalledWith({
+        original: { ...sampleEntry.original, description: 'Archived 2 threads' },
+        inverse: freshInverse,
+      });
+    });
+
+    it('restores the entry when the redo fails', async () => {
+      const s = makeSetters({
+        popRedo: vi.fn(() => sampleEntry),
+        redispatch: vi.fn(async (): Promise<ActionResult> => ({ ok: false, error: 'offline' })),
+      });
+      const actions = createAppActions(s);
+      await actions.redo({}, ctx);
+      expect(s.pushRedo).toHaveBeenCalledWith(sampleEntry);
+      expect(s.pushUndo).not.toHaveBeenCalled();
     });
   });
 });

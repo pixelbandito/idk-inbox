@@ -9,6 +9,7 @@ import {
   removeLabelThreadAction,
   unsubscribeThreadAction,
   modifyThreadLabelsAction,
+  wakeSnoozedAction,
   // Layout
   openPanelAction,
   closePanelAction,
@@ -37,7 +38,7 @@ export type { Action, ActionName, ModelName } from './types';
 export {
   archiveThreadAction, deleteThreadAction, spamThreadAction, snoozeThreadAction,
   addLabelThreadAction, removeLabelThreadAction, unsubscribeThreadAction,
-  modifyThreadLabelsAction, openPanelAction, closePanelAction, navPanelPrevAction,
+  modifyThreadLabelsAction, wakeSnoozedAction, openPanelAction, closePanelAction, navPanelPrevAction,
   navPanelNextAction, refreshPanelAction, enterSelectionAction, exitSelectionAction,
   toggleSelectionAction, signInAction, signOutAction, undoAction, redoAction,
   openCommandPaletteAction, exitModeAction, threadModel,
@@ -92,6 +93,8 @@ export const ACTIONS: Action[] = [
   { name: removeLabelThreadAction,  modelName: threadModel },
   { name: unsubscribeThreadAction,  modelName: threadModel },
   { name: modifyThreadLabelsAction, modelName: threadModel },
+  // Operates on whatever is due, not on selected threads — no model target.
+  { name: wakeSnoozedAction },
 
   // Layout (open-panel takes a threadId; the rest operate on the focused panel
   // / app state and have no model target)
@@ -130,6 +133,7 @@ export const labelByActionName: Record<ActionName, string> = {
   [removeLabelThreadAction]:  'Remove label',
   [unsubscribeThreadAction]:  'Unsubscribe',
   [modifyThreadLabelsAction]: 'Modify labels…',
+  [wakeSnoozedAction]:        'Wake due snoozes',
 
   [openPanelAction]:          'Open',
   [closePanelAction]:         'Close panel',

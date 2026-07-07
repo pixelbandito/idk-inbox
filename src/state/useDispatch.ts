@@ -1,7 +1,7 @@
 import { useContext } from 'react';
 import {
-  DispatchContext, DispatcherContext, LayoutStateContext, PendingStateContext,
-  RefreshStateContext, UndoStateContext,
+  DispatchContext, DispatcherContext, FeedbackStateContext, LayoutStateContext,
+  PendingStateContext, RefreshStateContext, UndoStateContext,
 } from './dispatchContexts';
 
 export function useDispatchContext() {
@@ -30,4 +30,8 @@ export function usePending() {
 
 export function useRefreshState() {
   return useContext(RefreshStateContext);
+}
+
+export function useFeedback() {
+  return useContext(FeedbackStateContext);
 }

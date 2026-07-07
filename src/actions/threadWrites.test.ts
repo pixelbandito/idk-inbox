@@ -123,27 +123,29 @@ describe('createThreadWriteActions', () => {
     const actions = actionsWith(client);
 
     const result = await actions.snoozeThread(
-      { targets: ['t1'], until: '2026-06-01T09:00:00Z' }, ctx,
+      { targets: ['t1'], until: '2099-06-01T09:00:00Z' }, ctx,
     );
 
     expect(modifyThreadLabels).toHaveBeenCalledWith('token', ['t1'], {
-      add: ['idk-inbox/Snoozed', 'idk-inbox/Snoozed/2026-06-01-0900'],
+      add: ['idk-inbox/Snoozed', 'idk-inbox/Snoozed/2099-06-01-0900'],
       remove: ['INBOX'],
     });
     if (result.ok) {
       expect(result.inverse?.args).toEqual({
         targets: ['t1'],
         add: ['INBOX'],
-        remove: ['idk-inbox/Snoozed', 'idk-inbox/Snoozed/2026-06-01-0900'],
+        remove: ['idk-inbox/Snoozed', 'idk-inbox/Snoozed/2099-06-01-0900'],
       });
     }
   });
 
-  it('snooze refuses a missing or malformed until', async () => {
+  it('snooze refuses a missing, malformed, past, or unrepresentable until', async () => {
     const { client } = fakeClient();
     const actions = actionsWith(client);
     expect((await actions.snoozeThread({ targets: ['t1'] }, ctx)).ok).toBe(false);
     expect((await actions.snoozeThread({ targets: ['t1'], until: 'nope' }, ctx)).ok).toBe(false);
+    expect((await actions.snoozeThread({ targets: ['t1'], until: '2020-01-01T00:00:00Z' }, ctx)).ok).toBe(false);
+    expect((await actions.snoozeThread({ targets: ['t1'], until: '+010000-01-01T00:00:00Z' }, ctx)).ok).toBe(false);
   });
 
   it('partial failure succeeds with an inverse scoped to the threads that changed', async () => {
@@ -184,7 +186,9 @@ describe('createThreadWriteActions', () => {
     const result = await actions.wakeSnoozed({}, ctx);
 
     expect(sweep).toHaveBeenCalledWith('tok', client);
-    expect(result).toEqual({ ok: true, description: 'Woke 3 snoozed threads' });
+    expect(result).toEqual({
+      ok: true, description: 'Woke 3 snoozed threads', announce: true,
+    });
   });
 
   it('wake-snoozed with nothing due still succeeds quietly', async () => {
@@ -193,7 +197,8 @@ describe('createThreadWriteActions', () => {
     const actions = createThreadWriteActions({ getToken: () => 'tok', client, sweep });
 
     const result = await actions.wakeSnoozed({}, ctx);
-    expect(result).toEqual({ ok: true, description: 'No snoozed threads due' });
+    // mutated:false so a no-op sweep doesn't trigger a pointless list refresh.
+    expect(result).toEqual({ ok: true, description: 'No snoozed threads due', mutated: false });
   });
 
   it('wake-snoozed requires sign-in and surfaces sweep errors', async () => {

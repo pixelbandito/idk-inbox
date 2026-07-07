@@ -14,6 +14,7 @@ export interface LayoutContainerProps {
 
 function dataAttrs(panel: Panel): Record<string, string> {
   if (panel.kind === 'settings') return { 'data-kind': 'settings' };
+  if (panel.kind === 'labels') return { 'data-kind': 'labels' };
   if (panel.kind === 'threadlist')
     return { 'data-kind': 'threadlist', 'data-label': panel.label };
   return {
@@ -25,6 +26,7 @@ function dataAttrs(panel: Panel): Record<string, string> {
 
 function panelKey(panel: Panel, index: number): string {
   if (panel.kind === 'settings') return 'settings';
+  if (panel.kind === 'labels') return 'labels';
   if (panel.kind === 'threadlist') return `tl:${panel.label}`;
   return `th:${panel.threadId}:${index}`;
 }

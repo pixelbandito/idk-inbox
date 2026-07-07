@@ -67,7 +67,7 @@ describe('SnoozePicker', () => {
     await act(async () => {
       fireEvent.change(input, { target: { value: '2099-03-05T08:30' } });
     });
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^snooze$/i })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^snooze until/i })); });
 
     const expectedBucket =
       'idk-inbox/Snoozed/' +

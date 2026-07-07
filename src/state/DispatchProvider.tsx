@@ -22,10 +22,13 @@ import { createDispatcher } from '../input/dispatch';
 import {
   DispatchContext,
   DispatcherContext,
+  FeedbackStateContext,
   LayoutStateContext,
   PendingStateContext,
   RefreshStateContext,
   UndoStateContext,
+  type Feedback,
+  type FeedbackState,
   type LayoutState,
   type PendingRequest,
   type PendingState,
@@ -97,6 +100,7 @@ export function DispatchProvider({
   const [undoStack, setUndoStack]      = useState<UndoEntry[]>([]);
   const [redoStack, setRedoStack]      = useState<UndoEntry[]>([]);
   const [pending, setPending]          = useState<PendingRequest | null>(null);
+  const [feedback, setFeedback]        = useState<Feedback | null>(null);
 
   const [panels, setPanelsRaw] = useState<Panel[]>(initialPanels ?? []);
   const defaultFocus = useMemo(() => {
@@ -257,11 +261,13 @@ export function DispatchProvider({
   const stableGetToken = useCallback(() => getTokenRef.current?.() ?? null, []);
 
   // stableGetToken reads its ref only at dispatch time, never during render
-  // (same pattern as getPanels/getFocusIndex below).
+  // (same pattern as getPanels/getFocusIndex below). signedIn is a deliberate
+  // extra dep: label ids are per-account, so crossing a sign-out/sign-in
+  // boundary must rebuild the client and drop its resolver cache.
   const threadWriteActions = useMemo(
     // eslint-disable-next-line react-hooks/refs
     () => createThreadWriteActions({ getToken: stableGetToken, client: threadWriteClient }),
-    [stableGetToken, threadWriteClient],
+    [stableGetToken, threadWriteClient, signedIn], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // The getPanels/getFocusIndex/redispatch callbacks read refs only when
@@ -331,7 +337,8 @@ export function DispatchProvider({
     const run = createDispatcher(registry);
     return async (req: DispatchRequest): Promise<ActionResult> => {
       const result = await run(req);
-      if (result.ok && registry[req.action]?.category === 'thread-write') {
+      const isThreadWrite = registry[req.action]?.category === 'thread-write';
+      if (result.ok && isThreadWrite && result.mutated !== false) {
         setThreadsVersion((v) => v + 1);
       }
       return result;
@@ -356,6 +363,10 @@ export function DispatchProvider({
           inverse: result.inverse,
         });
       }
+      // Nothing else renders ActionResults, so failures (and undo-less
+      // outcomes that ask to be announced) surface here or nowhere.
+      if (!result.ok) setFeedback({ kind: 'error', message: result.error });
+      else if (result.announce) setFeedback({ kind: 'info', message: result.description });
       return result;
     };
   }, [registry, innerDispatcher, pushUndo]);
@@ -368,6 +379,10 @@ export function DispatchProvider({
     threadsVersion, labelVersions,
   }), [threadsVersion, labelVersions]);
 
+  const feedbackState: FeedbackState = useMemo(() => ({
+    feedback, setFeedback,
+  }), [feedback]);
+
   useEffect(() => { dispatchRef.current = dispatcher; }, [dispatcher]);
   useEffect(() => { innerDispatchRef.current = innerDispatcher; }, [innerDispatcher]);
 
@@ -378,7 +393,9 @@ export function DispatchProvider({
           <LayoutStateContext.Provider value={layoutState}>
             <PendingStateContext.Provider value={pendingState}>
               <RefreshStateContext.Provider value={refreshState}>
-                {children}
+                <FeedbackStateContext.Provider value={feedbackState}>
+                  {children}
+                </FeedbackStateContext.Provider>
               </RefreshStateContext.Provider>
             </PendingStateContext.Provider>
           </LayoutStateContext.Provider>

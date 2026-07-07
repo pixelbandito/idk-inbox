@@ -1,6 +1,25 @@
 import { useState } from 'react';
 import { useDispatchContext, useDispatcher, usePending } from '../state/useDispatch';
 
+interface CustomDateInput {
+  value: string;
+  /** Parsed wake time, or null when the value is empty, malformed, or past. */
+  target: Date | null;
+}
+
+const NO_CUSTOM_DATE: CustomDateInput = { value: '', target: null };
+
+/**
+ * Coarse lower bound for the datetime-local input, frozen at app load — a
+ * browser hint only; real validation happens per keystroke and again in the
+ * snooze action.
+ */
+const MIN_DATETIME_HINT = (() => {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+})();
+
 function later(hours: number): string {
   const d = new Date(Date.now() + hours * 3600_000);
   return d.toISOString();
@@ -26,29 +45,38 @@ export function SnoozePicker() {
   const ctx = useDispatchContext();
   const dispatch = useDispatcher();
   const { pending, setPending } = usePending();
-  const [customDate, setCustomDate] = useState('');
+  // target is derived in the change handler (not render) because validity
+  // depends on the impure "now".
+  const [custom, setCustom] = useState<CustomDateInput>(NO_CUSTOM_DATE);
 
   if (ctx.mode !== 'picker-snooze' || pending?.action !== 'snooze-thread') return null;
 
   const fire = async (until: string) => {
     const targets = (pending.args as { targets?: string[] }).targets ?? [];
     setPending(null);
-    setCustomDate('');
+    setCustom(NO_CUSTOM_DATE);
     await dispatch({ action: 'snooze-thread', args: { targets, until }, context: { ...ctx, mode: 'idle' } });
     await dispatch({ action: 'exit-mode', args: {}, context: ctx });
   };
 
-  const fireCustom = async () => {
+  const onCustomChange = (value: string) => {
     // datetime-local values are timezone-naive; Date() reads them in the
     // user's local zone, which is what "snooze until Tuesday 9am" means.
-    const parsed = new Date(customDate);
-    if (Number.isNaN(parsed.getTime())) return;
-    await fire(parsed.toISOString());
+    const parsed = new Date(value);
+    const isFuture = value !== ''
+      && !Number.isNaN(parsed.getTime())
+      && parsed.getTime() > Date.now();
+    setCustom({ value, target: isFuture ? parsed : null });
+  };
+
+  const fireCustom = async () => {
+    if (!custom.target) return;
+    await fire(custom.target.toISOString());
   };
 
   const cancel = async () => {
     setPending(null);
-    setCustomDate('');
+    setCustom(NO_CUSTOM_DATE);
     await dispatch({ action: 'exit-mode', args: {}, context: ctx });
   };
 
@@ -63,11 +91,19 @@ export function SnoozePicker() {
         Pick a date
         <input
           type="datetime-local"
-          value={customDate}
-          onChange={(e) => setCustomDate(e.target.value)}
+          min={MIN_DATETIME_HINT}
+          value={custom.value}
+          onChange={(e) => onCustomChange(e.target.value)}
         />
       </label>
-      <button disabled={customDate === ''} onClick={() => void fireCustom()}>Snooze</button>
+      {custom.value !== '' && custom.target === null && (
+        <p className="error">Pick a time in the future.</p>
+      )}
+      <button disabled={custom.target === null} onClick={() => void fireCustom()}>
+        {custom.target
+          ? `Snooze until ${custom.target.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`
+          : 'Snooze'}
+      </button>
       <button onClick={() => void cancel()}>Cancel</button>
     </div>
   );

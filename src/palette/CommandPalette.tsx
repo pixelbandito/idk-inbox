@@ -4,6 +4,10 @@ import { targetsFromSelection } from '../input/helpers';
 import { useDispatchContext, useDispatcher } from '../state/useDispatch';
 import type { ReadonlyContext } from '../input/types';
 
+// Thread-write actions that take `targets`. Deliberately NOT every
+// category:'thread-write' catalog entry — wake-snoozed operates on whatever
+// is due and takes no targets; listing it here would make it fail with
+// "No targets specified."
 const THREAD_WRITE_ACTIONS = new Set([
   'modify-thread-labels', 'archive-thread', 'delete-thread', 'spam-thread',
   'add-label-thread', 'remove-label-thread', 'snooze-thread', 'unsubscribe-thread',

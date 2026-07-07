@@ -6,6 +6,7 @@ import type { Panel } from './types';
 
 function stubRender(panel: Panel, _i: number, props: PanelRenderProps) {
   if (panel.kind === 'settings') return <div data-testid="p-settings">settings</div>;
+  if (panel.kind === 'labels') return <div data-testid="p-labels">labels</div>;
   if (panel.kind === 'threadlist') return <div data-testid={`p-threadlist-${panel.label}`}>list {panel.label}</div>;
   return (
     <div data-testid={`p-thread-${panel.threadId}`}>

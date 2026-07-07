@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { ACTION_CATALOG } from './catalog';
+import { ACTION_CATALOG, ACTIONS, labelByActionName } from './catalog';
+import { confirmationByActionName } from './confirmations';
 
 describe('ACTION_CATALOG', () => {
   it('has no duplicate action ids', () => {
@@ -29,5 +30,23 @@ describe('ACTION_CATALOG', () => {
       selection: ['t1', 't2', 't3'], mode: 'idle' as const, signedIn: true,
     };
     expect(archive.previewFor!(ctx)).toMatch(/3.*selected/i);
+  });
+});
+
+describe('catalog parity', () => {
+  // Registering an action by string id alone silently skips the dispatcher's
+  // auth gate and trigger resolution — this net catches the next one.
+  it('every ACTION_CATALOG id has a matching symbol in ACTIONS', () => {
+    const symbolIds = new Set(ACTIONS.map((a) => a.name.description));
+    for (const entry of ACTION_CATALOG) {
+      expect(symbolIds, `missing symbol for catalog id ${entry.id}`).toContain(entry.id);
+    }
+  });
+
+  it('every ACTIONS symbol has a label and a confirmation policy', () => {
+    for (const action of ACTIONS) {
+      expect(labelByActionName[action.name]).toBeTruthy();
+      expect(confirmationByActionName[action.name]).toBeTruthy();
+    }
   });
 });
