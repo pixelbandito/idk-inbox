@@ -29,19 +29,42 @@ export interface ThreadWriteDeps {
   sweep?: (token: string, client: ThreadWriteClient) => Promise<WakeSweepResult>;
   /** Test seam: overrides the real auto-archive rule sweep. */
   autoArchive?: (token: string, client: ThreadWriteClient) => Promise<AutoArchiveSweepResult>;
-  /** Opens a URL outside the app; defaults to window.open. Test seam. */
-  openExternal?: (url: string) => void;
+  /**
+   * Opens a URL outside the app. Returns false if the open was blocked
+   * (popup blocker, standalone PWA). Defaults to window.open. Test seam.
+   */
+  openExternal?: (url: string) => boolean;
 }
 
 function summarize(n: number, verb: string): string {
   return `${verb} ${n} thread${n === 1 ? '' : 's'}`;
 }
 
+/**
+ * mailto: links are navigations, not popups — window.open('mailto:') no-ops in
+ * standalone PWAs, so route those through location.href. Returns whether the
+ * open plausibly succeeded (a null window.open means the popup was blocked).
+ */
+function defaultOpenExternal(url: string): boolean {
+  if (url.startsWith('mailto:')) {
+    window.location.href = url;
+    return true;
+  }
+  return window.open(url, '_blank', 'noopener') !== null;
+}
+
+/** Turns a raw Gmail error into something a user can act on. */
+function humanizeWriteError(e: unknown): string {
+  const message = e instanceof Error ? e.message : 'Gmail write failed.';
+  if (/\b40[13]\b/.test(message)) return 'Session expired — sign in again.';
+  return message;
+}
+
 export function createThreadWriteActions({ getToken, client, sweep, autoArchive, openExternal }: ThreadWriteDeps) {
   const writes = client ?? createThreadWriteClient();
   const runSweep = sweep ?? sweepDueSnoozes;
   const runAutoArchive = autoArchive ?? sweepAutoArchive;
-  const openUrl = openExternal ?? ((url: string) => { window.open(url, '_blank', 'noopener'); });
+  const openUrl = openExternal ?? defaultOpenExternal;
 
   /**
    * Shared write path: apply `change` to `targets`, report a human summary,
@@ -60,7 +83,7 @@ export function createThreadWriteActions({ getToken, client, sweep, autoArchive,
     try {
       outcome = await writes.modifyThreadLabels(token, targets, change);
     } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : 'Gmail write failed.' };
+      return { ok: false, error: humanizeWriteError(e) };
     }
 
     const { succeeded, failed } = outcome;
@@ -72,6 +95,7 @@ export function createThreadWriteActions({ getToken, client, sweep, autoArchive,
     return {
       ok: true,
       description: summarize(succeeded.length, verbs.done) + suffix,
+      affectedTargets: succeeded,
       inverse: {
         action: 'modify-thread-labels',
         args: { targets: succeeded, add: change.remove, remove: change.add },
@@ -178,10 +202,12 @@ export function createThreadWriteActions({ getToken, client, sweep, autoArchive,
       if (!summary || !uri) {
         return { ok: false, error: 'No unsubscribe link found for this sender.' };
       }
-      openUrl(uri);
+      if (!openUrl(uri)) {
+        return { ok: false, error: "Couldn't open the unsubscribe page — check popup settings." };
+      }
       return {
         ok: true,
-        description: `Opened unsubscribe for ${senderAddressOf(summary.from)}`,
+        description: `Opening unsubscribe for ${senderAddressOf(summary.from)} in your browser…`,
         announce: true,
         mutated: false,
       };

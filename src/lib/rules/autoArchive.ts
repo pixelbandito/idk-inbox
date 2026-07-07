@@ -10,7 +10,9 @@ import type { ThreadWriteClient } from '../gmail/threadWriteClient';
 import { gmailJson } from '../gmail/http';
 import { isPlainEmailAddress, senderAddressOf } from '../gmail/address';
 
-const STORAGE_KEY = 'idk-inbox:auto-archive-rules';
+import { STORAGE_KEYS } from '../storageKeys';
+
+const STORAGE_KEY = STORAGE_KEYS.autoArchiveRules;
 const MAX_THREADS_PER_RULE = 100;
 
 export interface AutoArchiveRule {

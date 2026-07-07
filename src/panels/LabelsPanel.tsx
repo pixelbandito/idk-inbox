@@ -44,7 +44,7 @@ export function LabelsPanel({ getToken }: LabelsPanelProps) {
     });
   };
 
-  if (!getToken()) {
+  if (!ctx.signedIn) {
     return (
       <>
         <PanelHeader title="Labels" />

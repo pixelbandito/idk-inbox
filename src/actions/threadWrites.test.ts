@@ -176,7 +176,7 @@ describe('createThreadWriteActions', () => {
     };
     const actions = actionsWith(client);
     const result = await actions.archiveThread({ targets: ['t1'] }, ctx);
-    expect(result).toEqual({ ok: false, error: 'Gmail write failed: 401' });
+    expect(result).toEqual({ ok: false, error: 'Session expired — sign in again.' });
   });
 
   it('wake-snoozed sweeps due buckets and reports the count', async () => {
@@ -241,7 +241,7 @@ describe('createThreadWriteActions', () => {
     it('opens the https unsubscribe link and announces, without a Gmail write', async () => {
       cacheThreadSummaries([summaryWithHeader]);
       const { client, modifyThreadLabels } = fakeClient();
-      const openExternal = vi.fn();
+      const openExternal = vi.fn(() => true);
       const actions = createThreadWriteActions({ getToken: () => 'tok', client, openExternal });
 
       const result = await actions.unsubscribeThread({ targets: ['t1'] }, ctx);
@@ -250,16 +250,25 @@ describe('createThreadWriteActions', () => {
       expect(modifyThreadLabels).not.toHaveBeenCalled();
       expect(result).toEqual({
         ok: true,
-        description: 'Opened unsubscribe for deals@shop.example',
+        description: 'Opening unsubscribe for deals@shop.example in your browser…',
         announce: true,
         mutated: false,
       });
     });
 
+    it('reports failure when the browser blocks the open', async () => {
+      cacheThreadSummaries([summaryWithHeader]);
+      const { client } = fakeClient();
+      const openExternal = vi.fn(() => false);
+      const actions = createThreadWriteActions({ getToken: () => 'tok', client, openExternal });
+      const result = await actions.unsubscribeThread({ targets: ['t1'] }, ctx);
+      expect(result.ok).toBe(false);
+    });
+
     it('fails readably without a List-Unsubscribe header or with multiple targets', async () => {
       cacheThreadSummaries([{ ...summaryWithHeader, listUnsubscribe: undefined }]);
       const { client } = fakeClient();
-      const openExternal = vi.fn();
+      const openExternal = vi.fn(() => true);
       const actions = createThreadWriteActions({ getToken: () => 'tok', client, openExternal });
 
       expect((await actions.unsubscribeThread({ targets: ['t1'] }, ctx)).ok).toBe(false);

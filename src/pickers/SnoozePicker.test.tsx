@@ -103,8 +103,11 @@ describe('SnoozePicker', () => {
     const { modifyThreadLabels } = renderWithPicker(['t1']);
     await act(async () => { fireEvent.click(screen.getByTestId('open-snooze')); });
 
-    const morningOf = await screen.findByRole('button', { name: 'Morning of 2099-03-05' });
-    expect(screen.getByRole('button', { name: 'Evening before 2099-03-05' })).toBeInTheDocument();
+    const resolved = new Date(2099, 2, 5).toLocaleDateString(undefined, {
+      weekday: 'short', month: 'short', day: 'numeric',
+    });
+    const morningOf = await screen.findByRole('button', { name: `Morning of ${resolved}` });
+    expect(screen.getByRole('button', { name: `Evening before ${resolved}` })).toBeInTheDocument();
 
     await act(async () => { fireEvent.click(morningOf); });
     const expectedUntil = new Date(2099, 2, 5, 8, 0); // local morning-of

@@ -1,5 +1,6 @@
 import type { ActionResult, ReadonlyContext, ThreadRef } from '../input/types';
 import { openThread, openThreadlist, closeAt } from '../layout/operations';
+import { displayNameOf } from '../lib/gmail/labelDisplay';
 import type { Panel } from '../layout/types';
 
 export type OpenPanelArgs =
@@ -28,7 +29,7 @@ export function createLayoutActions(s: LayoutSetters) {
           return result.panels;
         });
         if (focusAt >= 0) s.setFocusIndex(() => focusAt);
-        return { ok: true, description: `Opened ${args.label}` };
+        return { ok: true, description: `Opened ${displayNameOf(args.label)}` };
       }
 
       const sourceLabel = ctx.focusedLabel ?? 'INBOX';

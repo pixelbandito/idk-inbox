@@ -39,7 +39,7 @@ describe('FeedbackToast', () => {
       </DispatchProvider>,
     );
     await act(async () => { fireEvent.click(screen.getByTestId('fire')); });
-    expect(screen.getByRole('alert')).toHaveTextContent('Gmail write failed: 401');
+    expect(screen.getByRole('alert')).toHaveTextContent('Session expired — sign in again.');
   });
 
   it('announces undo-less outcomes like the wake sweep as status', async () => {
@@ -68,7 +68,7 @@ describe('FeedbackToast', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Woke 1 snoozed thread');
   });
 
-  it('auto-dismisses and can be dismissed by hand', async () => {
+  it('keeps errors until dismissed by hand (no auto-dismiss)', async () => {
     vi.useFakeTimers();
     render(
       <DispatchProvider signedIn getToken={() => 'tok'} threadWriteClient={failingClient}>
@@ -78,7 +78,9 @@ describe('FeedbackToast', () => {
     );
     await act(async () => { fireEvent.click(screen.getByTestId('fire')); });
     expect(screen.getByRole('alert')).toBeInTheDocument();
-    await act(async () => { vi.advanceTimersByTime(1100); });
+    await act(async () => { vi.advanceTimersByTime(5000); });
+    expect(screen.getByRole('alert')).toBeInTheDocument(); // still there
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /dismiss/i })); });
     expect(screen.queryByRole('alert')).toBeNull();
   });
 });

@@ -27,9 +27,15 @@ export function eventSnoozeOptionsFor(
   const event = detectEventDate(`${summary.subject} ${summary.snippet}`, now);
   if (!event) return [];
 
+  // Show the resolved date alongside the matched text: it defuses locale
+  // ambiguity ("7/8" → Jul 8 vs 7 Aug), makes a next-year rollover obvious,
+  // and lets a false positive (e.g. "1/2 off") be seen and skipped.
+  const resolved = event.date.toLocaleDateString(undefined, {
+    weekday: 'short', month: 'short', day: 'numeric',
+  });
   const candidates = [
-    { label: `Evening before ${event.matchedText}`, when: at(event.date, EVENING_HOUR, -1) },
-    { label: `Morning of ${event.matchedText}`,     when: at(event.date, MORNING_HOUR) },
+    { label: `Evening before ${resolved}`, when: at(event.date, EVENING_HOUR, -1) },
+    { label: `Morning of ${resolved}`,     when: at(event.date, MORNING_HOUR) },
   ];
   return candidates
     .filter((c) => c.when.getTime() > now.getTime())

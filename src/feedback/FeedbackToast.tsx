@@ -16,7 +16,9 @@ export function FeedbackToast({ dismissAfterMs = DEFAULT_DISMISS_MS }: FeedbackT
   const { feedback, setFeedback } = useFeedback();
 
   useEffect(() => {
-    if (!feedback) return;
+    // Errors stay until dismissed by hand (the ✕) — a glance-away shouldn't
+    // lose them. Info announcements auto-dismiss.
+    if (!feedback || feedback.kind === 'error') return;
     const timer = setTimeout(() => setFeedback(null), dismissAfterMs);
     return () => clearTimeout(timer);
   }, [feedback, setFeedback, dismissAfterMs]);

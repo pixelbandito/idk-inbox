@@ -9,7 +9,9 @@ import { threadSummaryOf } from '../../state/threadSummaryCache';
 import { senderAddressOf } from '../gmail/address';
 import type { EmailSummary } from '../gmail/types';
 
-const STORAGE_KEY = 'idk-inbox:triage-log';
+import { STORAGE_KEYS } from '../storageKeys';
+
+const STORAGE_KEY = STORAGE_KEYS.triageLog;
 const RETENTION_DAYS = 30;
 const DAY_MS = 24 * 3600 * 1000;
 

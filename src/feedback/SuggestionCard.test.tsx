@@ -4,7 +4,7 @@ import { SuggestionCard } from './SuggestionCard';
 import { DispatchProvider } from '../state/DispatchProvider';
 import { spyThreadWriteClient } from '../test/spyThreadWriteClient';
 import { recordSightings, recordTriageForThreads, resetTriageLog } from '../lib/heuristics/triageLog';
-import { resetDismissals } from '../lib/heuristics/dismissals';
+import { resetResolvedSuggestions } from '../lib/heuristics/resolvedSuggestions';
 import { autoArchiveRules, resetAutoArchiveRules } from '../lib/rules/autoArchive';
 import { cacheThreadSummaries, resetThreadSummaryCache } from '../state/threadSummaryCache';
 import type { EmailSummary } from '../lib/gmail/types';
@@ -43,7 +43,7 @@ describe('SuggestionCard', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     resetTriageLog();
-    resetDismissals();
+    resetResolvedSuggestions();
     resetAutoArchiveRules();
     resetThreadSummaryCache();
   });
@@ -58,18 +58,18 @@ describe('SuggestionCard', () => {
     const emails = seedFatigue();
     renderCard(emails);
     const card = await screen.findByRole('region', { name: /suggestion/i });
-    expect(card).toHaveTextContent('5 of 6');
+    expect(card).toHaveTextContent('5 of the last 6 seen');
     expect(card).toHaveTextContent(SENDER);
   });
 
-  it('Dismiss hides the card and persists across re-renders', async () => {
+  it('resolving hides the card and persists across re-renders', async () => {
     const emails = seedFatigue();
     renderCard(emails);
-    const dismiss = await screen.findByRole('button', { name: /dismiss/i });
+    const dismiss = await screen.findByRole('button', { name: /don.t suggest again/i });
     await act(async () => { fireEvent.click(dismiss); });
     expect(screen.queryByRole('region', { name: /suggestion/i })).toBeNull();
 
-    // A fresh mount stays quiet: the dismissal is stored.
+    // A fresh mount stays quiet: the resolution is stored.
     renderCard(emails);
     await act(async () => {});
     expect(screen.queryByRole('region', { name: /suggestion/i })).toBeNull();

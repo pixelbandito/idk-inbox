@@ -5,6 +5,7 @@ import { loadGis } from './loadGis';
 import { loadPersistedToken, savePersistedToken } from './tokenPersistence';
 import { resetAppLabelResolver } from '../gmail/appLabelResolver';
 import { resetThreadSummaryCache } from '../../state/threadSummaryCache';
+import { clearAccountScopedStorage } from '../storageKeys';
 
 const tokenStore = new TokenStore();
 
@@ -64,9 +65,11 @@ export function useGoogleAuth() {
     tokenStore.clear();
     savePersistedToken(null);
     clientRef.current = null;
-    // Per-account caches must not survive sign-out.
+    // Per-account state (label ids, cached mail, triage history, rules) must
+    // not leak into the next account.
     resetAppLabelResolver();
     resetThreadSummaryCache();
+    clearAccountScopedStorage();
     setError(null);
     setSignedIn(false);
   }, []);

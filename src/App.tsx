@@ -13,7 +13,7 @@ import { FeedbackToast } from './feedback/FeedbackToast';
 import { ensureAppLabels, SNOOZED_LABEL } from './lib/gmail/labelBootstrap';
 import { displayNameOf } from './lib/gmail/labelDisplay';
 import { DispatchProvider } from './state/DispatchProvider';
-import { useDispatchContext, useDispatcher } from './state/useDispatch';
+import { useDispatchContext, useDispatcher, useFeedback } from './state/useDispatch';
 import { useKeyboardProducer } from './triggers/producers/fromKeyboard';
 import { useTriggerHandler } from './triggers/useTriggerHandler';
 import {
@@ -76,6 +76,7 @@ function AppInner({ getToken }: { getToken: () => string | null }) {
 
   const ctx = useDispatchContext();
   const dispatch = useDispatcher();
+  const { setFeedback } = useFeedback();
   const bootstrapped = useRef(false);
 
   // Post-sign-in bootstrap: make sure the app labels exist, then wake any
@@ -93,10 +94,17 @@ function AppInner({ getToken }: { getToken: () => string | null }) {
       } catch (e) {
         console.warn('label bootstrap failed:', e);
       }
-      await dispatch({ action: 'wake-snoozed', args: {}, context: ctx });
-      await dispatch({ action: 'apply-auto-archive', args: {}, context: ctx });
+      // Suppress each sweep's own announcement, then compose one summary — two
+      // back-to-back announcements would clobber the single feedback slot.
+      const woke = await dispatch({ action: 'wake-snoozed', args: {}, context: ctx, silent: true });
+      const archived = await dispatch({ action: 'apply-auto-archive', args: {}, context: ctx, silent: true });
+      const parts = [
+        woke.ok && woke.mutated !== false ? woke.description : null,
+        archived.ok && archived.mutated !== false ? archived.description : null,
+      ].filter(Boolean);
+      if (parts.length > 0) setFeedback({ kind: 'info', message: parts.join(' · ') });
     })();
-  }, [ctx, dispatch, getToken]);
+  }, [ctx, dispatch, getToken, setFeedback]);
 
   function renderPanel(panel: Panel, index: number, props: PanelRenderProps) {
     if (panel.kind === 'settings') {

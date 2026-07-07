@@ -349,10 +349,6 @@ export function DispatchProvider({
       const isThreadWrite = registry[req.action]?.category === 'thread-write';
       if (result.ok && isThreadWrite && result.mutated !== false) {
         setThreadsVersion((v) => v + 1);
-        const triageAction = TRIAGE_BY_ACTION[req.action];
-        if (triageAction) {
-          recordTriageForThreads((req.args.targets as string[] | undefined) ?? [], triageAction);
-        }
       }
       return result;
     };
@@ -376,10 +372,20 @@ export function DispatchProvider({
           inverse: result.inverse,
         });
       }
+      // Triage is recorded here (user-initiated path) not in innerDispatcher,
+      // so undo/redo re-dispatches don't double-count; keyed on the threads
+      // that actually changed, not the requested targets.
+      if (result.ok && result.affectedTargets?.length) {
+        const triageAction = TRIAGE_BY_ACTION[req.action];
+        if (triageAction) recordTriageForThreads(result.affectedTargets, triageAction);
+      }
       // Nothing else renders ActionResults, so failures (and undo-less
-      // outcomes that ask to be announced) surface here or nowhere.
-      if (!result.ok) setFeedback({ kind: 'error', message: result.error });
-      else if (result.announce) setFeedback({ kind: 'info', message: result.description });
+      // outcomes that ask to be announced) surface here or nowhere. A silent
+      // request opts out so its caller can compose one combined message.
+      if (!req.silent) {
+        if (!result.ok) setFeedback({ kind: 'error', message: result.error });
+        else if (result.announce) setFeedback({ kind: 'info', message: result.description });
+      }
       return result;
     };
   }, [registry, innerDispatcher, pushUndo]);

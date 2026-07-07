@@ -38,6 +38,8 @@ export type ActionResult =
       announce?: boolean;
       /** Set false when a write turned out to be a no-op (skips list refresh). */
       mutated?: boolean;
+      /** Threads the write actually changed — the basis for triage recording. */
+      affectedTargets?: ThreadRef[];
     }
   | { ok: false; error: string };
 
@@ -45,6 +47,8 @@ export interface DispatchRequest {
   action:  ActionId;
   args:    Record<string, unknown>;
   context: ReadonlyContext;
+  /** Suppress the automatic feedback toast — the caller will announce itself. */
+  silent?: boolean;
 }
 
 export type ActionCategory = 'thread-write' | 'layout' | 'app' | 'selection';

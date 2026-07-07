@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useDispatchContext, useDispatcher } from '../state/useDispatch';
 import { senderStats, type SenderStats } from '../lib/heuristics/triageLog';
 import { findFatiguedSenders, FATIGUE_WINDOW_DAYS } from '../lib/heuristics/senderFatigue';
-import { dismissSuggestionFor, isSuggestionDismissed } from '../lib/heuristics/dismissals';
+import { resolveSuggestionFor, isSuggestionResolved } from '../lib/heuristics/resolvedSuggestions';
 import { addAutoArchiveRule } from '../lib/rules/autoArchive';
 import { isPlainEmailAddress, senderAddressOf } from '../lib/gmail/address';
 import type { EmailSummary } from '../lib/gmail/types';
@@ -27,7 +27,7 @@ export function SuggestionCard({ emails }: SuggestionCardProps) {
   useEffect(() => {
     queueMicrotask(() => {
       const fatigued = findFatiguedSenders(senderStats(FATIGUE_WINDOW_DAYS));
-      setSuggestion(fatigued.find((f) => !isSuggestionDismissed(f.sender)) ?? null);
+      setSuggestion(fatigued.find((f) => !isSuggestionResolved(f.sender)) ?? null);
     });
   }, [emails]);
 
@@ -37,40 +37,42 @@ export function SuggestionCard({ emails }: SuggestionCardProps) {
     (e) => senderAddressOf(e.from) === suggestion.sender && e.listUnsubscribe,
   );
 
-  const settle = () => {
-    dismissSuggestionFor(suggestion.sender);
+  const resolve = () => {
+    resolveSuggestionFor(suggestion.sender);
     setSuggestion(null);
   };
 
-  const unsubscribe = () => {
+  const unsubscribe = async () => {
     if (!unsubscribeTarget) return;
-    void dispatch({
+    const result = await dispatch({
       action: 'unsubscribe-thread',
       args: { targets: [unsubscribeTarget.threadId] },
       context: ctx,
     });
-    settle();
+    // Only settle the card if the unsubscribe page actually opened — a blocked
+    // popup or missing link should leave the offer standing.
+    if (result.ok) resolve();
   };
 
   const autoArchive = () => {
     addAutoArchiveRule(suggestion.sender);
-    settle();
+    resolve();
     void dispatch({ action: 'apply-auto-archive', args: {}, context: ctx });
   };
 
   return (
     <section className="suggestion-card" aria-label="Suggestion">
       <p>
-        You’ve dismissed {suggestion.dismissedUnread} of {suggestion.received} emails
-        from <strong>{suggestion.sender}</strong> without reading.
+        You’ve been dismissing mail from <strong>{suggestion.sender}</strong> without
+        reading it ({suggestion.dismissedUnread} of the last {suggestion.received} seen).
       </p>
       {unsubscribeTarget && (
-        <button onClick={unsubscribe}>Unsubscribe</button>
+        <button onClick={() => void unsubscribe()}>Unsubscribe</button>
       )}
       {isPlainEmailAddress(suggestion.sender) && (
-        <button onClick={autoArchive}>Auto-archive new mail</button>
+        <button onClick={autoArchive}>Auto-archive this sender</button>
       )}
-      <button onClick={() => settle()}>Dismiss</button>
+      <button onClick={resolve}>Don’t suggest again</button>
     </section>
   );
 }
