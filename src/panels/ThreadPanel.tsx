@@ -64,15 +64,13 @@ export function ThreadPanel({
       <div className="panel__body" data-surface="panel-body" ref={bodyRef}>
         {error && <p className="error">{error}</p>}
         {view && (
-          <ol style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          <ol className="thread">
             {view.messages.map((m) => (
-              <li key={m.id} style={{ padding: '1rem', borderBottom: '1px solid #eee' }}>
-                <div style={{ fontSize: '0.85rem', color: '#555' }}>
+              <li key={m.id} className="thread__message">
+                <div className="thread__meta">
                   <strong>{m.from}</strong> · {m.date}
                 </div>
-                <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', marginTop: '0.5rem' }}>
-                  {m.body}
-                </pre>
+                <pre className="thread__body">{m.body}</pre>
               </li>
             ))}
           </ol>

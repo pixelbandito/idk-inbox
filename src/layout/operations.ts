@@ -26,7 +26,7 @@ export function openThreadlist(panels: Panel[], label: string): OpenThreadlistRe
 
   const labelsPanelIndex = panels.findIndex((p) => p.kind === 'labels');
   const insertAt = labelsPanelIndex === -1 ? panels.length : labelsPanelIndex;
-  const next: Panel = { kind: 'threadlist', label };
+  const next: Panel = { kind: 'threadlist', label, closable: true };
   return {
     panels: [...panels.slice(0, insertAt), next, ...panels.slice(insertAt)],
     focusIndex: insertAt,

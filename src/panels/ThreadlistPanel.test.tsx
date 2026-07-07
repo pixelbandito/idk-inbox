@@ -63,6 +63,24 @@ describe('ThreadlistPanel', () => {
     await waitFor(() => expect(fetchByLabel).toHaveBeenCalledTimes(2));
   });
 
+  it('shows a close button only when onClose is provided (on-demand lists)', () => {
+    const { rerender } = render(
+      <DispatchProvider signedIn initialPanels={initialPanels}>
+        <ThreadlistPanel label="idk-inbox/Todo" displayName="Todo" getToken={() => 'tok'} />
+      </DispatchProvider>,
+    );
+    expect(screen.queryByRole('button', { name: /close/i })).toBeNull();
+
+    const onClose = vi.fn();
+    rerender(
+      <DispatchProvider signedIn initialPanels={initialPanels}>
+        <ThreadlistPanel label="idk-inbox/Todo" displayName="Todo" getToken={() => 'tok'} onClose={onClose} />
+      </DispatchProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /close todo/i }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('shows a sign-in prompt when no token is available', () => {
     render(
       <DispatchProvider initialPanels={initialPanels}>

@@ -10,6 +10,9 @@
     color-scheme: var(--colorScheme);
     container-type: normal;
     container-name: theme;
+    /* Reading column: content stays comfortable on wide panels instead of
+       stretching edge to edge. */
+    --readingMaxWidth: 42rem;
   }
 
   body {
@@ -85,11 +88,42 @@
        a horizontal mouse drag is eaten by the panel container's scroll-snap. */
     touch-action: pan-y pinch-zoom;
     user-select: none;
+    /* Long unbroken tokens (URLs, IDs) must wrap, not blow out the row. */
+    overflow-wrap: anywhere;
   }
   .email--unread { font-weight: 600; background: #f6f9ff; }
   .email--selected { background: #eef6ff; }
   .email__from { font-size: 0.85rem; color: #555; }
-  .email__snippet { font-size: 0.85rem; color: #888; }
+  .email__subject { font-weight: inherit; }
+  /* Snippet stays a one-line preview; the thread view shows the full body. */
+  .email__snippet {
+    font-size: 0.85rem;
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ----- Thread view ----- */
+
+  .thread { list-style: none; padding: 0; margin: 0; }
+  .thread__message {
+    padding: 1rem;
+    max-width: var(--readingMaxWidth);
+    border-bottom: var(--borderSize) solid #eee;
+  }
+  .thread__meta {
+    font-size: 0.85rem;
+    color: #555;
+    overflow-wrap: anywhere;
+  }
+  .thread__body {
+    margin-top: 0.5rem;
+    font-family: inherit;
+    /* Wrap on newlines AND break long unbroken tokens so URLs don't overflow. */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
 
   .error { color: #c0392b; padding: 0 1rem; }
 
@@ -101,11 +135,22 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 0.15rem;
     background: #f3f3f3;
-    border-right: var(--borderSize) solid #ddd;
-    font-size: 0.85rem;
+    border: 0;
+    border-inline-end: var(--borderSize) solid #ddd;
+    font-size: 0.8rem;
     color: #555;
     cursor: pointer;
+  }
+  .stash-column[data-side="right"] {
+    border-inline-end: 0;
+    border-inline-start: var(--borderSize) solid #ddd;
+  }
+  .stash-column__chevron {
+    font-size: 1.4rem;
+    line-height: 1;
+    color: #999;
   }
   .stash-column__count {
     font-weight: 600;

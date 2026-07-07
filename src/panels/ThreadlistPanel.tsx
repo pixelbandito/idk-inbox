@@ -33,6 +33,8 @@ export interface ThreadlistPanelProps {
   label: string;
   displayName: string;
   getToken: () => string | null;
+  /** Present for on-demand lists (a tag opened from the Labels panel). */
+  onClose?: () => void;
 }
 
 function Row({ email, isSelected }: { email: EmailSummary; isSelected: boolean }) {
@@ -59,6 +61,7 @@ export function ThreadlistPanel({
   label,
   displayName,
   getToken,
+  onClose,
 }: ThreadlistPanelProps) {
   const [emails, setEmails] = useState<EmailSummary[]>([]);
   const [failed, setFailed] = useState(0);
@@ -126,9 +129,14 @@ export function ThreadlistPanel({
       <PanelHeader
         title={displayName}
         actions={
-          <button onClick={() => void load()} disabled={loading} aria-label="Refresh">
-            {loading ? '…' : '↻'}
-          </button>
+          <>
+            <button onClick={() => void load()} disabled={loading} aria-label="Refresh">
+              {loading ? '…' : '↻'}
+            </button>
+            {onClose && (
+              <button onClick={onClose} aria-label={`Close ${displayName}`}>×</button>
+            )}
+          </>
         }
       />
       <div className="panel__body">

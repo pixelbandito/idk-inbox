@@ -116,6 +116,7 @@ function AppInner({ getToken }: { getToken: () => string | null }) {
           label={panel.label}
           displayName={displayNameOf(panel.label)}
           getToken={getToken}
+          onClose={panel.closable ? props.onClose : undefined}
         />
       );
     }

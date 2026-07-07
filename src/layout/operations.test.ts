@@ -30,11 +30,13 @@ describe('openThread', () => {
 });
 
 describe('openThreadlist', () => {
-  it('inserts a new list just before the labels panel and focuses it', () => {
+  it('inserts a new closable list just before the labels panel and focuses it', () => {
     const before: Panel[] = [settings, inbox, snoozed, labels];
     const result = openThreadlist(before, 'idk-inbox/Receipts');
     expect(result.panels).toEqual([
-      settings, inbox, snoozed, { kind: 'threadlist', label: 'idk-inbox/Receipts' }, labels,
+      settings, inbox, snoozed,
+      { kind: 'threadlist', label: 'idk-inbox/Receipts', closable: true },
+      labels,
     ]);
     expect(result.focusIndex).toBe(3);
   });
@@ -42,7 +44,9 @@ describe('openThreadlist', () => {
   it('appends at the end when there is no labels panel', () => {
     const before: Panel[] = [settings, inbox];
     const result = openThreadlist(before, 'idk-inbox/Todo');
-    expect(result.panels).toEqual([settings, inbox, { kind: 'threadlist', label: 'idk-inbox/Todo' }]);
+    expect(result.panels).toEqual([
+      settings, inbox, { kind: 'threadlist', label: 'idk-inbox/Todo', closable: true },
+    ]);
     expect(result.focusIndex).toBe(2);
   });
 

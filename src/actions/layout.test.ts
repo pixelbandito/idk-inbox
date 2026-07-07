@@ -70,7 +70,7 @@ describe('createLayoutActions', () => {
       expect(env.getPanels()).toEqual([
         { kind: 'settings' },
         { kind: 'threadlist', label: 'INBOX' },
-        { kind: 'threadlist', label: 'idk-inbox/Receipts' },
+        { kind: 'threadlist', label: 'idk-inbox/Receipts', closable: true },
         { kind: 'labels' },
       ]);
       expect(env.getFocus()).toBe(2);
