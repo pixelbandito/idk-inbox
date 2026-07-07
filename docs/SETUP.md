@@ -174,7 +174,8 @@ the dev box:
 
    With both set, `npm run dev` / `npm run preview` serve HTTPS and bind to
    the LAN (`host: true`). Without them, everything stays on plain-http
-   localhost.
+   localhost. Binding to the LAN exposes the dev server (and HMR socket) to
+   everyone on the network — only do this on networks you trust.
 4. **Register the origin** — add `https://inbox.home.arpa:5173` (dev) and/or
    `https://inbox.home.arpa:4173` (preview) to the OAuth client's
    **Authorized JavaScript origins**.
