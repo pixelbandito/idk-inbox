@@ -13,7 +13,10 @@ function fakeClient(outcome?: Partial<ThreadWriteOutcome>) {
     succeeded: outcome?.succeeded ?? threadIds,
     failed: outcome?.failed ?? [],
   }));
-  const client: ThreadWriteClient = { modifyThreadLabels };
+  const client: ThreadWriteClient = {
+    modifyThreadLabels,
+    deleteLabel: vi.fn(async () => {}),
+  };
   return { client, modifyThreadLabels };
 }
 
@@ -166,6 +169,7 @@ describe('createThreadWriteActions', () => {
   it('surfaces client exceptions as readable errors', async () => {
     const client: ThreadWriteClient = {
       modifyThreadLabels: async () => { throw new Error('Gmail write failed: 401'); },
+      deleteLabel: async () => {},
     };
     const actions = actionsWith(client);
     const result = await actions.archiveThread({ targets: ['t1'] }, ctx);

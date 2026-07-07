@@ -50,6 +50,7 @@ describe('ThreadlistPanel', () => {
         getToken={() => 'tok'}
         threadWriteClient={{
           modifyThreadLabels: async (_t, threadIds) => ({ succeeded: threadIds, failed: [] }),
+          deleteLabel: async () => {},
         }}
       >
         <ThreadlistPanel label="INBOX" displayName="Inbox" getToken={() => 'tok'} />

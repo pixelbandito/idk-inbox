@@ -9,10 +9,12 @@ import type { ThreadWriteClient } from '../lib/gmail/threadWriteClient';
 /** Client whose writes always succeed, without touching the network. */
 const alwaysSucceeds: ThreadWriteClient = {
   modifyThreadLabels: async (_token, threadIds) => ({ succeeded: threadIds, failed: [] }),
+  deleteLabel: async () => {},
 };
 
 const alwaysFails: ThreadWriteClient = {
   modifyThreadLabels: async (_token, threadIds) => ({ succeeded: [], failed: threadIds }),
+  deleteLabel: async () => {},
 };
 
 function Probe() {

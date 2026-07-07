@@ -1,15 +1,22 @@
 // Gmail's modify endpoints take label *ids* (e.g. "Label_7"), but the rest of
 // the app speaks in label *names*. This resolver hides the mapping plus the
 // create-on-demand path for app sublabels (snooze buckets, user tags).
+//
+// Ids are PER-ACCOUNT: never let a resolver (or anything holding one) outlive
+// a sign-out. Callers that delete labels must evict() them here, or later
+// writes will send Gmail a dead id.
 
-const BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
+import { gmailJson } from './http';
+import type { GmailLabel } from './types';
 
 // System label ids equal their names, so they never need the network.
 const SYSTEM_LABELS = new Set([
   'INBOX', 'UNREAD', 'STARRED', 'IMPORTANT', 'SPAM', 'TRASH', 'SENT', 'DRAFT',
 ]);
 
-interface GmailLabel { id: string; name: string; }
+// A cache miss re-lists at most this often — covers labels created by the
+// bootstrap (or another client) after our first listing.
+const RELIST_INTERVAL_MS = 30_000;
 
 export interface ResolveOptions {
   /** Create labels that don't exist yet (used for the add side of a modify). */
@@ -23,40 +30,43 @@ export interface LabelIdResolver {
    * doesn't have is a no-op anyway.
    */
   idsFor(token: string, names: string[], opts?: ResolveOptions): Promise<Map<string, string>>;
-}
-
-async function fetchAllLabels(token: string): Promise<GmailLabel[]> {
-  const res = await fetch(`${BASE}/labels`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`Gmail labels list failed: ${res.status}`);
-  const json = (await res.json()) as { labels?: GmailLabel[] };
-  return json.labels ?? [];
-}
-
-async function createLabel(token: string, name: string): Promise<GmailLabel> {
-  const res = await fetch(`${BASE}/labels`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ name }),
-  });
-  if (!res.ok) throw new Error(`Gmail label create failed: ${res.status}`);
-  return (await res.json()) as GmailLabel;
+  /** Forget a label after deleting it, so its dead id can't be reused. */
+  evict(name: string): void;
 }
 
 export function createLabelIdResolver(): LabelIdResolver {
   const idByName = new Map<string, string>();
-  let listLoaded = false;
+  const pendingCreates = new Map<string, Promise<string>>();
+  let listPromise: Promise<void> | null = null;
+  let listLoadedAt = 0;
 
-  async function loadListOnce(token: string): Promise<void> {
-    if (listLoaded) return;
-    for (const label of await fetchAllLabels(token)) {
-      idByName.set(label.name, label.id);
+  function refreshList(token: string): Promise<void> {
+    // Concurrent misses share one in-flight listing.
+    listPromise ??= (async () => {
+      const json = await gmailJson<{ labels?: GmailLabel[] }>(token, '/labels', 'labels list');
+      for (const label of json.labels ?? []) idByName.set(label.name, label.id);
+      listLoadedAt = Date.now();
+    })().finally(() => { listPromise = null; });
+    return listPromise;
+  }
+
+  function createOnce(token: string, name: string): Promise<string> {
+    // Concurrent creates of the same name (e.g. two rapid snoozes into the
+    // same bucket) share one POST instead of colliding with a 409.
+    let create = pendingCreates.get(name);
+    if (!create) {
+      create = gmailJson<GmailLabel>(token, '/labels', 'label create', {
+        method: 'POST',
+        body: { name },
+      })
+        .then((label) => {
+          idByName.set(name, label.id);
+          return label.id;
+        })
+        .finally(() => { pendingCreates.delete(name); });
+      pendingCreates.set(name, create);
     }
-    listLoaded = true;
+    return create;
   }
 
   return {
@@ -70,16 +80,17 @@ export function createLabelIdResolver(): LabelIdResolver {
       }
       if (unknown.length === 0) return resolved;
 
-      await loadListOnce(token);
+      if (Date.now() - listLoadedAt >= RELIST_INTERVAL_MS) await refreshList(token);
       for (const name of unknown) {
         let id = idByName.get(name);
-        if (!id && opts.createMissing) {
-          id = (await createLabel(token, name)).id;
-          idByName.set(name, id);
-        }
+        if (!id && opts.createMissing) id = await createOnce(token, name);
         if (id) resolved.set(name, id);
       }
       return resolved;
+    },
+
+    evict(name) {
+      idByName.delete(name);
     },
   };
 }

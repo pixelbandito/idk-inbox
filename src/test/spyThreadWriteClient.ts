@@ -12,6 +12,7 @@ export function spyThreadWriteClient() {
       failed: [] as string[],
     }),
   );
-  const client: ThreadWriteClient = { modifyThreadLabels };
-  return { client, modifyThreadLabels };
+  const deleteLabel = vi.fn(async (_token: string, _name: string) => {});
+  const client: ThreadWriteClient = { modifyThreadLabels, deleteLabel };
+  return { client, modifyThreadLabels, deleteLabel };
 }

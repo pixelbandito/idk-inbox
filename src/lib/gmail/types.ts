@@ -1,3 +1,8 @@
+export interface GmailLabel {
+  id: string;
+  name: string;
+}
+
 export interface EmailSummary {
   id: string;
   threadId: string;

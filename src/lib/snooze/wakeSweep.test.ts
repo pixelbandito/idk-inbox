@@ -18,18 +18,16 @@ const LABELS = {
   ],
 };
 
-function stubFetchRouting(threadsByLabel: Record<string, string[]>) {
+/** Routes label listing + `threads?labelIds=<id>` listing; records all calls. */
+function stubFetchRouting(threadsByLabelId: Record<string, string[]>) {
   const calls: { url: string; method: string }[] = [];
   const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
     calls.push({ url: String(url), method: init?.method ?? 'GET' });
     const u = String(url);
-    if (u.includes('/labels') && (!init?.method || init.method === 'GET')) {
-      return Promise.resolve(jsonResponse(LABELS));
-    }
+    if (u.endsWith('/labels')) return Promise.resolve(jsonResponse(LABELS));
     if (u.includes('/threads?')) {
-      const q = decodeURIComponent(u);
-      const match = Object.entries(threadsByLabel).find(([label]) => q.includes(label));
-      const threads = (match?.[1] ?? []).map((id) => ({ id }));
+      const labelId = new URL(u).searchParams.get('labelIds') ?? '';
+      const threads = (threadsByLabelId[labelId] ?? []).map((id) => ({ id }));
       return Promise.resolve(jsonResponse({ threads }));
     }
     return Promise.resolve(jsonResponse());
@@ -42,7 +40,7 @@ describe('sweepDueSnoozes', () => {
   beforeEach(() => vi.restoreAllMocks());
 
   it('returns due threads to the inbox and ignores future/undecodable buckets', async () => {
-    stubFetchRouting({ 'idk-inbox/Snoozed/2026-07-07-0900': ['t1', 't2'] });
+    stubFetchRouting({ L_due: ['t1', 't2'] });
     const { client, modifyThreadLabels } = spyThreadWriteClient();
 
     const result = await sweepDueSnoozes('tok', client, NOW);
@@ -55,38 +53,59 @@ describe('sweepDueSnoozes', () => {
     });
   });
 
-  it('deletes the bucket label once fully swept', async () => {
-    const { calls } = stubFetchRouting({ 'idk-inbox/Snoozed/2026-07-07-0900': ['t1'] });
+  it('lists bucket members by label id, never by search', async () => {
+    const { calls } = stubFetchRouting({ L_due: ['t1'] });
     const { client } = spyThreadWriteClient();
 
     await sweepDueSnoozes('tok', client, NOW);
 
-    const deletes = calls.filter((c) => c.method === 'DELETE');
-    expect(deletes).toHaveLength(1);
-    expect(deletes[0].url).toMatch(/\/labels\/L_due$/);
+    const threadLists = calls.filter((c) => c.url.includes('/threads?'));
+    expect(threadLists).toHaveLength(1);
+    expect(threadLists[0].url).toContain('labelIds=L_due');
+    expect(threadLists[0].url).not.toContain('q=');
+  });
+
+  it('deletes the bucket label once fully swept', async () => {
+    stubFetchRouting({ L_due: ['t1'] });
+    const { client, deleteLabel } = spyThreadWriteClient();
+
+    await sweepDueSnoozes('tok', client, NOW);
+
+    expect(deleteLabel).toHaveBeenCalledTimes(1);
+    expect(deleteLabel).toHaveBeenCalledWith('tok', 'idk-inbox/Snoozed/2026-07-07-0900');
   });
 
   it('keeps the bucket label when some threads failed to wake', async () => {
-    const { calls } = stubFetchRouting({ 'idk-inbox/Snoozed/2026-07-07-0900': ['t1', 't2'] });
-    const client = {
-      modifyThreadLabels: vi.fn(async () => ({ succeeded: ['t1'], failed: ['t2'] })),
-    };
+    stubFetchRouting({ L_due: ['t1', 't2'] });
+    const { client, deleteLabel } = spyThreadWriteClient();
+    client.modifyThreadLabels = vi.fn(async () => ({ succeeded: ['t1'], failed: ['t2'] }));
 
     const result = await sweepDueSnoozes('tok', client, NOW);
 
     expect(result.woken).toBe(1);
-    expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(0);
+    expect(deleteLabel).not.toHaveBeenCalled();
+  });
+
+  it('keeps the bucket label when the listing hit the cap (possible truncation)', async () => {
+    const century = Array.from({ length: 100 }, (_, i) => `t${i}`);
+    stubFetchRouting({ L_due: century });
+    const { client, deleteLabel } = spyThreadWriteClient();
+
+    const result = await sweepDueSnoozes('tok', client, NOW);
+
+    expect(result.woken).toBe(100);
+    expect(deleteLabel).not.toHaveBeenCalled();
   });
 
   it('deletes an empty due bucket without any thread writes', async () => {
-    const { calls } = stubFetchRouting({ 'idk-inbox/Snoozed/2026-07-07-0900': [] });
-    const { client, modifyThreadLabels } = spyThreadWriteClient();
+    stubFetchRouting({ L_due: [] });
+    const { client, modifyThreadLabels, deleteLabel } = spyThreadWriteClient();
 
     const result = await sweepDueSnoozes('tok', client, NOW);
 
     expect(result.woken).toBe(0);
     expect(modifyThreadLabels).not.toHaveBeenCalled();
-    expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(1);
+    expect(deleteLabel).toHaveBeenCalledTimes(1);
   });
 
   it('does nothing when no bucket is due', async () => {
@@ -99,5 +118,28 @@ describe('sweepDueSnoozes', () => {
     expect(result.woken).toBe(0);
     expect(modifyThreadLabels).not.toHaveBeenCalled();
     expect(calls.filter((c) => c.url.includes('/threads?'))).toHaveLength(0);
+  });
+
+  it("one bucket's failure doesn't starve the rest", async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const LABELS_TWO_DUE = {
+      labels: [
+        { id: 'L_a', name: 'idk-inbox/Snoozed/2026-07-07-0800' },
+        { id: 'L_b', name: 'idk-inbox/Snoozed/2026-07-07-0900' },
+      ],
+    };
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      const u = String(url);
+      if (u.endsWith('/labels')) return Promise.resolve(jsonResponse(LABELS_TWO_DUE));
+      if (u.includes('labelIds=L_a')) return Promise.resolve({ ok: false, status: 500 } as Response);
+      if (u.includes('labelIds=L_b')) return Promise.resolve(jsonResponse({ threads: [{ id: 't9' }] }));
+      return Promise.resolve(jsonResponse());
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { client } = spyThreadWriteClient();
+
+    const result = await sweepDueSnoozes('tok', client, NOW);
+
+    expect(result.woken).toBe(1); // L_b still woke despite L_a's 500
   });
 });

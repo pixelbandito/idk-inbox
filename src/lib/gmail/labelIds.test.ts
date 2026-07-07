@@ -71,6 +71,31 @@ describe('createLabelIdResolver', () => {
     expect(ids.get('INBOX')).toBe('INBOX');
   });
 
+  it('evict() drops a cached id so it cannot be reused after label deletion', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(LABEL_LIST));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resolver = createLabelIdResolver();
+    await resolver.idsFor('token', ['idk-inbox/Snoozed']);
+    resolver.evict('idk-inbox/Snoozed');
+
+    // Within the re-list interval, the evicted name stays unresolved.
+    const ids = await resolver.idsFor('token', ['idk-inbox/Snoozed']);
+    expect(ids.has('idk-inbox/Snoozed')).toBe(false);
+  });
+
+  it('concurrent misses share a single label listing', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(LABEL_LIST));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resolver = createLabelIdResolver();
+    await Promise.all([
+      resolver.idsFor('token', ['idk-inbox']),
+      resolver.idsFor('token', ['idk-inbox/Snoozed']),
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('throws a readable error when the label list fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403 } as Response));
     const resolver = createLabelIdResolver();

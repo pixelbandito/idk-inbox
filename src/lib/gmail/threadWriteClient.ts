@@ -8,8 +8,7 @@
 // doesn't abort a batch.
 
 import { createLabelIdResolver, type LabelIdResolver } from './labelIds';
-
-const BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
+import { gmailDelete, gmailJson } from './http';
 
 export interface LabelChange {
   add: string[];
@@ -22,11 +21,20 @@ export interface ThreadWriteOutcome {
 }
 
 export interface ThreadWriteClient {
+  /**
+   * Applies a label change to each thread. TRASH in `add`/`remove` is
+   * translated to the trash/untrash endpoints behind the scenes.
+   */
   modifyThreadLabels(
     token: string,
     threadIds: string[],
     change: LabelChange,
   ): Promise<ThreadWriteOutcome>;
+  /**
+   * Deletes a label by name (idempotent — a 404 counts as done) and evicts it
+   * from the id cache so later writes can't reuse the dead id.
+   */
+  deleteLabel(token: string, name: string): Promise<void>;
 }
 
 /** One thread's worth of API calls, in order. */
@@ -38,15 +46,7 @@ interface WritePlan {
 }
 
 async function post(token: string, path: string, body?: unknown): Promise<void> {
-  const res = await fetch(`${BASE}${path}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-    },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-  });
-  if (!res.ok) throw new Error(`Gmail write failed: ${res.status}`);
+  await gmailJson<unknown>(token, path, 'write', { method: 'POST', body });
 }
 
 async function planChange(
@@ -73,10 +73,11 @@ async function planChange(
 }
 
 async function applyPlan(token: string, threadId: string, plan: WritePlan): Promise<void> {
-  if (plan.trash) await post(token, `/threads/${threadId}/trash`);
-  if (plan.untrash) await post(token, `/threads/${threadId}/untrash`);
+  const id = encodeURIComponent(threadId);
+  if (plan.trash) await post(token, `/threads/${id}/trash`);
+  if (plan.untrash) await post(token, `/threads/${id}/untrash`);
   if (plan.addLabelIds.length > 0 || plan.removeLabelIds.length > 0) {
-    await post(token, `/threads/${threadId}/modify`, {
+    await post(token, `/threads/${id}/modify`, {
       addLabelIds: plan.addLabelIds,
       removeLabelIds: plan.removeLabelIds,
     });
@@ -100,6 +101,14 @@ export function createThreadWriteClient(
         else outcome.failed.push(threadIds[i]);
       });
       return outcome;
+    },
+
+    async deleteLabel(token, name) {
+      const ids = await resolver.idsFor(token, [name]);
+      const id = ids.get(name);
+      if (!id) return; // already gone
+      await gmailDelete(token, `/labels/${encodeURIComponent(id)}`, 'label delete');
+      resolver.evict(name);
     },
   };
 }

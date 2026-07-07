@@ -17,6 +17,7 @@ function stubResolver(missing: string[] = []): LabelIdResolver {
       }
       return map;
     },
+    evict: () => {},
   };
 }
 
@@ -117,12 +118,37 @@ describe('createThreadWriteClient', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('deleteLabel resolves the name, tolerates 404, and evicts the cache entry', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404 } as Response);
+    vi.stubGlobal('fetch', fetchMock);
+    const evict = vi.fn();
+    const resolver: LabelIdResolver = { ...stubResolver(), evict };
+
+    const client = createThreadWriteClient(resolver);
+    await client.deleteLabel('token', 'idk-inbox/Snoozed/2026-07-07-0900');
+
+    expect(calledUrls(fetchMock)).toEqual([
+      `https://gmail.googleapis.com/gmail/v1/users/me/labels/${encodeURIComponent('id:idk-inbox/Snoozed/2026-07-07-0900')}`,
+    ]);
+    expect(evict).toHaveBeenCalledWith('idk-inbox/Snoozed/2026-07-07-0900');
+  });
+
+  it('deleteLabel is a no-op for names that no longer resolve', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createThreadWriteClient(stubResolver(['idk-inbox/Gone']));
+    await client.deleteLabel('token', 'idk-inbox/Gone');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('creates add-side labels on demand (createMissing)', async () => {
     const idsFor = vi.fn().mockResolvedValue(new Map([['idk-inbox/New', 'id:new']]));
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse());
     vi.stubGlobal('fetch', fetchMock);
 
-    const client = createThreadWriteClient({ idsFor });
+    const client = createThreadWriteClient({ idsFor, evict: () => {} });
     await client.modifyThreadLabels('token', ['t1'], { add: ['idk-inbox/New'], remove: [] });
 
     expect(idsFor).toHaveBeenCalledWith('token', ['idk-inbox/New'], { createMissing: true });
