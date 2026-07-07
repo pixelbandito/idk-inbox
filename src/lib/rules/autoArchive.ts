@@ -8,7 +8,7 @@
 
 import type { ThreadWriteClient } from '../gmail/threadWriteClient';
 import { gmailJson } from '../gmail/http';
-import { senderAddressOf } from '../gmail/address';
+import { isPlainEmailAddress, senderAddressOf } from '../gmail/address';
 
 const STORAGE_KEY = 'idk-inbox:auto-archive-rules';
 const MAX_THREADS_PER_RULE = 100;
@@ -32,6 +32,9 @@ export function autoArchiveRules(): AutoArchiveRule[] {
 
 export function addAutoArchiveRule(sender: string, now: number = Date.now()): void {
   const address = senderAddressOf(sender);
+  // From headers are attacker-controlled; only plain addresses may become
+  // rules, or a crafted quote could widen the sweep query to the whole inbox.
+  if (!isPlainEmailAddress(address)) return;
   const rules = autoArchiveRules();
   if (rules.some((r) => r.sender === address)) return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify([...rules, { sender: address, createdAt: now }]));
@@ -64,6 +67,8 @@ export async function sweepAutoArchive(
 ): Promise<AutoArchiveSweepResult> {
   let archived = 0;
   for (const rule of rules) {
+    // Defense in depth against hand-edited or legacy stored rules.
+    if (!isPlainEmailAddress(rule.sender)) continue;
     try {
       const threadIds = await inboxThreadIdsFrom(token, rule.sender);
       if (threadIds.length === 0) continue;

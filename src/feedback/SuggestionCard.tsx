@@ -4,7 +4,7 @@ import { senderStats, type SenderStats } from '../lib/heuristics/triageLog';
 import { findFatiguedSenders, FATIGUE_WINDOW_DAYS } from '../lib/heuristics/senderFatigue';
 import { dismissSuggestionFor, isSuggestionDismissed } from '../lib/heuristics/dismissals';
 import { addAutoArchiveRule } from '../lib/rules/autoArchive';
-import { senderAddressOf } from '../lib/gmail/address';
+import { isPlainEmailAddress, senderAddressOf } from '../lib/gmail/address';
 import type { EmailSummary } from '../lib/gmail/types';
 
 export interface SuggestionCardProps {
@@ -67,7 +67,9 @@ export function SuggestionCard({ emails }: SuggestionCardProps) {
       {unsubscribeTarget && (
         <button onClick={unsubscribe}>Unsubscribe</button>
       )}
-      <button onClick={autoArchive}>Auto-archive new mail</button>
+      {isPlainEmailAddress(suggestion.sender) && (
+        <button onClick={autoArchive}>Auto-archive new mail</button>
+      )}
       <button onClick={() => settle()}>Dismiss</button>
     </section>
   );

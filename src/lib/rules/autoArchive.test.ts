@@ -24,6 +24,27 @@ describe('auto-archive rules', () => {
     expect(autoArchiveRules()).toEqual([{ sender: 'deals@shop.example', createdAt: 1 }]);
   });
 
+  it('refuses rules for addresses that could break out of the search query', () => {
+    addAutoArchiveRule('legit@x.com" or in:inbox or "@x.com', 1);
+    addAutoArchiveRule('Sneaky <legit@x.com" or in:inbox or "@x.com>', 1);
+    expect(autoArchiveRules()).toEqual([]);
+  });
+
+  it('sweep skips stored rules with non-plain addresses (defense in depth)', async () => {
+    localStorage.setItem(
+      'idk-inbox:auto-archive-rules',
+      JSON.stringify([{ sender: 'bad" or in:inbox or "@x.com', createdAt: 1 }]),
+    );
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const { client } = spyThreadWriteClient();
+
+    const result = await sweepAutoArchive('tok', client);
+
+    expect(result.archived).toBe(0);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('removes rules', () => {
     addAutoArchiveRule('a@x.example', 1);
     removeAutoArchiveRule('a@x.example');
