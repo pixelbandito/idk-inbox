@@ -1,30 +1,52 @@
 /// <reference types="vitest" />
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import fs from 'node:fs';
 
-export default defineConfig({
-  plugins: [
-    react(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      manifest: {
-        name: 'idk-inbox',
-        short_name: 'idk-inbox',
-        description: 'A lightweight, mobile-first Gmail wrapper',
-        theme_color: '#1a1a1a',
-        background_color: '#ffffff',
-        display: 'standalone',
-        icons: [
-          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-        ],
-      },
-    }),
-  ],
-  test: {
-    environment: 'jsdom',
-    globals: true,
-    setupFiles: './src/test/setup.ts',
-  },
+/**
+ * TLS for LAN testing / PWA install: point DEV_TLS_CERT and DEV_TLS_KEY (in
+ * .env.local) at a cert from your own CA. When set, the server also binds to
+ * the LAN (host: true); without them it stays plain-http localhost.
+ */
+function tlsFromEnv(env: Record<string, string>) {
+  if (!env.DEV_TLS_CERT || !env.DEV_TLS_KEY) return undefined;
+  return {
+    cert: fs.readFileSync(env.DEV_TLS_CERT),
+    key: fs.readFileSync(env.DEV_TLS_KEY),
+  };
+}
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const https = tlsFromEnv(env);
+  const serverConfig = { https, host: https !== undefined };
+
+  return {
+    plugins: [
+      react(),
+      VitePWA({
+        registerType: 'autoUpdate',
+        manifest: {
+          name: 'idk-inbox',
+          short_name: 'idk-inbox',
+          description: 'A lightweight, mobile-first Gmail wrapper',
+          theme_color: '#1a1a1a',
+          background_color: '#ffffff',
+          display: 'standalone',
+          icons: [
+            { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+            { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          ],
+        },
+      }),
+    ],
+    server: serverConfig,
+    preview: serverConfig,
+    test: {
+      environment: 'jsdom',
+      globals: true,
+      setupFiles: './src/test/setup.ts',
+    },
+  };
 });

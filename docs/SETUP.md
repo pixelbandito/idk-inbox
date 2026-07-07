@@ -152,6 +152,36 @@ and the app starts needing `gmail.send`):
   blocking `accounts.google.com`. Allow the host or disable the
   extension for `localhost:5173`.
 
+## LAN HTTPS + installing the PWA on a phone
+
+PWA install requires a secure origin, and Google sign-in requires the origin
+to be registered on the OAuth client. To run the app on your phone against
+the dev box:
+
+1. **Pick a hostname, not an IP.** Google OAuth rejects LAN IP origins
+   (`https://192.168.x.x`), so give the dev box a name your devices can
+   resolve — a local-DNS/router entry like `inbox.home.arpa`, or any domain
+   you control pointed at the LAN IP.
+2. **Issue a cert from your CA** for that hostname, and make sure the CA's
+   root is trusted on each device (iOS: install the profile, then enable it
+   under Settings → General → About → Certificate Trust Settings).
+3. **Point the dev server at the cert** in `.env.local`:
+
+   ```sh
+   DEV_TLS_CERT=/path/to/inbox.home.arpa.pem
+   DEV_TLS_KEY=/path/to/inbox.home.arpa-key.pem
+   ```
+
+   With both set, `npm run dev` / `npm run preview` serve HTTPS and bind to
+   the LAN (`host: true`). Without them, everything stays on plain-http
+   localhost.
+4. **Register the origin** — add `https://inbox.home.arpa:5173` (dev) and/or
+   `https://inbox.home.arpa:4173` (preview) to the OAuth client's
+   **Authorized JavaScript origins**.
+5. On the phone, open the URL, sign in, and use the browser's
+   **Add to Home Screen / Install** — `npm run build && npm run preview`
+   serves the real installable build with the service worker.
+
 ## Architecture pointers
 
 - Design: `docs/plans/2026-05-16-inbox-zero-design.md`.
