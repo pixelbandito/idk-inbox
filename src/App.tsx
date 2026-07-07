@@ -131,6 +131,7 @@ export default function App() {
         initialPanels={INITIAL_PANELS}
         externalSignIn={signIn}
         externalSignOut={signOut}
+        getToken={getToken}
       >
         <AppInner getToken={getToken} />
       </DispatchProvider>

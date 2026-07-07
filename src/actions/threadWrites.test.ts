@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  modifyThreadLabelsStub, archiveThreadStub, deleteThreadStub, spamThreadStub,
-  addLabelThreadStub, removeLabelThreadStub, snoozeThreadStub, unsubscribeThreadStub,
-} from './threadWrites';
+import { createThreadWriteActions } from './threadWrites';
+import type { ThreadWriteClient, ThreadWriteOutcome } from '../lib/gmail/threadWriteClient';
 import type { ReadonlyContext } from '../input/types';
 
 const ctx: ReadonlyContext = {
@@ -10,134 +8,174 @@ const ctx: ReadonlyContext = {
   selection: [], mode: 'idle', signedIn: true,
 };
 
-describe('modifyThreadLabelsStub', () => {
-  beforeEach(() => vi.spyOn(console, 'info').mockImplementation(() => {}));
+function fakeClient(outcome?: Partial<ThreadWriteOutcome>) {
+  const modifyThreadLabels = vi.fn(async (_t: string, threadIds: string[]) => ({
+    succeeded: outcome?.succeeded ?? threadIds,
+    failed: outcome?.failed ?? [],
+  }));
+  const client: ThreadWriteClient = { modifyThreadLabels };
+  return { client, modifyThreadLabels };
+}
 
-  it('logs and returns ok with a symmetric inverse', async () => {
-    const result = await modifyThreadLabelsStub(
-      { targets: ['t1'], add: ['L1'], remove: ['INBOX'] }, ctx,
-    );
+function actionsWith(client: ThreadWriteClient, token: string | null = 'token') {
+  return createThreadWriteActions({ getToken: () => token, client });
+}
+
+describe('createThreadWriteActions', () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it('refuses every write when signed out', async () => {
+    const { client, modifyThreadLabels } = fakeClient();
+    const actions = actionsWith(client, null);
+    const result = await actions.archiveThread({ targets: ['t1'] }, ctx);
+    expect(result).toEqual({ ok: false, error: 'Not signed in.' });
+    expect(modifyThreadLabels).not.toHaveBeenCalled();
+  });
+
+  it('refuses writes with no targets', async () => {
+    const { client } = fakeClient();
+    const actions = actionsWith(client);
+    const result = await actions.archiveThread({ targets: [] }, ctx);
+    expect(result.ok).toBe(false);
+  });
+
+  it('archive removes INBOX and inverts to restoring it', async () => {
+    const { client, modifyThreadLabels } = fakeClient();
+    const actions = actionsWith(client);
+
+    const result = await actions.archiveThread({ targets: ['t1', 't2'] }, ctx);
+
+    expect(modifyThreadLabels).toHaveBeenCalledWith('token', ['t1', 't2'], {
+      add: [], remove: ['INBOX'],
+    });
     expect(result.ok).toBe(true);
     if (result.ok) {
+      expect(result.description).toBe('Archived 2 threads');
       expect(result.inverse).toEqual({
         action: 'modify-thread-labels',
-        args: { targets: ['t1'], add: ['INBOX'], remove: ['L1'] },
+        args: { targets: ['t1', 't2'], add: ['INBOX'], remove: [] },
         description: expect.any(String),
       });
     }
-    expect(console.info).toHaveBeenCalledWith('[stub:modify-thread-labels]', expect.any(Object));
   });
 
-  it('returns ok:false when targets is empty', async () => {
-    const result = await modifyThreadLabelsStub({ targets: [], add: ['L1'], remove: [] }, ctx);
-    expect(result.ok).toBe(false);
-  });
-});
+  it('delete adds TRASH and inverts to untrash + INBOX', async () => {
+    const { client, modifyThreadLabels } = fakeClient();
+    const actions = actionsWith(client);
 
-describe('archiveThreadStub', () => {
-  beforeEach(() => vi.spyOn(console, 'info').mockImplementation(() => {}));
+    const result = await actions.deleteThread({ targets: ['t1'] }, ctx);
 
-  it("delegates to modify with remove:['INBOX']", async () => {
-    const result = await archiveThreadStub({ targets: ['t1', 't2'] }, ctx);
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.inverse?.action).toBe('modify-thread-labels');
-      expect(result.inverse?.args).toEqual({
-        targets: ['t1', 't2'], add: ['INBOX'], remove: [],
-      });
-    }
-  });
-});
-
-describe('deleteThreadStub', () => {
-  beforeEach(() => vi.spyOn(console, 'info').mockImplementation(() => {}));
-
-  it("delegates to modify with add:['TRASH'], remove:['INBOX']", async () => {
-    const result = await deleteThreadStub({ targets: ['t1'] }, ctx);
-    expect(result.ok).toBe(true);
+    expect(modifyThreadLabels).toHaveBeenCalledWith('token', ['t1'], {
+      add: ['TRASH'], remove: ['INBOX'],
+    });
     if (result.ok) {
       expect(result.inverse?.args).toEqual({
         targets: ['t1'], add: ['INBOX'], remove: ['TRASH'],
       });
     }
   });
-});
 
-describe('spamThreadStub', () => {
-  beforeEach(() => vi.spyOn(console, 'info').mockImplementation(() => {}));
-
-  it("delegates to modify with add:['SPAM'], remove:['INBOX']", async () => {
-    const result = await spamThreadStub({ targets: ['t1'] }, ctx);
+  it('spam adds SPAM with a symmetric inverse', async () => {
+    const { client } = fakeClient();
+    const actions = actionsWith(client);
+    const result = await actions.spamThread({ targets: ['t1'] }, ctx);
     if (result.ok) {
       expect(result.inverse?.args).toEqual({
         targets: ['t1'], add: ['INBOX'], remove: ['SPAM'],
       });
     }
   });
-});
 
-describe('addLabelThreadStub', () => {
-  beforeEach(() => vi.spyOn(console, 'info').mockImplementation(() => {}));
-
-  it('inverse removes the same label', async () => {
-    const result = await addLabelThreadStub({ targets: ['t1'], label: 'idk-inbox/Receipts' }, ctx);
+  it('add-label inverse removes the same label', async () => {
+    const { client, modifyThreadLabels } = fakeClient();
+    const actions = actionsWith(client);
+    const result = await actions.addLabelThread(
+      { targets: ['t1'], label: 'idk-inbox/Receipts' }, ctx,
+    );
+    expect(modifyThreadLabels).toHaveBeenCalledWith('token', ['t1'], {
+      add: ['idk-inbox/Receipts'], remove: [],
+    });
     if (result.ok) {
       expect(result.inverse?.args).toEqual({
         targets: ['t1'], add: [], remove: ['idk-inbox/Receipts'],
       });
     }
   });
-});
 
-describe('removeLabelThreadStub', () => {
-  beforeEach(() => vi.spyOn(console, 'info').mockImplementation(() => {}));
-
-  it('inverse adds the same label', async () => {
-    const result = await removeLabelThreadStub({ targets: ['t1'], label: 'idk-inbox/Receipts' }, ctx);
+  it('remove-label inverse re-adds the same label', async () => {
+    const { client } = fakeClient();
+    const actions = actionsWith(client);
+    const result = await actions.removeLabelThread(
+      { targets: ['t1'], label: 'idk-inbox/Receipts' }, ctx,
+    );
     if (result.ok) {
       expect(result.inverse?.args).toEqual({
         targets: ['t1'], add: ['idk-inbox/Receipts'], remove: [],
       });
     }
   });
-});
 
-describe('snoozeThreadStub', () => {
-  beforeEach(() => vi.spyOn(console, 'info').mockImplementation(() => {}));
+  it('snooze applies the bucket label pair and removes INBOX', async () => {
+    const { client, modifyThreadLabels } = fakeClient();
+    const actions = actionsWith(client);
 
-  it('returns ok:false when until is missing (elicit-via picker)', async () => {
-    const result = await snoozeThreadStub({ targets: ['t1'] }, ctx);
-    expect(result.ok).toBe(false);
-  });
-
-  it('adds the snoozed labels and removes INBOX, with symmetric inverse', async () => {
-    const result = await snoozeThreadStub(
+    const result = await actions.snoozeThread(
       { targets: ['t1'], until: '2026-06-01T09:00:00Z' }, ctx,
     );
-    expect(result.ok).toBe(true);
+
+    expect(modifyThreadLabels).toHaveBeenCalledWith('token', ['t1'], {
+      add: ['idk-inbox/Snoozed', 'idk-inbox/Snoozed/2026-06-01-0900'],
+      remove: ['INBOX'],
+    });
     if (result.ok) {
       expect(result.inverse?.args).toEqual({
         targets: ['t1'],
         add: ['INBOX'],
-        remove: ['idk-inbox/Snoozed', 'idk-inbox/Snoozed/2026-06-01T09:00:00Z'],
+        remove: ['idk-inbox/Snoozed', 'idk-inbox/Snoozed/2026-06-01-0900'],
       });
     }
   });
-});
 
-describe('unsubscribeThreadStub', () => {
-  beforeEach(() => vi.spyOn(console, 'info').mockImplementation(() => {}));
+  it('snooze refuses a missing or malformed until', async () => {
+    const { client } = fakeClient();
+    const actions = actionsWith(client);
+    expect((await actions.snoozeThread({ targets: ['t1'] }, ctx)).ok).toBe(false);
+    expect((await actions.snoozeThread({ targets: ['t1'], until: 'nope' }, ctx)).ok).toBe(false);
+  });
 
-  it('logs and returns ok with no inverse (cannot un-unsubscribe)', async () => {
-    const result = await unsubscribeThreadStub({ targets: ['t1'] }, ctx);
+  it('partial failure succeeds with an inverse scoped to the threads that changed', async () => {
+    const { client } = fakeClient({ succeeded: ['t1'], failed: ['t2'] });
+    const actions = actionsWith(client);
+
+    const result = await actions.archiveThread({ targets: ['t1', 't2'] }, ctx);
+
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.inverse).toBeUndefined();
+      expect(result.description).toBe('Archived 1 thread (1 failed)');
+      expect(result.inverse?.args).toEqual({ targets: ['t1'], add: ['INBOX'], remove: [] });
     }
   });
 
-  it('returns ok:false when targets empty', async () => {
-    const result = await unsubscribeThreadStub({ targets: [] }, ctx);
+  it('total failure returns ok:false', async () => {
+    const { client } = fakeClient({ succeeded: [], failed: ['t1'] });
+    const actions = actionsWith(client);
+    const result = await actions.archiveThread({ targets: ['t1'] }, ctx);
+    expect(result.ok).toBe(false);
+  });
+
+  it('surfaces client exceptions as readable errors', async () => {
+    const client: ThreadWriteClient = {
+      modifyThreadLabels: async () => { throw new Error('Gmail write failed: 401'); },
+    };
+    const actions = actionsWith(client);
+    const result = await actions.archiveThread({ targets: ['t1'] }, ctx);
+    expect(result).toEqual({ ok: false, error: 'Gmail write failed: 401' });
+  });
+
+  it('unsubscribe is honestly unimplemented', async () => {
+    const { client } = fakeClient();
+    const actions = actionsWith(client);
+    const result = await actions.unsubscribeThread({ targets: ['t1'] }, ctx);
     expect(result.ok).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PanelHeader } from '../layout/PanelHeader';
-import { useDispatchContext } from '../state/useDispatch';
+import { useDispatchContext, useRefreshState } from '../state/useDispatch';
 import { useGestureProducer } from '../triggers/producers/fromGesture';
 import { useTriggerHandler } from '../triggers/useTriggerHandler';
 import {
@@ -63,6 +63,10 @@ export function ThreadlistPanel({
   const [loading, setLoading] = useState(false);
   const ctx = useDispatchContext();
   const selectionSet = new Set(ctx.selection);
+  const { threadsVersion, labelVersions } = useRefreshState();
+  // Any thread write (or a refresh-panel aimed at this label) invalidates the
+  // list; combining the two versions gives the effect one number to watch.
+  const refreshTick = threadsVersion + (labelVersions[label] ?? 0);
 
   const load = useCallback(async () => {
     const token = getToken();
@@ -88,7 +92,7 @@ export function ThreadlistPanel({
     queueMicrotask(() => {
       void load();
     });
-  }, [load]);
+  }, [load, refreshTick]);
 
   const token = getToken();
   if (!token) {

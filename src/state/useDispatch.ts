@@ -1,5 +1,8 @@
 import { useContext } from 'react';
-import { DispatchContext, DispatcherContext, LayoutStateContext, PendingStateContext, UndoStateContext } from './dispatchContexts';
+import {
+  DispatchContext, DispatcherContext, LayoutStateContext, PendingStateContext,
+  RefreshStateContext, UndoStateContext,
+} from './dispatchContexts';
 
 export function useDispatchContext() {
   const ctx = useContext(DispatchContext);
@@ -23,4 +26,8 @@ export function useLayoutState() {
 
 export function usePending() {
   return useContext(PendingStateContext);
+}
+
+export function useRefreshState() {
+  return useContext(RefreshStateContext);
 }

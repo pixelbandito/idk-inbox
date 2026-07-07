@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { UndoToast } from './UndoToast';
 import { DispatchProvider } from '../state/DispatchProvider';
 import { useDispatchContext, useDispatcher } from '../state/useDispatch';
+import { spyThreadWriteClient } from '../test/spyThreadWriteClient';
 
 function FireArchiveButton() {
   const ctx = useDispatchContext();
@@ -18,8 +19,23 @@ describe('UndoToast', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.useFakeTimers();
-    vi.spyOn(console, 'info').mockImplementation(() => {});
   });
+
+  function renderWithToast(toast: React.ReactNode) {
+    const { client, modifyThreadLabels } = spyThreadWriteClient();
+    render(
+      <DispatchProvider
+        signedIn
+        initialPanels={[{ kind: 'settings' }, { kind: 'threadlist', label: 'INBOX' }]}
+        getToken={() => 'tok'}
+        threadWriteClient={client}
+      >
+        <FireArchiveButton />
+        {toast}
+      </DispatchProvider>,
+    );
+    return { modifyThreadLabels };
+  }
   afterEach(() => vi.useRealTimers());
 
   it('is hidden when the undo stack is empty', () => {
@@ -28,24 +44,14 @@ describe('UndoToast', () => {
   });
 
   it('appears after a successful action with an inverse, showing the description', async () => {
-    render(
-      <DispatchProvider signedIn initialPanels={[{kind:'settings'},{kind:'threadlist',label:'INBOX'}]}>
-        <FireArchiveButton />
-        <UndoToast />
-      </DispatchProvider>,
-    );
+    renderWithToast(<UndoToast />);
     await act(async () => { fireEvent.click(screen.getByTestId('fire')); });
     expect(screen.getByRole('status')).toBeInTheDocument();
     expect(screen.getByText(/archived/i)).toBeInTheDocument();
   });
 
   it('auto-dismisses after the dismissAfterMs threshold', async () => {
-    render(
-      <DispatchProvider signedIn initialPanels={[{kind:'settings'},{kind:'threadlist',label:'INBOX'}]}>
-        <FireArchiveButton />
-        <UndoToast dismissAfterMs={1000} />
-      </DispatchProvider>,
-    );
+    renderWithToast(<UndoToast dismissAfterMs={1000} />);
     await act(async () => { fireEvent.click(screen.getByTestId('fire')); });
     expect(screen.getByRole('status')).toBeInTheDocument();
     await act(async () => { vi.advanceTimersByTime(1100); });
@@ -53,12 +59,7 @@ describe('UndoToast', () => {
   });
 
   it('clicking Undo dispatches the undo action and drains the undo stack', async () => {
-    render(
-      <DispatchProvider signedIn initialPanels={[{kind:'settings'},{kind:'threadlist',label:'INBOX'}]}>
-        <FireArchiveButton />
-        <UndoToast />
-      </DispatchProvider>,
-    );
+    const { modifyThreadLabels } = renderWithToast(<UndoToast />);
     await act(async () => { fireEvent.click(screen.getByTestId('fire')); });
     expect(screen.getByRole('status')).toBeInTheDocument();
 
@@ -69,7 +70,9 @@ describe('UndoToast', () => {
     // so the undo stack is empty (the wrapper didn't push anything).
     // The toast is therefore gone.
     expect(screen.queryByRole('status')).toBeNull();
-    // Verify the inverse stub did get logged through the inner dispatcher:
-    expect(console.info).toHaveBeenCalledWith('[stub:modify-thread-labels]', expect.any(Object));
+    // The inverse write (restore INBOX) went through the client:
+    expect(modifyThreadLabels).toHaveBeenLastCalledWith('tok', ['t1'], {
+      add: ['INBOX'], remove: [],
+    });
   });
 });

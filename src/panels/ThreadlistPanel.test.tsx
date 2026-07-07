@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ThreadlistPanel } from './ThreadlistPanel';
 import { DispatchProvider } from '../state/DispatchProvider';
+import { useDispatchContext, useDispatcher } from '../state/useDispatch';
 import { LayoutContainer } from '../layout/LayoutContainer';
 import type { EmailSummary } from '../lib/gmail/types';
 import type { Panel } from '../layout/types';
@@ -23,6 +24,43 @@ const initialPanels: Panel[] = [
 
 describe('ThreadlistPanel', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('refetches after a successful thread write elsewhere in the app', async () => {
+    (fetchByLabel as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ emails, failed: 0 });
+
+    function ArchiveButton() {
+      const dispatch = useDispatcher();
+      const ctx = useDispatchContext();
+      return (
+        <button
+          data-testid="archive"
+          onClick={() => {
+            void dispatch({ action: 'archive-thread', args: { targets: ['t1'] }, context: ctx });
+          }}
+        >
+          archive
+        </button>
+      );
+    }
+
+    render(
+      <DispatchProvider
+        signedIn
+        initialPanels={initialPanels}
+        getToken={() => 'tok'}
+        threadWriteClient={{
+          modifyThreadLabels: async (_t, threadIds) => ({ succeeded: threadIds, failed: [] }),
+        }}
+      >
+        <ThreadlistPanel label="INBOX" displayName="Inbox" getToken={() => 'tok'} />
+        <ArchiveButton />
+      </DispatchProvider>,
+    );
+
+    await waitFor(() => expect(fetchByLabel).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId('archive'));
+    await waitFor(() => expect(fetchByLabel).toHaveBeenCalledTimes(2));
+  });
 
   it('shows a sign-in prompt when no token is available', () => {
     render(

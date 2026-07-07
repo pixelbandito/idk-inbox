@@ -13,16 +13,8 @@ import type {
   UndoEntry,
 } from '../input/types';
 import type { Panel } from '../layout/types';
-import {
-  modifyThreadLabelsStub,
-  archiveThreadStub,
-  deleteThreadStub,
-  spamThreadStub,
-  addLabelThreadStub,
-  removeLabelThreadStub,
-  snoozeThreadStub,
-  unsubscribeThreadStub,
-} from '../actions/threadWrites';
+import { createThreadWriteActions } from '../actions/threadWrites';
+import type { ThreadWriteClient } from '../lib/gmail/threadWriteClient';
 import { createSelectionActions } from '../actions/selection';
 import { createLayoutActions } from '../actions/layout';
 import { createAppActions } from '../actions/app';
@@ -32,10 +24,12 @@ import {
   DispatcherContext,
   LayoutStateContext,
   PendingStateContext,
+  RefreshStateContext,
   UndoStateContext,
   type LayoutState,
   type PendingRequest,
   type PendingState,
+  type RefreshState,
   type UndoState,
 } from './dispatchContexts';
 
@@ -47,6 +41,10 @@ export interface DispatchProviderProps {
   externalSignIn?: () => Promise<void>;
   /** Called when a `sign-out` action is dispatched. Defaults to a no-op. */
   externalSignOut?: () => void;
+  /** OAuth token accessor for thread writes. Defaults to "signed out". */
+  getToken?: () => string | null;
+  /** Test seam: overrides the real Gmail write client. */
+  threadWriteClient?: ThreadWriteClient;
 }
 
 /**
@@ -91,6 +89,8 @@ export function DispatchProvider({
   initialPanels,
   externalSignIn: externalSignInProp,
   externalSignOut: externalSignOutProp,
+  getToken,
+  threadWriteClient,
 }: DispatchProviderProps) {
   const [selection, setSelectionState] = useState<ThreadRef[]>([]);
   const [mode, setModeState]           = useState<Mode>('idle');
@@ -112,10 +112,12 @@ export function DispatchProvider({
   const setMode      = useCallback((m: Mode) => setModeState(m), []);
   const setSelection = useCallback((sel: ThreadRef[]) => setSelectionState(sel), []);
 
-  // Refresh counter map for panels. bumpRefresh increments the counter for a key.
-  const [, setRefreshCounters] = useState<Record<string, number>>({});
+  // Refresh versions panels watch to refetch: per-label (refresh-panel action)
+  // and global (any successful thread write).
+  const [labelVersions, setLabelVersions] = useState<Record<string, number>>({});
+  const [threadsVersion, setThreadsVersion] = useState(0);
   const bumpRefresh = useCallback((key: string) => {
-    setRefreshCounters((c) => ({ ...c, [key]: (c[key] ?? 0) + 1 }));
+    setLabelVersions((c) => ({ ...c, [key]: (c[key] ?? 0) + 1 }));
   }, []);
 
   // Refs mirror the stacks so popUndo/popRedo can return the popped entry
@@ -248,6 +250,20 @@ export function DispatchProvider({
 
   const selectionActions = createSelectionActions({ setMode, setSelection });
 
+  // Mirror getToken through a ref so a new accessor identity (it re-forms when
+  // auth state changes) doesn't rebuild the action registry and dispatchers.
+  const getTokenRef = useRef<(() => string | null) | undefined>(getToken);
+  useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
+  const stableGetToken = useCallback(() => getTokenRef.current?.() ?? null, []);
+
+  // stableGetToken reads its ref only at dispatch time, never during render
+  // (same pattern as getPanels/getFocusIndex below).
+  const threadWriteActions = useMemo(
+    // eslint-disable-next-line react-hooks/refs
+    () => createThreadWriteActions({ getToken: stableGetToken, client: threadWriteClient }),
+    [stableGetToken, threadWriteClient],
+  );
+
   // The getPanels/getFocusIndex/redispatch callbacks read refs only when
   // invoked at action-dispatch time, never during render. The lint rule's
   // static analysis cannot see through useCallback, so disable for these.
@@ -275,15 +291,15 @@ export function DispatchProvider({
   });
 
   const registry: ActionRegistry = useMemo(() => ({
-    // Thread-write stubs:
-    'modify-thread-labels': asAction('modify-thread-labels', 'Modify labels',  'thread-write', modifyThreadLabelsStub),
-    'archive-thread':       asAction('archive-thread',       'Archive',        'thread-write', archiveThreadStub),
-    'delete-thread':        asAction('delete-thread',        'Delete',         'thread-write', deleteThreadStub,       { destructive: true }),
-    'spam-thread':          asAction('spam-thread',          'Mark as spam',   'thread-write', spamThreadStub,         { destructive: true }),
-    'add-label-thread':     asAction('add-label-thread',     'Apply label',    'thread-write', addLabelThreadStub,     { elicitVia: 'picker-label' }),
-    'remove-label-thread':  asAction('remove-label-thread',  'Remove label',   'thread-write', removeLabelThreadStub,  { elicitVia: 'picker-label' }),
-    'snooze-thread':        asAction('snooze-thread',        'Snooze',         'thread-write', snoozeThreadStub,       { elicitVia: 'picker-snooze' }),
-    'unsubscribe-thread':   asAction('unsubscribe-thread',   'Unsubscribe',    'thread-write', unsubscribeThreadStub,  { destructive: true }),
+    // Thread writes (real Gmail mutations):
+    'modify-thread-labels': asAction('modify-thread-labels', 'Modify labels',  'thread-write', threadWriteActions.modifyThreadLabels),
+    'archive-thread':       asAction('archive-thread',       'Archive',        'thread-write', threadWriteActions.archiveThread),
+    'delete-thread':        asAction('delete-thread',        'Delete',         'thread-write', threadWriteActions.deleteThread,      { destructive: true }),
+    'spam-thread':          asAction('spam-thread',          'Mark as spam',   'thread-write', threadWriteActions.spamThread,        { destructive: true }),
+    'add-label-thread':     asAction('add-label-thread',     'Apply label',    'thread-write', threadWriteActions.addLabelThread,    { elicitVia: 'picker-label' }),
+    'remove-label-thread':  asAction('remove-label-thread',  'Remove label',   'thread-write', threadWriteActions.removeLabelThread, { elicitVia: 'picker-label' }),
+    'snooze-thread':        asAction('snooze-thread',        'Snooze',         'thread-write', threadWriteActions.snoozeThread,      { elicitVia: 'picker-snooze' }),
+    'unsubscribe-thread':   asAction('unsubscribe-thread',   'Unsubscribe',    'thread-write', threadWriteActions.unsubscribeThread, { destructive: true }),
 
     // Layout (real):
     'open-panel':           asAction('open-panel',           'Open thread',    'layout',       layoutActions.openPanel),
@@ -304,12 +320,22 @@ export function DispatchProvider({
     'exit-mode':            asAction('exit-mode',            'Cancel',          'app',        appActions.exitMode),
     'sign-in':              asAction('sign-in',              'Sign in',         'app',        appActions.signIn),
     'sign-out':             asAction('sign-out',             'Sign out',        'app',        appActions.signOut),
-  }), [layoutActions, selectionActions, appActions]);
+  }), [threadWriteActions, layoutActions, selectionActions, appActions]);
 
   // Inner dispatcher: raw action execution without undo-stack side effects.
   // appActions.redispatch (used by undo/redo) routes through this so that
-  // re-dispatching an inverse does NOT re-push to the undo stack.
-  const innerDispatcher = useMemo(() => createDispatcher(registry), [registry]);
+  // re-dispatching an inverse does NOT re-push to the undo stack. Bumping
+  // threadsVersion here (not in the wrapper) means undo/redo refresh lists too.
+  const innerDispatcher = useMemo(() => {
+    const run = createDispatcher(registry);
+    return async (req: DispatchRequest): Promise<ActionResult> => {
+      const result = await run(req);
+      if (result.ok && registry[req.action]?.category === 'thread-write') {
+        setThreadsVersion((v) => v + 1);
+      }
+      return result;
+    };
+  }, [registry]);
 
   // Wrapping dispatcher: handles picker elicitation and pushes undo entries
   // for successful user-initiated actions with inverses. External callers
@@ -337,6 +363,10 @@ export function DispatchProvider({
     pending, setPending,
   }), [pending]);
 
+  const refreshState: RefreshState = useMemo(() => ({
+    threadsVersion, labelVersions,
+  }), [threadsVersion, labelVersions]);
+
   useEffect(() => { dispatchRef.current = dispatcher; }, [dispatcher]);
   useEffect(() => { innerDispatchRef.current = innerDispatcher; }, [innerDispatcher]);
 
@@ -346,7 +376,9 @@ export function DispatchProvider({
         <UndoStateContext.Provider value={undoState}>
           <LayoutStateContext.Provider value={layoutState}>
             <PendingStateContext.Provider value={pendingState}>
-              {children}
+              <RefreshStateContext.Provider value={refreshState}>
+                {children}
+              </RefreshStateContext.Provider>
             </PendingStateContext.Provider>
           </LayoutStateContext.Provider>
         </UndoStateContext.Provider>

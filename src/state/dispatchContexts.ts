@@ -47,6 +47,21 @@ const noopLayoutState: LayoutState = {
 
 export const LayoutStateContext = createContext<LayoutState>(noopLayoutState);
 
+/**
+ * Monotonic versions panels watch to know when to refetch. `threadsVersion`
+ * bumps after any successful thread write (including undo/redo); per-label
+ * versions bump on explicit refresh-panel requests.
+ */
+export interface RefreshState {
+  threadsVersion: number;
+  labelVersions: Record<string, number>;
+}
+
+export const RefreshStateContext = createContext<RefreshState>({
+  threadsVersion: 0,
+  labelVersions: {},
+});
+
 export interface PendingRequest {
   action: ActionId;
   args:   Record<string, unknown>;

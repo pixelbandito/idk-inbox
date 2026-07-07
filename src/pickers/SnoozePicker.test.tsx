@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { SnoozePicker } from './SnoozePicker';
 import { DispatchProvider } from '../state/DispatchProvider';
 import { useDispatchContext, useDispatcher } from '../state/useDispatch';
+import { spyThreadWriteClient } from '../test/spyThreadWriteClient';
 
 function OpenSnoozeButton({ targets }: { targets: string[] }) {
   const ctx = useDispatchContext();
@@ -15,10 +16,23 @@ function OpenSnoozeButton({ targets }: { targets: string[] }) {
 }
 
 describe('SnoozePicker', () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-    vi.spyOn(console, 'info').mockImplementation(() => {});
-  });
+  beforeEach(() => vi.restoreAllMocks());
+
+  function renderWithPicker(targets: string[]) {
+    const { client, modifyThreadLabels } = spyThreadWriteClient();
+    render(
+      <DispatchProvider
+        signedIn
+        initialPanels={[{ kind: 'settings' }, { kind: 'threadlist', label: 'INBOX' }]}
+        getToken={() => 'tok'}
+        threadWriteClient={client}
+      >
+        <OpenSnoozeButton targets={targets} />
+        <SnoozePicker />
+      </DispatchProvider>,
+    );
+    return { modifyThreadLabels };
+  }
 
   it('is not visible by default', () => {
     render(<DispatchProvider signedIn><SnoozePicker /></DispatchProvider>);
@@ -26,40 +40,32 @@ describe('SnoozePicker', () => {
   });
 
   it('opens when snooze-thread is dispatched without until, then snooze-thread fires with the until filled in', async () => {
-    render(
-      <DispatchProvider signedIn initialPanels={[{kind:'settings'},{kind:'threadlist',label:'INBOX'}]}>
-        <OpenSnoozeButton targets={['t1']} />
-        <SnoozePicker />
-      </DispatchProvider>,
-    );
+    const { modifyThreadLabels } = renderWithPicker(['t1']);
     await act(async () => { fireEvent.click(screen.getByTestId('open-snooze')); });
     expect(screen.getByText(/snooze until/i)).toBeInTheDocument();
 
-    // Pick "Tomorrow"
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /tomorrow/i })); });
 
-    // The stub log shows snooze-thread fired with both targets and until set.
-    expect(console.info).toHaveBeenCalledWith(
-      '[stub:snooze-thread]',
-      expect.objectContaining({ targets: ['t1'], until: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) }),
-    );
+    // The write applies the snooze pair (parent + wake bucket) and leaves the inbox.
+    expect(modifyThreadLabels).toHaveBeenCalledWith('tok', ['t1'], {
+      add: [
+        'idk-inbox/Snoozed',
+        expect.stringMatching(/^idk-inbox\/Snoozed\/\d{4}-\d{2}-\d{2}-\d{4}$/),
+      ],
+      remove: ['INBOX'],
+    });
 
     // After picking, the picker closes (mode returns to idle).
     await waitFor(() => expect(screen.queryByText(/snooze until/i)).toBeNull());
   });
 
   it('cancel button closes the picker without dispatching snooze-thread', async () => {
-    render(
-      <DispatchProvider signedIn initialPanels={[{kind:'settings'},{kind:'threadlist',label:'INBOX'}]}>
-        <OpenSnoozeButton targets={['t1']} />
-        <SnoozePicker />
-      </DispatchProvider>,
-    );
+    const { modifyThreadLabels } = renderWithPicker(['t1']);
     await act(async () => { fireEvent.click(screen.getByTestId('open-snooze')); });
     expect(screen.getByText(/snooze until/i)).toBeInTheDocument();
 
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /cancel/i })); });
     await waitFor(() => expect(screen.queryByText(/snooze until/i)).toBeNull());
-    expect(console.info).not.toHaveBeenCalledWith('[stub:snooze-thread]', expect.any(Object));
+    expect(modifyThreadLabels).not.toHaveBeenCalled();
   });
 });

@@ -1,111 +1,110 @@
-import type { ActionResult, ReadonlyContext, ThreadRef } from '../input/types';
+// Thread-write action handlers: archive, delete, spam, label, snooze.
+// Every write is a label change applied through the ThreadWriteClient, and
+// every inverse is the mirrored label change — which is what makes undo a
+// plain re-dispatch of `modify-thread-labels` instead of per-action code.
 
-export interface ModifyArgs { targets: ThreadRef[]; add: string[]; remove: string[]; }
+import type { ActionResult, ReadonlyContext, ThreadRef } from '../input/types';
+import {
+  createThreadWriteClient,
+  type LabelChange,
+  type ThreadWriteClient,
+} from '../lib/gmail/threadWriteClient';
+import { SNOOZED_LABEL } from '../lib/gmail/labelBootstrap';
+import { snoozeBucketLabel } from '../lib/snooze/bucket';
+
+export interface ModifyArgs       { targets: ThreadRef[]; add: string[]; remove: string[]; }
 export interface SingleTargetArgs { targets: ThreadRef[]; }
 export interface LabelArgs        { targets: ThreadRef[]; label: string; }
+export interface SnoozeArgs       { targets: ThreadRef[]; until?: string; }
+
+export interface ThreadWriteDeps {
+  getToken: () => string | null;
+  client?: ThreadWriteClient;
+}
 
 function summarize(n: number, verb: string): string {
   return `${verb} ${n} thread${n === 1 ? '' : 's'}`;
 }
 
-export async function modifyThreadLabelsStub(args: ModifyArgs, _ctx: ReadonlyContext): Promise<ActionResult> {
-  if (args.targets.length === 0) {
-    return { ok: false, error: 'No targets specified.' };
-  }
-  console.info('[stub:modify-thread-labels]', args);
-  return {
-    ok: true,
-    description: summarize(args.targets.length, 'Modified'),
-    inverse: {
-      action: 'modify-thread-labels',
-      args: { targets: args.targets, add: args.remove, remove: args.add },
-      description: summarize(args.targets.length, 'Reverted'),
-    },
-  };
-}
+export function createThreadWriteActions({ getToken, client }: ThreadWriteDeps) {
+  const writes = client ?? createThreadWriteClient();
 
-async function delegate(action: string, args: ModifyArgs, _ctx: ReadonlyContext, verb: string): Promise<ActionResult> {
-  if (args.targets.length === 0) return { ok: false, error: 'No targets specified.' };
-  console.info(`[stub:${action}]`, args);
-  return {
-    ok: true,
-    description: summarize(args.targets.length, verb),
-    inverse: {
-      action: 'modify-thread-labels',
-      args: { targets: args.targets, add: args.remove, remove: args.add },
-      description: summarize(args.targets.length, 'Restored'),
-    },
-  };
-}
+  /**
+   * Shared write path: apply `change` to `targets`, report a human summary,
+   * and hand undo an inverse scoped to the threads that actually changed.
+   */
+  async function applyChange(
+    targets: ThreadRef[],
+    change: LabelChange,
+    verbs: { done: string; undone: string },
+  ): Promise<ActionResult> {
+    if (targets.length === 0) return { ok: false, error: 'No targets specified.' };
+    const token = getToken();
+    if (!token) return { ok: false, error: 'Not signed in.' };
 
-export const archiveThreadStub = (args: SingleTargetArgs, ctx: ReadonlyContext) =>
-  delegate('archive-thread',
-    { targets: args.targets, add: [], remove: ['INBOX'] }, ctx, 'Archived');
+    let outcome;
+    try {
+      outcome = await writes.modifyThreadLabels(token, targets, change);
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : 'Gmail write failed.' };
+    }
 
-export const deleteThreadStub = (args: SingleTargetArgs, ctx: ReadonlyContext) =>
-  delegate('delete-thread',
-    { targets: args.targets, add: ['TRASH'], remove: ['INBOX'] }, ctx, 'Deleted');
+    const { succeeded, failed } = outcome;
+    if (succeeded.length === 0) {
+      return { ok: false, error: `${verbs.done} failed for all ${targets.length} thread${targets.length === 1 ? '' : 's'}.` };
+    }
 
-export const spamThreadStub = (args: SingleTargetArgs, ctx: ReadonlyContext) =>
-  delegate('spam-thread',
-    { targets: args.targets, add: ['SPAM'], remove: ['INBOX'] }, ctx, 'Marked as spam');
-
-export const addLabelThreadStub = async (args: LabelArgs, _ctx: ReadonlyContext): Promise<ActionResult> => {
-  if (args.targets.length === 0) return { ok: false, error: 'No targets specified.' };
-  console.info('[stub:add-label-thread]', args);
-  return {
-    ok: true,
-    description: summarize(args.targets.length, `Labelled with ${args.label}`),
-    inverse: {
-      action: 'modify-thread-labels',
-      args: { targets: args.targets, add: [], remove: [args.label] },
-      description: summarize(args.targets.length, 'Restored'),
-    },
-  };
-};
-
-export const removeLabelThreadStub = async (args: LabelArgs, _ctx: ReadonlyContext): Promise<ActionResult> => {
-  if (args.targets.length === 0) return { ok: false, error: 'No targets specified.' };
-  console.info('[stub:remove-label-thread]', args);
-  return {
-    ok: true,
-    description: summarize(args.targets.length, `Removed ${args.label}`),
-    inverse: {
-      action: 'modify-thread-labels',
-      args: { targets: args.targets, add: [args.label], remove: [] },
-      description: summarize(args.targets.length, 'Restored'),
-    },
-  };
-};
-
-export interface SnoozeArgs { targets: ThreadRef[]; until?: string; }
-
-export const snoozeThreadStub = async (args: SnoozeArgs, _ctx: ReadonlyContext): Promise<ActionResult> => {
-  if (args.targets.length === 0) return { ok: false, error: 'No targets specified.' };
-  if (!args.until) return { ok: false, error: 'Snooze duration required.' };
-  console.info('[stub:snooze-thread]', args);
-  const subLabel = `idk-inbox/Snoozed/${args.until}`;
-  return {
-    ok: true,
-    description: summarize(args.targets.length, 'Snoozed'),
-    inverse: {
-      action: 'modify-thread-labels',
-      args: {
-        targets: args.targets,
-        add: ['INBOX'],
-        remove: ['idk-inbox/Snoozed', subLabel],
+    const suffix = failed.length > 0 ? ` (${failed.length} failed)` : '';
+    return {
+      ok: true,
+      description: summarize(succeeded.length, verbs.done) + suffix,
+      inverse: {
+        action: 'modify-thread-labels',
+        args: { targets: succeeded, add: change.remove, remove: change.add },
+        description: summarize(succeeded.length, verbs.undone),
       },
-      description: summarize(args.targets.length, 'Unsnoozed'),
-    },
-  };
-};
+    };
+  }
 
-export const unsubscribeThreadStub = async (args: SingleTargetArgs, _ctx: ReadonlyContext): Promise<ActionResult> => {
-  if (args.targets.length === 0) return { ok: false, error: 'No targets specified.' };
-  console.info('[stub:unsubscribe-thread]', args);
   return {
-    ok: true,
-    description: summarize(args.targets.length, 'Unsubscribed from'),
-    // No inverse — unsubscribe is not reversible.
+    modifyThreadLabels: (args: ModifyArgs, _ctx: ReadonlyContext) =>
+      applyChange(args.targets, { add: args.add, remove: args.remove },
+        { done: 'Modified', undone: 'Reverted' }),
+
+    archiveThread: (args: SingleTargetArgs, _ctx: ReadonlyContext) =>
+      applyChange(args.targets, { add: [], remove: ['INBOX'] },
+        { done: 'Archived', undone: 'Restored' }),
+
+    deleteThread: (args: SingleTargetArgs, _ctx: ReadonlyContext) =>
+      applyChange(args.targets, { add: ['TRASH'], remove: ['INBOX'] },
+        { done: 'Deleted', undone: 'Restored' }),
+
+    spamThread: (args: SingleTargetArgs, _ctx: ReadonlyContext) =>
+      applyChange(args.targets, { add: ['SPAM'], remove: ['INBOX'] },
+        { done: 'Marked as spam', undone: 'Restored' }),
+
+    addLabelThread: (args: LabelArgs, _ctx: ReadonlyContext) =>
+      applyChange(args.targets, { add: [args.label], remove: [] },
+        { done: `Labelled with ${args.label}`, undone: 'Restored' }),
+
+    removeLabelThread: (args: LabelArgs, _ctx: ReadonlyContext) =>
+      applyChange(args.targets, { add: [], remove: [args.label] },
+        { done: `Removed ${args.label}`, undone: 'Restored' }),
+
+    snoozeThread: async (args: SnoozeArgs, _ctx: ReadonlyContext): Promise<ActionResult> => {
+      if (!args.until) return { ok: false, error: 'Snooze duration required.' };
+      const until = new Date(args.until);
+      if (Number.isNaN(until.getTime())) return { ok: false, error: 'Invalid snooze date.' };
+      return applyChange(
+        args.targets,
+        { add: [SNOOZED_LABEL, snoozeBucketLabel(until)], remove: ['INBOX'] },
+        { done: 'Snoozed', undone: 'Unsnoozed' },
+      );
+    },
+
+    // Real unsubscribe (List-Unsubscribe header) is a later slice; failing
+    // honestly beats pretending it worked.
+    unsubscribeThread: async (_args: SingleTargetArgs, _ctx: ReadonlyContext): Promise<ActionResult> =>
+      ({ ok: false, error: 'Unsubscribe is not implemented yet.' }),
   };
-};
+}
