@@ -1,6 +1,10 @@
 import type { ActionResult, ReadonlyContext, ThreadRef } from '../input/types';
-import { openThread, closeAt } from '../layout/operations';
+import { openThread, openThreadlist, closeAt } from '../layout/operations';
 import type { Panel } from '../layout/types';
+
+export type OpenPanelArgs =
+  | { kind: 'thread'; threadId: ThreadRef }
+  | { kind: 'threadlist'; label: string };
 
 interface LayoutSetters {
   setPanels:      (updater: (p: Panel[]) => Panel[]) => void;
@@ -13,9 +17,20 @@ interface LayoutSetters {
 export function createLayoutActions(s: LayoutSetters) {
   return {
     openPanel: async (
-      args: { kind: 'thread'; threadId: ThreadRef },
+      args: OpenPanelArgs,
       ctx: ReadonlyContext,
     ): Promise<ActionResult> => {
+      if (args.kind === 'threadlist') {
+        let focusAt = -1;
+        s.setPanels((p) => {
+          const result = openThreadlist(p, args.label);
+          focusAt = result.focusIndex;
+          return result.panels;
+        });
+        if (focusAt >= 0) s.setFocusIndex(() => focusAt);
+        return { ok: true, description: `Opened ${args.label}` };
+      }
+
       const sourceLabel = ctx.focusedLabel ?? 'INBOX';
       let insertedIndex = -1;
       s.setPanels((p) => {

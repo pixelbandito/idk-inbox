@@ -4,11 +4,13 @@ import { LayoutContainer, type PanelRenderProps } from './layout/LayoutContainer
 import { SettingsPanel } from './panels/SettingsPanel';
 import { ThreadlistPanel } from './panels/ThreadlistPanel';
 import { ThreadPanel } from './panels/ThreadPanel';
+import { LabelsPanel } from './panels/LabelsPanel';
 import { SnoozePicker } from './pickers/SnoozePicker';
 import { LabelPicker } from './pickers/LabelPicker';
 import { CommandPalette } from './palette/CommandPalette';
 import { UndoToast } from './feedback/UndoToast';
 import { ensureAppLabels, SNOOZED_LABEL } from './lib/gmail/labelBootstrap';
+import { displayNameOf } from './lib/gmail/labelDisplay';
 import { DispatchProvider } from './state/DispatchProvider';
 import { useDispatchContext, useDispatcher } from './state/useDispatch';
 import { useKeyboardProducer } from './triggers/producers/fromKeyboard';
@@ -45,12 +47,8 @@ const INITIAL_PANELS: Panel[] = [
   { kind: 'settings' },
   { kind: 'threadlist', label: 'INBOX' },
   { kind: 'threadlist', label: SNOOZED_LABEL },
+  { kind: 'labels' },
 ];
-
-function displayName(label: string): string {
-  if (label === 'INBOX') return 'Inbox';
-  return label.replace(/^idk-inbox\//, '');
-}
 
 /**
  * Small adapter that pulls signedIn from the dispatch context and dispatches
@@ -105,10 +103,13 @@ function AppInner({ getToken }: { getToken: () => string | null }) {
       return (
         <ThreadlistPanel
           label={panel.label}
-          displayName={displayName(panel.label)}
+          displayName={displayNameOf(panel.label)}
           getToken={getToken}
         />
       );
+    }
+    if (panel.kind === 'labels') {
+      return <LabelsPanel getToken={getToken} />;
     }
     return (
       <ThreadPanel
@@ -124,7 +125,7 @@ function AppInner({ getToken }: { getToken: () => string | null }) {
     <>
       <LayoutContainer renderPanel={renderPanel} />
       <SnoozePicker />
-      <LabelPicker />
+      <LabelPicker getToken={getToken} />
       <CommandPalette />
       <UndoToast />
     </>

@@ -5,6 +5,11 @@ import { DispatchProvider } from '../state/DispatchProvider';
 import { useDispatchContext, useDispatcher } from '../state/useDispatch';
 import { spyThreadWriteClient } from '../test/spyThreadWriteClient';
 
+vi.mock('../lib/gmail/fetchLabels', () => ({
+  fetchUserLabels: vi.fn(),
+}));
+import { fetchUserLabels } from '../lib/gmail/fetchLabels';
+
 function OpenLabelButton({ action, targets }: { action: 'add-label-thread' | 'remove-label-thread'; targets: string[] }) {
   const ctx = useDispatchContext();
   const dispatch = useDispatcher();
@@ -71,6 +76,34 @@ describe('LabelPicker', () => {
 
     expect(modifyThreadLabels).toHaveBeenCalledWith('tok', ['t2'], {
       add: [], remove: ['idk-inbox/Todo'],
+    });
+  });
+
+  it('suggests the user\'s real labels when given a token accessor', async () => {
+    (fetchUserLabels as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 'L1', name: 'idk-inbox/Trips' },
+      { id: 'L2', name: 'Work' },
+    ]);
+    const { client, modifyThreadLabels } = spyThreadWriteClient();
+    render(
+      <DispatchProvider
+        signedIn
+        initialPanels={[{ kind: 'settings' }, { kind: 'threadlist', label: 'INBOX' }]}
+        getToken={() => 'tok'}
+        threadWriteClient={client}
+      >
+        <OpenLabelButton action="add-label-thread" targets={['t1']} />
+        <LabelPicker getToken={() => 'tok'} />
+      </DispatchProvider>,
+    );
+    await act(async () => { fireEvent.click(screen.getByTestId('open')); });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Trips' })).toBeInTheDocument());
+    // Static fallbacks give way to the real list.
+    expect(screen.queryByRole('button', { name: /receipts/i })).toBeNull();
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Trips' })); });
+    expect(modifyThreadLabels).toHaveBeenCalledWith('tok', ['t1'], {
+      add: ['idk-inbox/Trips'], remove: [],
     });
   });
 

@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { openThread, closeAt } from './operations';
+import { openThread, openThreadlist, closeAt } from './operations';
 import type { Panel } from './types';
 
 const settings: Panel = { kind: 'settings' };
 const inbox: Panel = { kind: 'threadlist', label: 'INBOX' };
 const snoozed: Panel = { kind: 'threadlist', label: 'idk-inbox/Snoozed' };
+const labels: Panel = { kind: 'labels' };
 const thread = (id: string, src: string): Panel => ({ kind: 'thread', threadId: id, sourceLabel: src });
 
 describe('openThread', () => {
@@ -25,6 +26,31 @@ describe('openThread', () => {
   it('throws when the source threadlist is not present', () => {
     const before: Panel[] = [settings, inbox];
     expect(() => openThread(before, 'NoSuch', 't1')).toThrow();
+  });
+});
+
+describe('openThreadlist', () => {
+  it('inserts a new list just before the labels panel and focuses it', () => {
+    const before: Panel[] = [settings, inbox, snoozed, labels];
+    const result = openThreadlist(before, 'idk-inbox/Receipts');
+    expect(result.panels).toEqual([
+      settings, inbox, snoozed, { kind: 'threadlist', label: 'idk-inbox/Receipts' }, labels,
+    ]);
+    expect(result.focusIndex).toBe(3);
+  });
+
+  it('appends at the end when there is no labels panel', () => {
+    const before: Panel[] = [settings, inbox];
+    const result = openThreadlist(before, 'idk-inbox/Todo');
+    expect(result.panels).toEqual([settings, inbox, { kind: 'threadlist', label: 'idk-inbox/Todo' }]);
+    expect(result.focusIndex).toBe(2);
+  });
+
+  it('focuses the existing list instead of duplicating it', () => {
+    const before: Panel[] = [settings, inbox, snoozed, labels];
+    const result = openThreadlist(before, 'INBOX');
+    expect(result.panels).toBe(before);
+    expect(result.focusIndex).toBe(1);
   });
 });
 
