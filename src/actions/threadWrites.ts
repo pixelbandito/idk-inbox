@@ -11,6 +11,7 @@ import {
 } from '../lib/gmail/threadWriteClient';
 import { SNOOZED_LABEL } from '../lib/gmail/labelBootstrap';
 import { snoozeBucketLabel } from '../lib/snooze/bucket';
+import { sweepDueSnoozes, type WakeSweepResult } from '../lib/snooze/wakeSweep';
 
 export interface ModifyArgs       { targets: ThreadRef[]; add: string[]; remove: string[]; }
 export interface SingleTargetArgs { targets: ThreadRef[]; }
@@ -20,14 +21,17 @@ export interface SnoozeArgs       { targets: ThreadRef[]; until?: string; }
 export interface ThreadWriteDeps {
   getToken: () => string | null;
   client?: ThreadWriteClient;
+  /** Test seam: overrides the real snooze wake-up sweep. */
+  sweep?: (token: string, client: ThreadWriteClient) => Promise<WakeSweepResult>;
 }
 
 function summarize(n: number, verb: string): string {
   return `${verb} ${n} thread${n === 1 ? '' : 's'}`;
 }
 
-export function createThreadWriteActions({ getToken, client }: ThreadWriteDeps) {
+export function createThreadWriteActions({ getToken, client, sweep }: ThreadWriteDeps) {
   const writes = client ?? createThreadWriteClient();
+  const runSweep = sweep ?? sweepDueSnoozes;
 
   /**
    * Shared write path: apply `change` to `targets`, report a human summary,
@@ -100,6 +104,27 @@ export function createThreadWriteActions({ getToken, client }: ThreadWriteDeps) 
         { add: [SNOOZED_LABEL, snoozeBucketLabel(until)], remove: ['INBOX'] },
         { done: 'Snoozed', undone: 'Unsnoozed' },
       );
+    },
+
+    /**
+     * Returns due snoozed threads to the inbox. Registered as a thread-write
+     * so a successful sweep rides the same refresh path as any other write.
+     * No inverse — waking is what the user asked for when they snoozed.
+     */
+    wakeSnoozed: async (_args: Record<string, never>, _ctx: ReadonlyContext): Promise<ActionResult> => {
+      const token = getToken();
+      if (!token) return { ok: false, error: 'Not signed in.' };
+      try {
+        const { woken } = await runSweep(token, writes);
+        return {
+          ok: true,
+          description: woken > 0
+            ? `Woke ${woken} snoozed thread${woken === 1 ? '' : 's'}`
+            : 'No snoozed threads due',
+        };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Snooze sweep failed.' };
+      }
     },
 
     // Real unsubscribe (List-Unsubscribe header) is a later slice; failing

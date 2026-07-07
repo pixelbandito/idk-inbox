@@ -172,6 +172,37 @@ describe('createThreadWriteActions', () => {
     expect(result).toEqual({ ok: false, error: 'Gmail write failed: 401' });
   });
 
+  it('wake-snoozed sweeps due buckets and reports the count', async () => {
+    const { client } = fakeClient();
+    const sweep = vi.fn(async () => ({ woken: 3 }));
+    const actions = createThreadWriteActions({ getToken: () => 'tok', client, sweep });
+
+    const result = await actions.wakeSnoozed({}, ctx);
+
+    expect(sweep).toHaveBeenCalledWith('tok', client);
+    expect(result).toEqual({ ok: true, description: 'Woke 3 snoozed threads' });
+  });
+
+  it('wake-snoozed with nothing due still succeeds quietly', async () => {
+    const { client } = fakeClient();
+    const sweep = vi.fn(async () => ({ woken: 0 }));
+    const actions = createThreadWriteActions({ getToken: () => 'tok', client, sweep });
+
+    const result = await actions.wakeSnoozed({}, ctx);
+    expect(result).toEqual({ ok: true, description: 'No snoozed threads due' });
+  });
+
+  it('wake-snoozed requires sign-in and surfaces sweep errors', async () => {
+    const { client } = fakeClient();
+    const sweep = vi.fn(async () => { throw new Error('Gmail labels list failed: 500'); });
+    const signedOut = createThreadWriteActions({ getToken: () => null, client, sweep });
+    expect((await signedOut.wakeSnoozed({}, ctx)).ok).toBe(false);
+
+    const actions = createThreadWriteActions({ getToken: () => 'tok', client, sweep });
+    const result = await actions.wakeSnoozed({}, ctx);
+    expect(result).toEqual({ ok: false, error: 'Gmail labels list failed: 500' });
+  });
+
   it('unsubscribe is honestly unimplemented', async () => {
     const { client } = fakeClient();
     const actions = actionsWith(client);

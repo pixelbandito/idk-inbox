@@ -75,6 +75,28 @@ function AppInner({ getToken }: { getToken: () => string | null }) {
   const onTrigger = useTriggerHandler(DOCUMENT_NEW_PIPELINE);
   useKeyboardProducer(onTrigger);
 
+  const ctx = useDispatchContext();
+  const dispatch = useDispatcher();
+  const bootstrapped = useRef(false);
+
+  // Post-sign-in bootstrap: make sure the app labels exist, then wake any
+  // snoozed threads that came due while the app was closed. wake-snoozed is a
+  // thread-write, so its success refreshes the lists automatically.
+  useEffect(() => {
+    if (!ctx.signedIn || bootstrapped.current) return;
+    const token = getToken();
+    if (!token) return;
+    bootstrapped.current = true;
+    void (async () => {
+      try {
+        await ensureAppLabels(token);
+      } catch (e) {
+        console.warn('label bootstrap failed:', e);
+      }
+      await dispatch({ action: 'wake-snoozed', args: {}, context: ctx });
+    })();
+  }, [ctx, dispatch, getToken]);
+
   function renderPanel(panel: Panel, index: number, props: PanelRenderProps) {
     if (panel.kind === 'settings') {
       return <SettingsPanelDispatching />;
@@ -111,17 +133,6 @@ function AppInner({ getToken }: { getToken: () => string | null }) {
 
 export default function App() {
   const { signedIn, error, signIn, signOut, getToken } = useGoogleAuth();
-  const bootstrapped = useRef(false);
-
-  useEffect(() => {
-    if (!signedIn || bootstrapped.current) return;
-    const token = getToken();
-    if (!token) return;
-    bootstrapped.current = true;
-    ensureAppLabels(token).catch((e) => {
-      console.warn('label bootstrap failed:', e);
-    });
-  }, [signedIn, getToken]);
 
   return (
     <>

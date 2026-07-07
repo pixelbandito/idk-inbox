@@ -188,6 +188,7 @@ export const ACTION_CATALOG: ActionCatalogEntry[] = [
   { id: 'remove-label-thread', label: 'Remove label',     category: 'thread-write', previewFor: previewTargets('Remove label from') },
   { id: 'unsubscribe-thread',  label: 'Unsubscribe',      category: 'thread-write', previewFor: previewTargets('Unsubscribe from') },
   { id: 'modify-thread-labels',label: 'Modify labels…',   category: 'thread-write' },
+  { id: 'wake-snoozed',        label: 'Wake due snoozes', category: 'thread-write' },
 
   // Layout
   { id: 'open-panel',          label: 'Open',             category: 'layout' },

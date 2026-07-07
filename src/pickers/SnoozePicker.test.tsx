@@ -59,6 +59,38 @@ describe('SnoozePicker', () => {
     await waitFor(() => expect(screen.queryByText(/snooze until/i)).toBeNull());
   });
 
+  it('a custom date/time snoozes to that exact bucket', async () => {
+    const { modifyThreadLabels } = renderWithPicker(['t1']);
+    await act(async () => { fireEvent.click(screen.getByTestId('open-snooze')); });
+
+    const input = screen.getByLabelText(/pick a date/i) as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(input, { target: { value: '2099-03-05T08:30' } });
+    });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^snooze$/i })); });
+
+    const expectedBucket =
+      'idk-inbox/Snoozed/' +
+      new Date('2099-03-05T08:30').toISOString().slice(0, 10) +
+      '-' +
+      new Date('2099-03-05T08:30').toISOString().slice(11, 16).replace(':', '');
+    expect(modifyThreadLabels).toHaveBeenCalledWith('tok', ['t1'], {
+      add: ['idk-inbox/Snoozed', expectedBucket],
+      remove: ['INBOX'],
+    });
+    await waitFor(() => expect(screen.queryByText(/snooze until/i)).toBeNull());
+  });
+
+  it('the custom snooze button stays disabled until a date is chosen', async () => {
+    const { modifyThreadLabels } = renderWithPicker(['t1']);
+    await act(async () => { fireEvent.click(screen.getByTestId('open-snooze')); });
+
+    const submit = screen.getByRole('button', { name: /^snooze$/i });
+    expect(submit).toBeDisabled();
+    await act(async () => { fireEvent.click(submit); });
+    expect(modifyThreadLabels).not.toHaveBeenCalled();
+  });
+
   it('cancel button closes the picker without dispatching snooze-thread', async () => {
     const { modifyThreadLabels } = renderWithPicker(['t1']);
     await act(async () => { fireEvent.click(screen.getByTestId('open-snooze')); });

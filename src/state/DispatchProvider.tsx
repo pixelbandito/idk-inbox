@@ -300,6 +300,7 @@ export function DispatchProvider({
     'remove-label-thread':  asAction('remove-label-thread',  'Remove label',   'thread-write', threadWriteActions.removeLabelThread, { elicitVia: 'picker-label' }),
     'snooze-thread':        asAction('snooze-thread',        'Snooze',         'thread-write', threadWriteActions.snoozeThread,      { elicitVia: 'picker-snooze' }),
     'unsubscribe-thread':   asAction('unsubscribe-thread',   'Unsubscribe',    'thread-write', threadWriteActions.unsubscribeThread, { destructive: true }),
+    'wake-snoozed':         asAction('wake-snoozed',         'Wake due snoozes', 'thread-write', threadWriteActions.wakeSnoozed),
 
     // Layout (real):
     'open-panel':           asAction('open-panel',           'Open thread',    'layout',       layoutActions.openPanel),
