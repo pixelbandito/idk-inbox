@@ -13,6 +13,7 @@ import {
 } from '../triggers/triggers';
 import type { TriggerName } from '../triggers/types';
 import { fetchByLabel } from '../lib/gmail/fetchByLabel';
+import { cacheThreadSummaries } from '../state/threadSummaryCache';
 import type { EmailSummary } from '../lib/gmail/types';
 
 // All row interactions flow through the trigger pipeline:
@@ -84,6 +85,7 @@ export function ThreadlistPanel({
     try {
       const result = await fetchByLabel(token, label);
       if (seq !== loadSeq.current) return;
+      cacheThreadSummaries(result.emails);
       setEmails(result.emails);
       setFailed(result.failed);
     } catch (e) {

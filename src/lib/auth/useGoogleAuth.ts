@@ -4,6 +4,7 @@ import { TokenStore } from './tokenStore';
 import { loadGis } from './loadGis';
 import { loadPersistedToken, savePersistedToken } from './tokenPersistence';
 import { resetAppLabelResolver } from '../gmail/appLabelResolver';
+import { resetThreadSummaryCache } from '../../state/threadSummaryCache';
 
 const tokenStore = new TokenStore();
 
@@ -63,8 +64,9 @@ export function useGoogleAuth() {
     tokenStore.clear();
     savePersistedToken(null);
     clientRef.current = null;
-    // Label ids are per-account; a resolver cache must not survive sign-out.
+    // Per-account caches must not survive sign-out.
     resetAppLabelResolver();
+    resetThreadSummaryCache();
     setError(null);
     setSignedIn(false);
   }, []);

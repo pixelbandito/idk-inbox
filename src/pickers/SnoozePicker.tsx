@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatchContext, useDispatcher, usePending } from '../state/useDispatch';
+import { threadSummaryOf } from '../state/threadSummaryCache';
+import { eventSnoozeOptionsFor, type EventSnoozeOption } from './eventSnoozeOptions';
 
 interface CustomDateInput {
   value: string;
@@ -48,8 +50,28 @@ export function SnoozePicker() {
   // target is derived in the change handler (not render) because validity
   // depends on the impure "now".
   const [custom, setCustom] = useState<CustomDateInput>(NO_CUSTOM_DATE);
+  const [eventOptions, setEventOptions] = useState<EventSnoozeOption[]>([]);
 
-  if (ctx.mode !== 'picker-snooze' || pending?.action !== 'snooze-thread') return null;
+  const isOpen = ctx.mode === 'picker-snooze' && pending?.action === 'snooze-thread';
+
+  // When snoozing a single thread whose text mentions an upcoming date, offer
+  // wake times relative to that event. Computed in an effect: it reads "now".
+  useEffect(() => {
+    // Microtask keeps the setState out of the effect body itself
+    // (react-hooks/set-state-in-effect), matching the panels' pattern.
+    queueMicrotask(() => {
+      if (!isOpen) {
+        setEventOptions([]);
+        return;
+      }
+      const targets = (pending?.args as { targets?: string[] } | undefined)?.targets ?? [];
+      setEventOptions(
+        targets.length === 1 ? eventSnoozeOptionsFor(threadSummaryOf(targets[0])) : [],
+      );
+    });
+  }, [isOpen, pending]);
+
+  if (!isOpen || !pending) return null;
 
   const fire = async (until: string) => {
     const targets = (pending.args as { targets?: string[] }).targets ?? [];
@@ -83,6 +105,11 @@ export function SnoozePicker() {
   return (
     <div role="dialog" aria-label="Snooze picker" className="snooze-picker" data-surface="overlay">
       <h2>Snooze until…</h2>
+      {eventOptions.map((option) => (
+        <button key={option.label} onClick={() => void fire(option.until)}>
+          {option.label}
+        </button>
+      ))}
       <button onClick={() => void fire(later(4))}>Later today</button>
       <button onClick={() => void fire(nextMorningAt(9, 1))}>Tomorrow</button>
       <button onClick={() => void fire(nextWeekday(6, 9))}>This weekend</button>
