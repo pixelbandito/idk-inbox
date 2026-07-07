@@ -28,7 +28,7 @@ describe('triage log', () => {
 
     const stats = senderStats(14, NOW + DAY);
     expect(stats).toEqual([
-      { sender: 'deals@shop.example', received: 2, dismissedUnread: 0 },
+      { sender: 'deals@shop.example', seen: 2, dismissedUnread: 0 },
     ]);
   });
 
@@ -45,7 +45,7 @@ describe('triage log', () => {
     const stats = senderStats(14, NOW);
     // Only the unread thread counts as dismissed-without-reading.
     expect(stats).toEqual([
-      { sender: 'deals@shop.example', received: 2, dismissedUnread: 1 },
+      { sender: 'deals@shop.example', seen: 2, dismissedUnread: 1 },
     ]);
   });
 

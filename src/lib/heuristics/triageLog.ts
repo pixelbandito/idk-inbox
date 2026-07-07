@@ -33,7 +33,13 @@ type Log = Record<string, SenderLog>;
 
 export interface SenderStats {
   sender: string;
-  received: number;
+  /**
+   * Messages from this sender seen in the top-of-inbox fetch while the app was
+   * open, within the window — a sample, not a true received count (deduped by
+   * message id, capped by the fetch size).
+   */
+  seen: number;
+  /** Threads from this sender dismissed (archive/delete/spam) while unread. */
   dismissedUnread: number;
 }
 
@@ -109,11 +115,11 @@ export function senderStats(windowDays: number, now: number = Date.now()): Sende
   const cutoff = now - windowDays * DAY_MS;
   const stats: SenderStats[] = [];
   for (const [sender, entry] of Object.entries(readLog())) {
-    const received = Object.values(entry.sightings).filter((at) => at >= cutoff).length;
+    const seen = Object.values(entry.sightings).filter((at) => at >= cutoff).length;
     const dismissedUnread = entry.triage
       .filter((e) => e.at >= cutoff && e.wasUnread).length;
-    if (received > 0 || dismissedUnread > 0) {
-      stats.push({ sender, received, dismissedUnread });
+    if (seen > 0 || dismissedUnread > 0) {
+      stats.push({ sender, seen, dismissedUnread });
     }
   }
   return stats;

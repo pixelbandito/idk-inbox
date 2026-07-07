@@ -158,7 +158,7 @@ describe('triage recording', () => {
     await act(async () => { screen.getByTestId('fire').click(); });
 
     expect(senderStats(14)).toEqual([
-      { sender: 'noisy@x.example', received: 0, dismissedUnread: 1 },
+      { sender: 'noisy@x.example', seen: 0, dismissedUnread: 1 },
     ]);
     resetTriageLog();
     resetThreadSummaryCache();

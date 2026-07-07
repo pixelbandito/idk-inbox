@@ -64,7 +64,8 @@ export function SuggestionCard({ emails }: SuggestionCardProps) {
     <section className="suggestion-card" aria-label="Suggestion">
       <p>
         You’ve been dismissing mail from <strong>{suggestion.sender}</strong> without
-        reading it ({suggestion.dismissedUnread} of the last {suggestion.received} seen).
+        reading it ({Math.min(suggestion.dismissedUnread, suggestion.seen)} of the
+        last {suggestion.seen} seen).
       </p>
       {unsubscribeTarget && (
         <button onClick={() => void unsubscribe()}>Unsubscribe</button>

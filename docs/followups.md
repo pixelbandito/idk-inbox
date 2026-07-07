@@ -34,10 +34,12 @@ ships, drop the bullet rather than checking it off — git history is the record
 - **No optimistic row removal / swipe visual.** Between finger-lift and the
   refetch completing, the UI is inert. List reads are consistent now
   (`labelIds=`), so the row does vanish on refetch — but a brief optimistic
-  hide would feel snappier on cellular.
-- **Wake sweep runs once per page load.** A long-lived PWA tab never
-  re-sweeps; threads coming due mid-session wake on next reload. Consider a
-  `visibilitychange` re-sweep.
+  hide would feel snappier on cellular. Also: the suggestion card pops in
+  after the list settles and shifts rows down (tap-misdirection risk) — reserve
+  its space or compute synchronously.
+- **Sweeps run once per page load.** A long-lived PWA tab never re-sweeps
+  (wake-snoozed + apply-auto-archive); threads coming due mid-session wake on
+  next reload. Consider a `visibilitychange` re-sweep.
 - **Thread-write inverses assume INBOX provenance.** Undoing a delete made
   from a tag list restores INBOX, which the thread may never have had.
   Proper fix: capture prior labelIds per thread at write time.
@@ -47,6 +49,17 @@ ships, drop the bullet rather than checking it off — git history is the record
   (`nextWeekday`'s `|| 7`). Unspecified; decide and test.
 - **`labelVersions` is keyed by focusedLabel.** refresh-panel on a non-label
   panel bumps an `idx:N` key no panel watches — refresh is a no-op there.
+- **Resolved suggestions & auto-archive rules are permanent with no UI to
+  revoke.** `removeAutoArchiveRule` exists but nothing calls it; no
+  un-dismiss surface. Wants a settings view (and maybe re-suggest-after-N-days).
+- **LabelsPanel has no filter** for large label sets, and refetches the full
+  label list on every thread write (chatty, invisible).
+- **DispatchProvider imports a heuristic** (`recordTriageForThreads` +
+  `TRIAGE_BY_ACTION`). Cleaner: a generic `onThreadWriteSuccess` observer
+  seam wired from App, with the triage mapping living in `lib/heuristics`.
+- **ThreadWriteDeps is accreting seams** (`sweep`, `autoArchive`,
+  `openExternal`) while unsubscribe reaches the summary cache singleton
+  directly. Consider splitting maintenance/unsubscribe into their own factory.
 
 ## Code cleanup (low priority)
 

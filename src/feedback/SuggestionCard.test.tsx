@@ -3,10 +3,10 @@ import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { SuggestionCard } from './SuggestionCard';
 import { DispatchProvider } from '../state/DispatchProvider';
 import { spyThreadWriteClient } from '../test/spyThreadWriteClient';
-import { recordSightings, recordTriageForThreads, resetTriageLog } from '../lib/heuristics/triageLog';
-import { resetResolvedSuggestions } from '../lib/heuristics/resolvedSuggestions';
-import { autoArchiveRules, resetAutoArchiveRules } from '../lib/rules/autoArchive';
-import { cacheThreadSummaries, resetThreadSummaryCache } from '../state/threadSummaryCache';
+import { resetLocalState } from '../test/resetLocalState';
+import { recordSightings, recordTriageForThreads } from '../lib/heuristics/triageLog';
+import { autoArchiveRules } from '../lib/rules/autoArchive';
+import { cacheThreadSummaries } from '../state/threadSummaryCache';
 import type { EmailSummary } from '../lib/gmail/types';
 
 const SENDER = 'deals@shop.example';
@@ -42,10 +42,7 @@ function renderCard(emails: EmailSummary[]) {
 describe('SuggestionCard', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    resetTriageLog();
-    resetResolvedSuggestions();
-    resetAutoArchiveRules();
-    resetThreadSummaryCache();
+    resetLocalState();
   });
 
   it('stays hidden without a fatigued sender', async () => {
@@ -91,5 +88,16 @@ describe('SuggestionCard', () => {
     renderCard(bare);
     await screen.findByRole('region', { name: /suggestion/i });
     expect(screen.queryByRole('button', { name: /unsubscribe/i })).toBeNull();
+  });
+
+  it('keeps the suggestion standing when unsubscribe cannot open', async () => {
+    // A List-Unsubscribe header with no usable URI → the action returns
+    // ok:false, so the card must NOT settle.
+    const emails = seedFatigue().map((e) => ({ ...e, listUnsubscribe: '<not-a-uri>' }));
+    cacheThreadSummaries(emails); // overwrite the good-link summaries
+    renderCard(emails);
+    const button = await screen.findByRole('button', { name: /unsubscribe/i });
+    await act(async () => { fireEvent.click(button); });
+    expect(screen.getByRole('region', { name: /suggestion/i })).toBeInTheDocument();
   });
 });

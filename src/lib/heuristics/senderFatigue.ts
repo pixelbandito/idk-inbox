@@ -5,14 +5,14 @@
 import type { SenderStats } from './triageLog';
 
 export interface FatigueThresholds {
-  /** Minimum messages received in the window before we dare suggest anything. */
-  minReceived: number;
-  /** Fraction of received mail dismissed unread that marks fatigue. */
+  /** Minimum messages seen in the window before we dare suggest anything. */
+  minSeen: number;
+  /** Fraction of seen mail dismissed unread that marks fatigue. */
   minDismissRate: number;
 }
 
 export const DEFAULT_FATIGUE_THRESHOLDS: FatigueThresholds = {
-  minReceived: 5,
+  minSeen: 5,
   minDismissRate: 0.8,
 };
 
@@ -25,7 +25,7 @@ export function findFatiguedSenders(
 ): SenderStats[] {
   return stats
     .filter((s) =>
-      s.received >= thresholds.minReceived &&
-      s.dismissedUnread / s.received >= thresholds.minDismissRate)
+      s.seen >= thresholds.minSeen &&
+      s.dismissedUnread / s.seen >= thresholds.minDismissRate)
     .sort((a, b) => b.dismissedUnread - a.dismissedUnread);
 }

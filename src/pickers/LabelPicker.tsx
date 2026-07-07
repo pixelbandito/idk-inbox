@@ -68,7 +68,11 @@ export function LabelPicker({ getToken }: LabelPickerProps = {}) {
     await dispatch({ action: 'exit-mode', args: {}, context: ctx });
   };
 
-  const verb = pending.action === 'add-label-thread' ? 'Apply label' : 'Remove label';
+  const isAdd = pending.action === 'add-label-thread';
+  const verb = isAdd ? 'Apply label' : 'Remove label';
+  // Removing a non-app label is legitimate; only force the idk-inbox/ prefix
+  // when applying (creating) a label.
+  const submit = (raw: string) => void fire(isAdd ? prefix(raw) : raw);
 
   return (
     <div role="dialog" aria-label="Label picker" className="label-picker" data-surface="overlay">
@@ -88,7 +92,9 @@ export function LabelPicker({ getToken }: LabelPickerProps = {}) {
           placeholder="e.g. Receipts"
         />
       </label>
-      <button onClick={() => text.trim() && void fire(prefix(text.trim()))}>Apply</button>
+      <button onClick={() => { const t = text.trim(); if (t) submit(t); }}>
+        {isAdd ? 'Apply' : 'Remove'}
+      </button>
       <button onClick={() => void cancel()}>Cancel</button>
     </div>
   );

@@ -2,15 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { findFatiguedSenders } from './senderFatigue';
 import type { SenderStats } from './triageLog';
 
-function stats(sender: string, received: number, dismissedUnread: number): SenderStats {
-  return { sender, received, dismissedUnread };
+function stats(sender: string, seen: number, dismissedUnread: number): SenderStats {
+  return { sender, seen, dismissedUnread };
 }
 
 describe('findFatiguedSenders', () => {
   it('flags a sender with enough volume and a high unread-dismiss rate', () => {
     const result = findFatiguedSenders([stats('deals@shop.example', 10, 9)]);
     expect(result).toEqual([
-      { sender: 'deals@shop.example', received: 10, dismissedUnread: 9 },
+      { sender: 'deals@shop.example', seen: 10, dismissedUnread: 9 },
     ]);
   });
 
@@ -33,7 +33,7 @@ describe('findFatiguedSenders', () => {
   it('honors custom thresholds', () => {
     const result = findFatiguedSenders(
       [stats('a@x.example', 3, 3)],
-      { minReceived: 3, minDismissRate: 1 },
+      { minSeen: 3, minDismissRate: 1 },
     );
     expect(result).toHaveLength(1);
   });

@@ -1,7 +1,12 @@
-// Thread-write action handlers: archive, delete, spam, label, snooze.
-// Every write is a label change applied through the ThreadWriteClient, and
-// every inverse is the mirrored label change — which is what makes undo a
-// plain re-dispatch of `modify-thread-labels` instead of per-action code.
+// Thread-write action handlers, in three families:
+//   1. Label changes (archive, delete, spam, add/remove label, snooze) — each
+//      a label change through the ThreadWriteClient whose inverse is the
+//      mirrored change, so undo is a plain re-dispatch of `modify-thread-labels`.
+//   2. Maintenance sweeps (wake-snoozed, apply-auto-archive) — no inverse;
+//      they return whatever is due/matching to the inbox, and ride the same
+//      refresh path via the thread-write category.
+//   3. unsubscribe — not a Gmail write at all; opens the sender's
+//      List-Unsubscribe page and reports whether that succeeded.
 
 import type { ActionResult, ReadonlyContext, ThreadRef } from '../input/types';
 import {

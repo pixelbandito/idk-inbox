@@ -79,6 +79,18 @@ describe('LabelPicker', () => {
     });
   });
 
+  it('removes a typed non-app label verbatim (no idk-inbox/ prefix on remove)', async () => {
+    const { modifyThreadLabels } = renderWithPicker('remove-label-thread', ['t2']);
+    await act(async () => { fireEvent.click(screen.getByTestId('open')); });
+    const input = screen.getByLabelText(/label name/i) as HTMLInputElement;
+    await act(async () => { fireEvent.change(input, { target: { value: 'Work' } }); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^remove$/i })); });
+
+    expect(modifyThreadLabels).toHaveBeenCalledWith('tok', ['t2'], {
+      add: [], remove: ['Work'],
+    });
+  });
+
   it('suggests the user\'s real labels when given a token accessor', async () => {
     (fetchUserLabels as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: 'L1', name: 'idk-inbox/Trips' },
