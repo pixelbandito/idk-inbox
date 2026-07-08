@@ -12,7 +12,6 @@ import {
   deleteThreadAction,
   spamThreadAction,
   snoozeThreadAction,
-  addLabelThreadAction,
   enterSelectionAction,
   openPanelAction,
   closePanelAction,
@@ -28,9 +27,7 @@ import {
   click,
   pressLong,
   swipeInlineEnd,
-  swipeInlineEndEdge,
   swipeInlineStart,
-  swipeInlineStartEdge,
   overscrollBlockEnd,
   keypressJ,
   keypressE,
@@ -45,13 +42,10 @@ import {
 import type { Surface, TriggerName } from './types';
 
 export const ACTION_MAP: Map<Surface, Map<TriggerName, ActionName>> = new Map([
+  // Row swipes are handled by the swipe-intent pipeline (src/input/swipeIntents.ts), not here.
   ['row', new Map<TriggerName, ActionName>([
-    [click,                openPanelAction],
-    [swipeInlineEnd,       archiveThreadAction],
-    [swipeInlineEndEdge,   deleteThreadAction],
-    [swipeInlineStart,     snoozeThreadAction],
-    [swipeInlineStartEdge, addLabelThreadAction],
-    [pressLong,            enterSelectionAction],
+    [click,     openPanelAction],
+    [pressLong, enterSelectionAction],
   ])],
   ['panel-header', new Map<TriggerName, ActionName>([
     [swipeInlineEnd,   navPanelNextAction],

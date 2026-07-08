@@ -6,11 +6,7 @@ import {
 } from '../actions/types';
 import type { ActionName } from '../actions/types';
 import type { ReadonlyContext } from '../input/types';
-import {
-  click,
-  swipeInlineEnd,
-  swipeInlineEndEdge,
-} from './triggers';
+import { click } from './triggers';
 import type { Trigger, AbstractEvent, Distance, Surface, TriggerName } from './types';
 import { resolveAndFire } from './resolve';
 
@@ -243,23 +239,27 @@ describe('resolveAndFire', () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
-  it('end-to-end against the real registry: long swipe ending at edge fires delete', async () => {
+  it('end-to-end with threshold matchers: a long edge-ending swipe fires the higher-priority trigger', async () => {
+    // Synthetic triggers with realistic threshold matchers — the real row-swipe
+    // handling lives in src/input/swipeIntents.ts, outside this pipeline.
+    const swipeBulk: TriggerName = Symbol('swipeBulk');
+    const swipeEdge: TriggerName = Symbol('swipeEdge');
     const dispatch = vi.fn().mockResolvedValue({ ok: true, description: 'deleted' });
     const map = new Map<Surface, Map<TriggerName, ActionName>>([
       ['row', new Map<TriggerName, ActionName>([
-        [swipeInlineEnd,     archiveThreadAction],
-        [swipeInlineEndEdge, deleteThreadAction],
+        [swipeBulk, archiveThreadAction],
+        [swipeEdge, deleteThreadAction],
       ])],
     ]);
-    const realRegistry: Trigger[] = [
+    const registry: Trigger[] = [
       {
-        name: swipeInlineEnd,
+        name: swipeBulk,
         priority: 5,
         match: (e) => e.kind === 'gesture-swipe' && e.axis === 'inline' && e.towards === 'end'
                       && e.distance.fraction >= 0.20 && e.distance.pixels >= 60,
       },
       {
-        name: swipeInlineEndEdge,
+        name: swipeEdge,
         priority: 10,
         match: (e) => e.kind === 'gesture-swipe' && e.axis === 'inline' && e.towards === 'end'
                       && e.distance.fraction >= 0.50 && e.distance.pixels >= 240
@@ -271,7 +271,7 @@ describe('resolveAndFire', () => {
       baseCtx(),
       dispatch,
       map,
-      realRegistry,
+      registry,
     );
     expect(dispatch).toHaveBeenCalledTimes(1);
     expect(dispatch.mock.calls[0][0].action).toBe(deleteThreadAction);

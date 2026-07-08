@@ -5,14 +5,13 @@
 // resolver routes events through the action map's surface dimension.
 //
 // Priority bands (with gaps so future insertions don't churn):
-//   - Edge-qualified swipes:  10
 //   - Bulk swipes:             5
 //   - Long-press:              5
 //   - Overscroll:              5
 //   - Keypress:                5  (a combo can only match one event anyway)
 //   - Click:                   1  (lowest — most ambiguous gesture)
 
-import { beyond, within } from './helpers';
+import { beyond } from './helpers';
 import type { Trigger, TriggerName } from './types';
 
 // ----- Trigger identities (symbols) -----
@@ -21,9 +20,7 @@ export const click                = Symbol('click');
 export const pressLong            = Symbol('pressLong');
 
 export const swipeInlineEnd       = Symbol('swipeInlineEnd');
-export const swipeInlineEndEdge   = Symbol('swipeInlineEndEdge');
 export const swipeInlineStart     = Symbol('swipeInlineStart');
-export const swipeInlineStartEdge = Symbol('swipeInlineStartEdge');
 
 // Reserved — no current action assignment, but defined so the producer can
 // publish block-axis swipes without losing data.
@@ -45,8 +42,6 @@ export const keypressModShiftZ    = Symbol('keypressModShiftZ');
 // ----- Threshold constants -----
 
 const BULK_SWIPE = { fraction: 0.20, minPx: 60 };   // "went far enough"
-const EDGE_SWIPE = { fraction: 0.50, minPx: 240 };  // "went almost all the way"
-const NEAR_EDGE  = { fraction: 0.05, minPx: 48 };   // "released right at the edge"
 const OVERSCROLL = { fraction: 0.10, minPx: 40 };
 
 // ----- Helpers for keyboard matchers -----
@@ -77,30 +72,12 @@ export const TRIGGERS: Trigger[] = [
       && beyond(e.distance, BULK_SWIPE),
   },
   {
-    name: swipeInlineEndEdge,
-    priority: 10,
-    match: (e) =>
-      e.kind === 'gesture-swipe'
-      && e.axis === 'inline' && e.towards === 'end'
-      && beyond(e.distance,        EDGE_SWIPE)
-      && within(e.endEdgeDistance, NEAR_EDGE),
-  },
-  {
     name: swipeInlineStart,
     priority: 5,
     match: (e) =>
       e.kind === 'gesture-swipe'
       && e.axis === 'inline' && e.towards === 'start'
       && beyond(e.distance, BULK_SWIPE),
-  },
-  {
-    name: swipeInlineStartEdge,
-    priority: 10,
-    match: (e) =>
-      e.kind === 'gesture-swipe'
-      && e.axis === 'inline' && e.towards === 'start'
-      && beyond(e.distance,          EDGE_SWIPE)
-      && within(e.startEdgeDistance, NEAR_EDGE),
   },
 
   {

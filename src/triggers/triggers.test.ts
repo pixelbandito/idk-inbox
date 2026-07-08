@@ -4,9 +4,7 @@ import {
   click,
   pressLong,
   swipeInlineEnd,
-  swipeInlineEndEdge,
   swipeInlineStart,
-  swipeInlineStartEdge,
   swipeBlockEnd,
   swipeBlockStart,
   overscrollBlockEnd,
@@ -69,7 +67,7 @@ describe('TRIGGERS registry', () => {
     const names = new Set(TRIGGERS.map((t) => t.name));
     for (const sym of [
       click, pressLong,
-      swipeInlineEnd, swipeInlineEndEdge, swipeInlineStart, swipeInlineStartEdge,
+      swipeInlineEnd, swipeInlineStart,
       swipeBlockEnd, swipeBlockStart,
       overscrollBlockEnd,
       keypressJ, keypressE, keypressHash, keypressBang, keypressB,
@@ -136,31 +134,6 @@ describe('swipeInlineEnd trigger', () => {
   });
 });
 
-describe('swipeInlineEndEdge trigger', () => {
-  const t = TRIGGER_BY_NAME.get(swipeInlineEndEdge)!;
-  it('matches a long swipe ending at the end edge', () => {
-    expect(t.match(swipeEv({
-      axis: 'inline', towards: 'end',
-      distance:        dist(0.60, 300),
-      endEdgeDistance: dist(0.02, 10),
-    }))).toBe(true);
-  });
-  it('does not match when distance falls short', () => {
-    expect(t.match(swipeEv({
-      axis: 'inline', towards: 'end',
-      distance:        dist(0.30, 120),
-      endEdgeDistance: dist(0.02, 10),
-    }))).toBe(false);
-  });
-  it('does not match when not near the end edge', () => {
-    expect(t.match(swipeEv({
-      axis: 'inline', towards: 'end',
-      distance:        dist(0.60, 300),
-      endEdgeDistance: dist(0.40, 200),
-    }))).toBe(false);
-  });
-});
-
 describe('swipeInlineStart trigger', () => {
   const t = TRIGGER_BY_NAME.get(swipeInlineStart)!;
   it('matches an inline-start swipe past the bulk threshold', () => {
@@ -173,24 +146,6 @@ describe('swipeInlineStart trigger', () => {
     expect(t.match(swipeEv({
       axis: 'inline', towards: 'end',
       distance: dist(0.30, 100),
-    }))).toBe(false);
-  });
-});
-
-describe('swipeInlineStartEdge trigger', () => {
-  const t = TRIGGER_BY_NAME.get(swipeInlineStartEdge)!;
-  it('matches a long swipe ending at the start edge', () => {
-    expect(t.match(swipeEv({
-      axis: 'inline', towards: 'start',
-      distance:          dist(0.60, 300),
-      startEdgeDistance: dist(0.02, 10),
-    }))).toBe(true);
-  });
-  it('does not match when not near the start edge', () => {
-    expect(t.match(swipeEv({
-      axis: 'inline', towards: 'start',
-      distance:          dist(0.60, 300),
-      startEdgeDistance: dist(0.40, 200),
     }))).toBe(false);
   });
 });
