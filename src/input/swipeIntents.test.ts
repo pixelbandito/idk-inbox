@@ -12,11 +12,11 @@ const ctx = (selection: string[] = []): ReadonlyContext => ({
 describe('resolveSwipeIntent', () => {
   it('returns null under the first threshold', () => {
     expect(resolveSwipeIntent('end', 0.1)).toBeNull();
-    expect(resolveSwipeIntent('start', 0.24)).toBeNull();
+    expect(resolveSwipeIntent('start', 0.1)).toBeNull();
   });
   it('arms tier 1 between the thresholds', () => {
     expect(resolveSwipeIntent('end', 0.3)?.binding.action).toBe('archive-thread');
-    expect(resolveSwipeIntent('start', 0.5)?.binding.action).toBe('snooze-thread');
+    expect(resolveSwipeIntent('start', 0.3)?.binding.action).toBe('snooze-thread');
   });
   it('arms tier 2 past the far threshold', () => {
     expect(resolveSwipeIntent('end', 0.8)?.binding.action).toBe('delete-thread');

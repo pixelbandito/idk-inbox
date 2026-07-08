@@ -130,6 +130,28 @@
   .email[data-armed-icon="trash"]   .email__reveal-icon[data-swipe-icon="trash"]   { display: flex; }
   .email[data-armed-icon="clock"]   .email__reveal-icon[data-swipe-icon="clock"]   { display: flex; }
   .email[data-armed-icon="tag"]     .email__reveal-icon[data-swipe-icon="tag"]     { display: flex; }
+  /* When snapped open the clickable action button carries the icon instead. */
+  .email[data-revealed] .email__reveal-icon { display: none; }
+
+  /* Trackpad-revealed, click-to-commit action pinned to the pull-from edge. */
+  .email__action {
+    position: absolute;
+    inset-block: 0;
+    z-index: 2;
+    width: 5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    color: #fff;
+    cursor: pointer;
+  }
+  .email__action[data-side="start"] { inset-inline-start: 0; }
+  .email__action[data-side="end"]   { inset-inline-end: 0; }
+  .email__action[data-tone="safe"]   { background: var(--tone-safe); }
+  .email__action[data-tone="danger"] { background: var(--tone-danger); }
+  .email__action[data-tone="info"]   { background: var(--tone-info); }
+  .email__action[data-tone="warn"]   { background: var(--tone-warn); }
 
   .email__tile {
     position: relative;

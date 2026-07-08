@@ -39,11 +39,13 @@ export const ACTION_PRESENTATION: Record<string, ActionPresentation> = {
   'add-label-thread': { tone: 'warn',   icon: 'tag',     label: 'Label' },
 };
 
+// Thresholds are intentionally low so the light action arms with a short pull;
+// the heavy action still needs a clearly longer, deliberate drag. Tune here.
 export const ROW_SWIPE_BINDINGS: SwipeBinding[] = [
-  { direction: 'end',   armAtFraction: 0.25, action: 'archive-thread' },
-  { direction: 'end',   armAtFraction: 0.70, action: 'delete-thread' },
-  { direction: 'start', armAtFraction: 0.25, action: 'snooze-thread' },
-  { direction: 'start', armAtFraction: 0.70, action: 'add-label-thread' },
+  { direction: 'end',   armAtFraction: 0.15, action: 'archive-thread' },
+  { direction: 'end',   armAtFraction: 0.50, action: 'delete-thread' },
+  { direction: 'start', armAtFraction: 0.15, action: 'snooze-thread' },
+  { direction: 'start', armAtFraction: 0.50, action: 'add-label-thread' },
 ];
 
 /** The furthest-armed binding for a direction at this pull fraction, or null. */

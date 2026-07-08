@@ -175,4 +175,23 @@ describe('useGesture', () => {
     expect(onDragEnd).toHaveBeenCalledTimes(1);
     expect(onDragEnd).toHaveBeenCalledWith(50, 0, expect.any(Number));
   });
+
+  it('ignores presses that start on an interactive control (button), so its native click survives', () => {
+    const onClick = vi.fn();
+    function WithButton(props: GestureCallbacks) {
+      const ref = useRef<HTMLDivElement>(null);
+      useGesture('row', ref, props);
+      return (
+        <div ref={ref} data-testid="target">
+          <button data-testid="btn">go</button>
+        </div>
+      );
+    }
+    const { getByTestId } = render(<WithButton onClick={onClick} />);
+    const btn = getByTestId('btn');
+    fireEvent.pointerDown(btn, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(btn,   { pointerId: 1, clientX: 10, clientY: 10 });
+    // The gesture must not treat the button press as a row click.
+    expect(onClick).not.toHaveBeenCalled();
+  });
 });

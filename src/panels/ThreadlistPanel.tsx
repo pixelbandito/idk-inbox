@@ -36,7 +36,9 @@ function Row({ email, isSelected }: { email: EmailSummary; isSelected: boolean }
   const ctx = useDispatchContext();
   // A committed swipe collapses the row away; the list refetch then removes it.
   const [filing, setFiling] = useState(false);
-  useRowSwipe(ref, { onTrigger, dispatch, ctx, onCommit: () => setFiling(true) });
+  const { reveal, commitReveal } = useRowSwipe(ref, {
+    onTrigger, dispatch, ctx, onCommit: () => setFiling(true),
+  });
 
   // Safety: if the write failed (row never removed by the refetch), un-collapse
   // after the animation so the thread isn't left invisible-but-present.
@@ -64,6 +66,20 @@ function Row({ email, isSelected }: { email: EmailSummary; isSelected: boolean }
           </span>
         ))}
       </div>
+      {/* Trackpad reveal: the snapped-open action, clickable to commit. As a
+          real <button> it bypasses the row gesture and gets a native click. */}
+      {reveal && (
+        <button
+          type="button"
+          className="email__action"
+          data-tone={reveal.tone}
+          data-side={reveal.direction === 'end' ? 'start' : 'end'}
+          aria-label={reveal.label}
+          onClick={commitReveal}
+        >
+          <Icon name={reveal.icon} />
+        </button>
+      )}
       <div className="email__tile">
         <span className="email__from">{email.from}</span>
         <span className="email__subject">{email.subject}</span>

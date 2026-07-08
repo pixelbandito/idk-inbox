@@ -86,6 +86,11 @@ export function useGesture(
 
     const onDown = (ev: PointerEvent) => {
       if (pointerId !== null) return;
+      // Presses on interactive controls (header ×/↻ buttons, a revealed swipe
+      // action) must behave natively — capturing the pointer here would redirect
+      // their pointerup and swallow the click.
+      const t = ev.target as Element | null;
+      if (t?.closest('button, a, input, select, textarea, label, [role="button"]')) return;
       pointerId = ev.pointerId;
       startX = ev.clientX;
       startY = ev.clientY;

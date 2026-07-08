@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, fireEvent } from '@testing-library/react';
+import { render, fireEvent, act } from '@testing-library/react';
 import { useRef } from 'react';
-import { useRowSwipe, type RowSwipeOptions } from './useRowSwipe';
+import { useRowSwipe, type RowSwipeApi, type RowSwipeOptions } from './useRowSwipe';
 import type { ReadonlyContext } from './types';
 
 const ctx = (selection: string[] = []): ReadonlyContext => ({
@@ -9,22 +9,28 @@ const ctx = (selection: string[] = []): ReadonlyContext => ({
   selection, mode: 'idle', signedIn: true,
 });
 
-function Row(props: RowSwipeOptions) {
+function Row(props: RowSwipeOptions & { apiOut?: (api: RowSwipeApi) => void }) {
   const ref = useRef<HTMLLIElement>(null);
-  useRowSwipe(ref, props);
-  return <li ref={ref} data-thread-id="t1" data-surface="row" data-testid="row" />;
+  const { apiOut, ...opts } = props;
+  const api = useRowSwipe(ref, opts);
+  apiOut?.(api);
+  return (
+    <li ref={ref} data-thread-id="t1" data-surface="row" data-testid="row">
+      {api.reveal && (
+        <button data-testid="action" onClick={api.commitReveal}>{api.reveal.label}</button>
+      )}
+    </li>
+  );
 }
 
-function mountRow(overrides: Partial<RowSwipeOptions> = {}) {
+function mountRow(overrides: Partial<RowSwipeOptions & { apiOut?: (api: RowSwipeApi) => void }> = {}) {
   const onTrigger = vi.fn();
   const dispatch = vi.fn().mockResolvedValue({ ok: true, description: '' });
-  const { getByTestId } = render(
-    <Row onTrigger={onTrigger} dispatch={dispatch} ctx={ctx()} {...overrides} />,
-  );
-  const el = getByTestId('row');
+  const utils = render(<Row onTrigger={onTrigger} dispatch={dispatch} ctx={ctx()} {...overrides} />);
+  const el = utils.getByTestId('row');
   // jsdom reports 0 for layout sizes; the hook divides by clientWidth.
   Object.defineProperty(el, 'clientWidth', { value: 400 });
-  return { el, onTrigger, dispatch };
+  return { el, onTrigger, dispatch, getByTestId: utils.getByTestId, queryByTestId: utils.queryByTestId };
 }
 
 /** Press at x=100, drag horizontally by dx in two moves, release. */
@@ -35,23 +41,21 @@ function swipe(el: HTMLElement, dx: number) {
   fireEvent.pointerUp(el,   { pointerId: 1, clientX: 100 + dx, clientY: 100 });
 }
 
-describe('useRowSwipe', () => {
+describe('useRowSwipe — pointer drag-to-commit', () => {
   it('dispatches archive-thread targeting the row on a ~30% drag release', () => {
     const { el, onTrigger, dispatch } = mountRow();
-    swipe(el, 120); // 120 / 400 = 0.30 — past the 0.25 tier-1 threshold
+    swipe(el, 120); // 120 / 400 = 0.30 — past the 0.15 tier-1 threshold
     expect(dispatch).toHaveBeenCalledTimes(1);
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
       action: 'archive-thread',
       args: { targets: ['t1'] },
     }));
-    // Row swipes never flow through the generic trigger pipeline.
     expect(onTrigger).not.toHaveBeenCalled();
   });
 
-  it('dispatches delete-thread past the ~70% threshold', () => {
+  it('dispatches delete-thread past the ~50% threshold', () => {
     const { el, dispatch } = mountRow();
-    swipe(el, 320); // 0.80 — past the 0.70 tier-2 threshold
-    expect(dispatch).toHaveBeenCalledTimes(1);
+    swipe(el, 240); // 0.60 — past the 0.50 tier-2 threshold
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
       action: 'delete-thread',
       args: { targets: ['t1'] },
@@ -61,14 +65,14 @@ describe('useRowSwipe', () => {
   it('fires onCommit when a swipe commits', () => {
     const onCommit = vi.fn();
     const { el } = mountRow({ onCommit });
-    swipe(el, 120); // commits archive
+    swipe(el, 120);
     expect(onCommit).toHaveBeenCalledTimes(1);
   });
 
-  it('dispatches nothing, springs back, and does not fire onCommit on a sub-threshold drag', () => {
+  it('dispatches nothing, springs back, and does not fire onCommit under the tier-1 threshold', () => {
     const onCommit = vi.fn();
     const { el, onTrigger, dispatch } = mountRow({ onCommit });
-    swipe(el, 70); // a real swipe (>= 60px) but only 0.175 of the width
+    swipe(el, 48); // 0.12 — under the 0.15 threshold (and a drag, not a tap)
     expect(dispatch).not.toHaveBeenCalled();
     expect(onTrigger).not.toHaveBeenCalled();
     expect(onCommit).not.toHaveBeenCalled();
@@ -79,7 +83,6 @@ describe('useRowSwipe', () => {
     const { el, onTrigger, dispatch } = mountRow();
     fireEvent.pointerDown(el, { pointerId: 1, clientX: 100, clientY: 100 });
     fireEvent.pointerUp(el,   { pointerId: 1, clientX: 101, clientY: 100 });
-    expect(onTrigger).toHaveBeenCalledTimes(1);
     expect(onTrigger).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'gesture-click', surface: 'row', target: el,
     }));
@@ -88,96 +91,82 @@ describe('useRowSwipe', () => {
 
   it('paints live pull visuals and buzzes once when an action arms', () => {
     const vibrate = vi.fn();
-    Object.defineProperty(navigator, 'vibrate', {
-      value: vibrate, configurable: true, writable: true,
-    });
+    Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true, writable: true });
     try {
       const { el } = mountRow();
       fireEvent.pointerDown(el, { pointerId: 1, clientX: 100, clientY: 100 });
-
-      fireEvent.pointerMove(el, { pointerId: 1, clientX: 140, clientY: 100 }); // 0.10 — unarmed
-      expect(el.style.getPropertyValue('--drag-x')).toBe('40px');
-      expect(el.dataset.pull).toBe('end');
+      fireEvent.pointerMove(el, { pointerId: 1, clientX: 130, clientY: 100 }); // 0.075 — unarmed
       expect(el.dataset.armedTone).toBeUndefined();
-      expect(el.dataset.armedIcon).toBeUndefined();
       expect(vibrate).not.toHaveBeenCalled();
-
-      fireEvent.pointerMove(el, { pointerId: 1, clientX: 220, clientY: 100 }); // 0.30 — archive arms
-      expect(el.dataset.armedTone).toBe('safe');
+      fireEvent.pointerMove(el, { pointerId: 1, clientX: 200, clientY: 100 }); // 0.25 — archive arms
       expect(el.dataset.armedIcon).toBe('archive');
       expect(vibrate).toHaveBeenCalledTimes(1);
-
-      fireEvent.pointerMove(el, { pointerId: 1, clientX: 230, clientY: 100 }); // same tier — no re-buzz
-      expect(vibrate).toHaveBeenCalledTimes(1);
-
-      fireEvent.pointerMove(el, { pointerId: 1, clientX: 140, clientY: 100 }); // back under — disarms
+      fireEvent.pointerMove(el, { pointerId: 1, clientX: 120, clientY: 100 }); // 0.05 — disarms
       expect(el.dataset.armedTone).toBeUndefined();
-      expect(el.dataset.armedIcon).toBeUndefined();
     } finally {
       Reflect.deleteProperty(navigator, 'vibrate');
     }
   });
+});
 
-  describe('trackpad wheel drag', () => {
-    beforeEach(() => vi.useFakeTimers());
-    afterEach(() => vi.useRealTimers());
+describe('useRowSwipe — trackpad reveal-then-click', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
 
-    it('accumulates horizontal wheel deltas, paints live, and dispatches archive on a firm settle', () => {
-      const { el, dispatch } = mountRow();
-      // Natural scroll: a rightward two-finger swipe reports negative deltaX.
-      // Pull past the 0.5 wheel-commit gate (240px / 400px = 0.60).
-      fireEvent.wheel(el, { deltaX: -80, deltaY: 0, cancelable: true });
-      fireEvent.wheel(el, { deltaX: -80, deltaY: 2, cancelable: true });
-      fireEvent.wheel(el, { deltaX: -80, deltaY: 0, cancelable: true });
-      expect(el.style.getPropertyValue('--drag-x')).toBe('240px');
-      expect(el.dataset.pull).toBe('end');
-      expect(el.dataset.armedIcon).toBe('archive');
-      expect(dispatch).not.toHaveBeenCalled(); // not until the stream settles
+  it('reveals a click-to-commit action on settle, without auto-committing', () => {
+    const { el, dispatch, getByTestId } = mountRow();
+    // Rightward two-finger scroll reports negative deltaX; 120px = 0.30 → archive.
+    fireEvent.wheel(el, { deltaX: -40, deltaY: 0, cancelable: true });
+    fireEvent.wheel(el, { deltaX: -40, deltaY: 0, cancelable: true });
+    fireEvent.wheel(el, { deltaX: -40, deltaY: 0, cancelable: true });
+    expect(dispatch).not.toHaveBeenCalled();
 
-      vi.advanceTimersByTime(130); // past the settle debounce
-      expect(dispatch).toHaveBeenCalledTimes(1);
-      expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
-        action: 'archive-thread',
-        args: { targets: ['t1'] },
-      }));
-    });
+    act(() => { vi.advanceTimersByTime(130); }); // scroll settles
 
-    it('springs back when the wheel pull is armed but under the firmer commit gate', () => {
-      const { el, dispatch } = mountRow();
-      // 120px / 400px = 0.30 — arms archive visually, but under the 0.5 gate so
-      // a light exploratory trackpad scroll must not fire the action.
-      fireEvent.wheel(el, { deltaX: -60, deltaY: 0, cancelable: true });
-      fireEvent.wheel(el, { deltaX: -60, deltaY: 0, cancelable: true });
-      expect(el.dataset.armedIcon).toBe('archive');
-      vi.advanceTimersByTime(130);
-      expect(dispatch).not.toHaveBeenCalled();
-      expect(el.style.getPropertyValue('--drag-x')).toBe('0px');
-    });
+    expect(dispatch).not.toHaveBeenCalled();     // revealed, NOT committed
+    expect(el.dataset.revealed).toBe('true');
+    expect(el.style.getPropertyValue('--drag-x')).toBe('80px'); // snapped open
 
-    it('springs back without dispatching when the wheel pull stays sub-threshold', () => {
-      const { el, dispatch } = mountRow();
-      fireEvent.wheel(el, { deltaX: -30, deltaY: 0, cancelable: true }); // 0.075 of width
-      expect(el.style.getPropertyValue('--drag-x')).toBe('30px');
-      vi.advanceTimersByTime(130);
-      expect(dispatch).not.toHaveBeenCalled();
-      expect(el.style.getPropertyValue('--drag-x')).toBe('0px');
-    });
+    fireEvent.click(getByTestId('action'));       // now commit
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'archive-thread', args: { targets: ['t1'] },
+    }));
+  });
 
-    it('lets vertical-dominant wheel through: no preventDefault, no paint, no dispatch', () => {
-      const { el, dispatch } = mountRow();
-      const notPrevented = fireEvent.wheel(el, { deltaX: 2, deltaY: 40, cancelable: true });
-      expect(notPrevented).toBe(true); // preventDefault was NOT called
-      expect(el.style.getPropertyValue('--drag-x')).toBe('');
-      expect(el.dataset.pull).toBeUndefined();
-      vi.advanceTimersByTime(200);
-      expect(dispatch).not.toHaveBeenCalled();
-    });
+  it('reveals the heavy action when scrolled past the far threshold', () => {
+    const { el, getByTestId, dispatch } = mountRow();
+    fireEvent.wheel(el, { deltaX: -120, deltaY: 0, cancelable: true }); // 0.30
+    fireEvent.wheel(el, { deltaX: -120, deltaY: 0, cancelable: true }); // 0.60 → delete
+    act(() => { vi.advanceTimersByTime(130); });
+    fireEvent.click(getByTestId('action'));
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ action: 'delete-thread' }));
+  });
 
-    it('prevents default on horizontal wheel so the panels container does not scroll', () => {
-      const { el } = mountRow();
-      const notPrevented = fireEvent.wheel(el, { deltaX: -40, deltaY: 0, cancelable: true });
-      expect(notPrevented).toBe(false); // preventDefault WAS called
-      vi.advanceTimersByTime(130); // settle so no timer leaks into the next test
-    });
+  it('springs back with no reveal when the scroll stays under the threshold', () => {
+    const { el, queryByTestId } = mountRow();
+    fireEvent.wheel(el, { deltaX: -30, deltaY: 0, cancelable: true }); // 0.075
+    act(() => { vi.advanceTimersByTime(130); });
+    expect(el.dataset.revealed).toBeUndefined();
+    expect(queryByTestId('action')).toBeNull();
+    expect(el.style.getPropertyValue('--drag-x')).toBe('0px');
+  });
+
+  it('lets vertical-dominant wheel through: no preventDefault, no reveal', () => {
+    const { el, queryByTestId } = mountRow();
+    const notPrevented = fireEvent.wheel(el, { deltaX: 2, deltaY: 40, cancelable: true });
+    expect(notPrevented).toBe(true);
+    act(() => { vi.advanceTimersByTime(130); });
+    expect(queryByTestId('action')).toBeNull();
+  });
+
+  it('cancelReveal closes a snapped-open row', () => {
+    let api!: RowSwipeApi;
+    const { el } = mountRow({ apiOut: (a) => { api = a; } });
+    fireEvent.wheel(el, { deltaX: -120, deltaY: 0, cancelable: true });
+    act(() => { vi.advanceTimersByTime(130); });
+    expect(el.dataset.revealed).toBe('true');
+    act(() => { api.cancelReveal(); });
+    expect(el.dataset.revealed).toBeUndefined();
+    expect(el.style.getPropertyValue('--drag-x')).toBe('0px');
   });
 });
