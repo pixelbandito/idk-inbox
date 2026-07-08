@@ -34,11 +34,24 @@ function Row({ email, isSelected }: { email: EmailSummary; isSelected: boolean }
   const onTrigger = useTriggerHandler(ROW_TAP_PIPELINE);
   const dispatch = useDispatcher();
   const ctx = useDispatchContext();
-  useRowSwipe(ref, { onTrigger, dispatch, ctx });
+  // A committed swipe collapses the row away; the list refetch then removes it.
+  const [filing, setFiling] = useState(false);
+  useRowSwipe(ref, { onTrigger, dispatch, ctx, onCommit: () => setFiling(true) });
+
+  // Safety: if the write failed (row never removed by the refetch), un-collapse
+  // after the animation so the thread isn't left invisible-but-present.
+  useEffect(() => {
+    if (!filing) return;
+    const t = setTimeout(() => setFiling(false), 1500);
+    return () => clearTimeout(t);
+  }, [filing]);
+
   const className = [
     'email',
     email.unread ? 'email--unread' : null,
     isSelected ? 'email--selected' : null,
+    // Keep the tile's slide-off transition alive across the commit re-render.
+    filing ? 'email--releasing email--filing' : null,
   ]
     .filter(Boolean)
     .join(' ');

@@ -58,11 +58,20 @@ describe('useRowSwipe', () => {
     }));
   });
 
-  it('dispatches nothing and springs back on a sub-threshold drag', () => {
-    const { el, onTrigger, dispatch } = mountRow();
+  it('fires onCommit when a swipe commits', () => {
+    const onCommit = vi.fn();
+    const { el } = mountRow({ onCommit });
+    swipe(el, 120); // commits archive
+    expect(onCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it('dispatches nothing, springs back, and does not fire onCommit on a sub-threshold drag', () => {
+    const onCommit = vi.fn();
+    const { el, onTrigger, dispatch } = mountRow({ onCommit });
     swipe(el, 70); // a real swipe (>= 60px) but only 0.175 of the width
     expect(dispatch).not.toHaveBeenCalled();
     expect(onTrigger).not.toHaveBeenCalled();
+    expect(onCommit).not.toHaveBeenCalled();
     expect(el.style.getPropertyValue('--drag-x')).toBe('0px');
   });
 
@@ -113,14 +122,14 @@ describe('useRowSwipe', () => {
     beforeEach(() => vi.useFakeTimers());
     afterEach(() => vi.useRealTimers());
 
-    it('accumulates horizontal wheel deltas, paints live, and dispatches archive on settle', () => {
+    it('accumulates horizontal wheel deltas, paints live, and dispatches archive on a firm settle', () => {
       const { el, dispatch } = mountRow();
       // Natural scroll: a rightward two-finger swipe reports negative deltaX.
-      fireEvent.wheel(el, { deltaX: -40, deltaY: 0, cancelable: true });
-      fireEvent.wheel(el, { deltaX: -40, deltaY: 2, cancelable: true });
-      fireEvent.wheel(el, { deltaX: -40, deltaY: 0, cancelable: true });
-      // 120px of pull = 0.30 of the 400px row — archive armed and painted.
-      expect(el.style.getPropertyValue('--drag-x')).toBe('120px');
+      // Pull past the 0.5 wheel-commit gate (240px / 400px = 0.60).
+      fireEvent.wheel(el, { deltaX: -80, deltaY: 0, cancelable: true });
+      fireEvent.wheel(el, { deltaX: -80, deltaY: 2, cancelable: true });
+      fireEvent.wheel(el, { deltaX: -80, deltaY: 0, cancelable: true });
+      expect(el.style.getPropertyValue('--drag-x')).toBe('240px');
       expect(el.dataset.pull).toBe('end');
       expect(el.dataset.armedIcon).toBe('archive');
       expect(dispatch).not.toHaveBeenCalled(); // not until the stream settles
@@ -131,6 +140,18 @@ describe('useRowSwipe', () => {
         action: 'archive-thread',
         args: { targets: ['t1'] },
       }));
+    });
+
+    it('springs back when the wheel pull is armed but under the firmer commit gate', () => {
+      const { el, dispatch } = mountRow();
+      // 120px / 400px = 0.30 — arms archive visually, but under the 0.5 gate so
+      // a light exploratory trackpad scroll must not fire the action.
+      fireEvent.wheel(el, { deltaX: -60, deltaY: 0, cancelable: true });
+      fireEvent.wheel(el, { deltaX: -60, deltaY: 0, cancelable: true });
+      expect(el.dataset.armedIcon).toBe('archive');
+      vi.advanceTimersByTime(130);
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(el.style.getPropertyValue('--drag-x')).toBe('0px');
     });
 
     it('springs back without dispatching when the wheel pull stays sub-threshold', () => {

@@ -30,6 +30,7 @@
     --colorScheme: light dark;
 
     /* Swipe-reveal tones */
+    --tone-neutral: #33333b;
     --tone-safe: #1a7f37;
     --tone-danger: #c0392b;
     --tone-info: #b7791f;
@@ -44,6 +45,7 @@
     --colorScheme: dark light;
 
     /* Swipe-reveal tones */
+    --tone-neutral: #3d3d47;
     --tone-safe: #2ea043;
     --tone-danger: #e5534b;
     --tone-info: #d4a017;

@@ -35,7 +35,16 @@ export interface RowSwipeOptions {
   ctx:       ReadonlyContext;
   /** Override the swipe slots (defaults to ROW_SWIPE_BINDINGS). */
   bindings?: SwipeBinding[];
+  /** Called when a swipe commits, so the row can play its file-away animation. */
+  onCommit?: () => void;
 }
+
+// A trackpad wheel has no "release" event — a debounce stands in for lifting
+// the fingers, and momentum keeps deltas coming after the flick. So the wheel
+// path requires a firmer pull than the pointer (which commits on a deliberate
+// finger-lift past the tier threshold), or a light exploratory scroll would
+// fire an action the user didn't mean.
+const WHEEL_COMMIT_FRACTION = 0.5;
 
 function documentDirection(): 'ltr' | 'rtl' {
   return getComputedStyle(document.documentElement).direction === 'rtl' ? 'rtl' : 'ltr';
@@ -97,27 +106,28 @@ export function useRowSwipe(
     }
   }, []);
 
-  // Settle a released pull: dispatch the armed command (sliding the tile off)
-  // or spring back when nothing armed. Shared by the pointer and wheel paths.
-  const releasePull = useCallback((el: HTMLElement, dx: number) => {
+  // Settle a released pull: dispatch the armed command (filing the row away) or
+  // spring back. `minFraction` gates the commit (0 for pointers, higher for the
+  // no-release wheel). Shared by the pointer and wheel paths.
+  const releasePull = useCallback((el: HTMLElement, dx: number, minFraction = 0) => {
     armedActionRef.current = null;
     el.classList.add('email--releasing');
 
-    const { ctx, dispatch, bindings } = optsRef.current;
-    const command = swipeCommandFor(
-      logicalInlineDirection(dx, documentDirection()),
-      inlineFraction(dx, el.clientWidth),
-      targetFromRow(el),
-      ctx,
-      bindings,
-    );
+    const { ctx, dispatch, bindings, onCommit } = optsRef.current;
+    const fraction = inlineFraction(dx, el.clientWidth);
+    const command = fraction >= minFraction
+      ? swipeCommandFor(logicalInlineDirection(dx, documentDirection()), fraction, targetFromRow(el), ctx, bindings)
+      : null;
 
     if (!command) {
       clearPullVisuals(el);
       return;
     }
-    // Slide the tile off in the pull direction; the write's refresh removes the row.
+    // Record the current height so the file-away animation can collapse from it,
+    // slide the tile off, then commit. The write's refresh drops the row.
+    el.style.setProperty('--row-h', `${el.offsetHeight}px`);
     el.style.setProperty('--drag-x', `${Math.sign(dx) * el.clientWidth}px`);
+    onCommit?.();
     void dispatch({ action: command.action, args: command.args, context: ctx });
   }, []);
 
@@ -179,7 +189,7 @@ export function useRowSwipe(
       timer = setTimeout(() => {
         timer = null;
         session = false;
-        releasePull(el, wheelDx);
+        releasePull(el, wheelDx, WHEEL_COMMIT_FRACTION);
         accX = 0;
       }, 120);
     };

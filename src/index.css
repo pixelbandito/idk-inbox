@@ -97,9 +97,14 @@
     padding-inline: 1rem;
     color: #fff;
     opacity: 0;
+    /* Neutral until an action arms, then eases to that action's colour. */
+    background: var(--tone-neutral);
+    transition: background-color 140ms ease;
     /* Icon sits at the edge you pull FROM: end-drag reveals at inline-start. */
   }
-  .email[data-armed-tone] .email__reveal { opacity: 1; }
+  /* Visible from the first pixel of a horizontal pull — the moving tile needs a
+     framing box behind it, not empty space. */
+  .email[data-pull] .email__reveal { opacity: 1; }
   .email[data-armed-tone="safe"]   .email__reveal { background: var(--tone-safe); }
   .email[data-armed-tone="danger"] .email__reveal { background: var(--tone-danger); }
   .email[data-armed-tone="info"]   .email__reveal { background: var(--tone-info); }
@@ -124,10 +129,23 @@
     background: var(--backgroundColor);
     transform: translateX(var(--drag-x, 0));
   }
+  /* While dragging, the tile reads as a card lifting off the reveal track. */
+  .email[data-pull] .email__tile { box-shadow: 0 0 0.6rem rgba(0, 0, 0, 0.25); }
   .email--releasing .email__tile { transition: transform 180ms ease; }
   .email--unread { font-weight: 600; }
   .email--unread .email__tile { background: #f6f9ff; }
   .email--selected .email__tile { background: #eef6ff; }
+
+  /* On commit the row holds a beat (showing the action colour) then collapses
+     vertically, so it reads as being filed away rather than blinking out. */
+  .email--filing {
+    overflow: hidden;
+    animation: emailFileAway 320ms ease forwards;
+  }
+  @keyframes emailFileAway {
+    0%,  40% { max-height: var(--row-h, 6rem); opacity: 1; }
+    100%     { max-height: 0; opacity: 0; }
+  }
   .email__from { font-size: 0.85rem; color: #555; }
   .email__subject { font-weight: inherit; }
   /* Snippet stays a one-line preview; the thread view shows the full body. */
