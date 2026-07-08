@@ -107,6 +107,14 @@
   .email[data-pull="end"]   .email__reveal { justify-content: flex-start; }
   .email[data-pull="start"] .email__reveal { justify-content: flex-end; }
 
+  /* All four icons render once; the row's data-armed-icon (set imperatively
+     by useRowSwipe) picks which one shows — pure CSS, zero re-renders. */
+  .email__reveal-icon { display: none; }
+  .email[data-armed-icon="archive"] .email__reveal-icon[data-swipe-icon="archive"] { display: flex; }
+  .email[data-armed-icon="trash"]   .email__reveal-icon[data-swipe-icon="trash"]   { display: flex; }
+  .email[data-armed-icon="clock"]   .email__reveal-icon[data-swipe-icon="clock"]   { display: flex; }
+  .email[data-armed-icon="tag"]     .email__reveal-icon[data-swipe-icon="tag"]     { display: flex; }
+
   .email__tile {
     position: relative;
     display: flex;

@@ -4,8 +4,9 @@
 // swipeIntents); this hook only does DOM mutation + dispatch:
 //   - clicks / long-presses forward to `onTrigger` (the generic trigger
 //     pipeline), built exactly like producers/fromGesture does
-//   - onDrag paints --drag-x / data-pull / data-armed-tone imperatively so
-//     the tile follows the finger without re-rendering React every frame
+//   - onDrag paints --drag-x / data-pull / data-armed-tone / data-armed-icon
+//     imperatively so the tile follows the finger without re-rendering React
+//     every frame (CSS picks the matching reveal icon off data-armed-icon)
 //   - onSwipe (release) resolves the armed command and dispatches it, or
 //     springs the tile back when nothing armed. Row swipes deliberately do
 //     NOT flow through onTrigger/actionMap.
@@ -41,6 +42,7 @@ function clearPullVisuals(el: HTMLElement): void {
   el.style.setProperty('--drag-x', '0px');
   delete el.dataset.pull;
   delete el.dataset.armedTone;
+  delete el.dataset.armedIcon;
 }
 
 export function useRowSwipe(
@@ -81,8 +83,13 @@ export function useRowSwipe(
 
     el.style.setProperty('--drag-x', `${dx}px`);
     el.dataset.pull = direction;
-    if (intent) el.dataset.armedTone = intent.presentation.tone;
-    else        delete el.dataset.armedTone;
+    if (intent) {
+      el.dataset.armedTone = intent.presentation.tone;
+      el.dataset.armedIcon = intent.presentation.icon;
+    } else {
+      delete el.dataset.armedTone;
+      delete el.dataset.armedIcon;
+    }
 
     const armed = intent?.binding.action ?? null;
     if (armed !== armedActionRef.current) {

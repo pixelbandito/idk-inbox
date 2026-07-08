@@ -90,14 +90,20 @@ describe('useRowSwipe', () => {
       expect(el.style.getPropertyValue('--drag-x')).toBe('40px');
       expect(el.dataset.pull).toBe('end');
       expect(el.dataset.armedTone).toBeUndefined();
+      expect(el.dataset.armedIcon).toBeUndefined();
       expect(vibrate).not.toHaveBeenCalled();
 
       fireEvent.pointerMove(el, { pointerId: 1, clientX: 220, clientY: 100 }); // 0.30 — archive arms
       expect(el.dataset.armedTone).toBe('safe');
+      expect(el.dataset.armedIcon).toBe('archive');
       expect(vibrate).toHaveBeenCalledTimes(1);
 
       fireEvent.pointerMove(el, { pointerId: 1, clientX: 230, clientY: 100 }); // same tier — no re-buzz
       expect(vibrate).toHaveBeenCalledTimes(1);
+
+      fireEvent.pointerMove(el, { pointerId: 1, clientX: 140, clientY: 100 }); // back under — disarms
+      expect(el.dataset.armedTone).toBeUndefined();
+      expect(el.dataset.armedIcon).toBeUndefined();
     } finally {
       Reflect.deleteProperty(navigator, 'vibrate');
     }

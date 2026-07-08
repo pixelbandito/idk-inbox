@@ -1,33 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PanelHeader } from '../layout/PanelHeader';
-import { useDispatchContext, useRefreshState } from '../state/useDispatch';
-import { useGestureProducer } from '../triggers/producers/fromGesture';
+import { useDispatchContext, useDispatcher, useRefreshState } from '../state/useDispatch';
+import { useRowSwipe } from '../input/useRowSwipe';
 import { useTriggerHandler } from '../triggers/useTriggerHandler';
-import {
-  click,
-  pressLong,
-  swipeInlineEnd,
-  swipeInlineEndEdge,
-  swipeInlineStart,
-  swipeInlineStartEdge,
-} from '../triggers/triggers';
+import { click, pressLong } from '../triggers/triggers';
 import type { TriggerName } from '../triggers/types';
+import type { IconName } from '../input/swipeIntents';
+import { Icon } from '../ui/icons';
 import { fetchByLabel } from '../lib/gmail/fetchByLabel';
 import { cacheThreadSummaries } from '../state/threadSummaryCache';
 import { recordSightings } from '../lib/heuristics/triageLog';
 import { SuggestionCard } from '../feedback/SuggestionCard';
 import type { EmailSummary } from '../lib/gmail/types';
 
-// All row interactions flow through the trigger pipeline:
-// click, the four inline swipes, and long-press.
-const ROW_NEW_PIPELINE: ReadonlySet<TriggerName> = new Set([
-  click,
-  swipeInlineEnd,
-  swipeInlineEndEdge,
-  swipeInlineStart,
-  swipeInlineStartEdge,
-  pressLong,
-]);
+// Taps still flow through the generic trigger pipeline; swipes are owned by
+// useRowSwipe (see src/input/swipeIntents.ts for the bindings).
+const ROW_TAP_PIPELINE: ReadonlySet<TriggerName> = new Set([click, pressLong]);
+
+// All reveal icons render once; CSS shows the one matching the row's
+// data-armed-icon (set imperatively by useRowSwipe — no re-render per frame).
+const REVEAL_ICONS: readonly IconName[] = ['archive', 'trash', 'clock', 'tag'];
 
 export interface ThreadlistPanelProps {
   label: string;
@@ -39,8 +31,10 @@ export interface ThreadlistPanelProps {
 
 function Row({ email, isSelected }: { email: EmailSummary; isSelected: boolean }) {
   const ref = useRef<HTMLLIElement>(null);
-  const onTrigger = useTriggerHandler(ROW_NEW_PIPELINE);
-  useGestureProducer('row', ref, onTrigger);
+  const onTrigger = useTriggerHandler(ROW_TAP_PIPELINE);
+  const dispatch = useDispatcher();
+  const ctx = useDispatchContext();
+  useRowSwipe(ref, { onTrigger, dispatch, ctx });
   const className = [
     'email',
     email.unread ? 'email--unread' : null,
@@ -50,9 +44,18 @@ function Row({ email, isSelected }: { email: EmailSummary; isSelected: boolean }
     .join(' ');
   return (
     <li ref={ref} data-thread-id={email.threadId} data-surface="row" className={className}>
-      <span className="email__from">{email.from}</span>
-      <span className="email__subject">{email.subject}</span>
-      <span className="email__snippet">{email.snippet}</span>
+      <div className="email__reveal" aria-hidden="true">
+        {REVEAL_ICONS.map((name) => (
+          <span key={name} className="email__reveal-icon" data-swipe-icon={name}>
+            <Icon name={name} />
+          </span>
+        ))}
+      </div>
+      <div className="email__tile">
+        <span className="email__from">{email.from}</span>
+        <span className="email__subject">{email.subject}</span>
+        <span className="email__snippet">{email.snippet}</span>
+      </div>
     </li>
   );
 }
