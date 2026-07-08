@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/react';
 import { useRef } from 'react';
 import { useRowSwipe, type RowSwipeOptions } from './useRowSwipe';
@@ -107,5 +107,56 @@ describe('useRowSwipe', () => {
     } finally {
       Reflect.deleteProperty(navigator, 'vibrate');
     }
+  });
+
+  describe('trackpad wheel drag', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it('accumulates horizontal wheel deltas, paints live, and dispatches archive on settle', () => {
+      const { el, dispatch } = mountRow();
+      // Natural scroll: a rightward two-finger swipe reports negative deltaX.
+      fireEvent.wheel(el, { deltaX: -40, deltaY: 0, cancelable: true });
+      fireEvent.wheel(el, { deltaX: -40, deltaY: 2, cancelable: true });
+      fireEvent.wheel(el, { deltaX: -40, deltaY: 0, cancelable: true });
+      // 120px of pull = 0.30 of the 400px row — archive armed and painted.
+      expect(el.style.getPropertyValue('--drag-x')).toBe('120px');
+      expect(el.dataset.pull).toBe('end');
+      expect(el.dataset.armedIcon).toBe('archive');
+      expect(dispatch).not.toHaveBeenCalled(); // not until the stream settles
+
+      vi.advanceTimersByTime(130); // past the settle debounce
+      expect(dispatch).toHaveBeenCalledTimes(1);
+      expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+        action: 'archive-thread',
+        args: { targets: ['t1'] },
+      }));
+    });
+
+    it('springs back without dispatching when the wheel pull stays sub-threshold', () => {
+      const { el, dispatch } = mountRow();
+      fireEvent.wheel(el, { deltaX: -30, deltaY: 0, cancelable: true }); // 0.075 of width
+      expect(el.style.getPropertyValue('--drag-x')).toBe('30px');
+      vi.advanceTimersByTime(130);
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(el.style.getPropertyValue('--drag-x')).toBe('0px');
+    });
+
+    it('lets vertical-dominant wheel through: no preventDefault, no paint, no dispatch', () => {
+      const { el, dispatch } = mountRow();
+      const notPrevented = fireEvent.wheel(el, { deltaX: 2, deltaY: 40, cancelable: true });
+      expect(notPrevented).toBe(true); // preventDefault was NOT called
+      expect(el.style.getPropertyValue('--drag-x')).toBe('');
+      expect(el.dataset.pull).toBeUndefined();
+      vi.advanceTimersByTime(200);
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+
+    it('prevents default on horizontal wheel so the panels container does not scroll', () => {
+      const { el } = mountRow();
+      const notPrevented = fireEvent.wheel(el, { deltaX: -40, deltaY: 0, cancelable: true });
+      expect(notPrevented).toBe(false); // preventDefault WAS called
+      vi.advanceTimersByTime(130); // settle so no timer leaks into the next test
+    });
   });
 });
