@@ -2,25 +2,30 @@
 //
 // Two input models, because they differ fundamentally:
 //   - Pointer (mouse / touch): drag the tile and RELEASE past a tier to commit.
-//     A release has a clear end, so this is fluid drag-to-commit.
 //   - Trackpad wheel (Mac two-finger): a wheel stream has NO "fingers lifted"
-//     event, so we can't commit on release. Instead a horizontal scroll REVEALS
-//     and snaps the tile open, and the user clicks the revealed action to fire
-//     it (or taps the tile / scrolls back to close).
+//     event, so it can't commit on release. A horizontal scroll REVEALS and
+//     snaps the tile open; the exposed action button(s) commit on click (scroll
+//     far to reveal both the light and heavy actions). Tap the tile / scroll
+//     back to close.
 //
 // Decision logic lives in the pure, tested modules (swipeGeometry, swipeIntents);
 // this hook does DOM mutation, dispatch, and the small reveal state machine.
+//
+// On commit the tile is reset to centre (NOT slid off) and the armed colour is
+// cleared, so no coloured reveal can linger behind the row; the row's file-away
+// collapse is what animates it out, and only for an actual write.
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { useGesture, type ClickEvent, type PressEvent } from './useGesture';
 import { logicalInlineDirection, inlineFraction } from './swipeGeometry';
 import {
-  resolveSwipeIntent, swipeCommandFor, type IconName, type SwipeBinding,
+  resolveSwipeIntent, ACTION_PRESENTATION, ROW_SWIPE_BINDINGS,
+  type IconName, type SwipeBinding,
 } from './swipeIntents';
-import { targetFromRow } from './helpers';
+import { targetFromRow, targetsFromSelection } from './helpers';
 import { resolveSurface } from '../triggers/producers/fromGesture';
 import type { AbstractEvent } from '../triggers/types';
-import type { ActionId, ActionResult, DispatchRequest, ReadonlyContext } from './types';
+import type { ActionId, ActionResult, DispatchRequest, ReadonlyContext, ThreadRef } from './types';
 
 export interface RowSwipeOptions {
   /** The generic tap pipeline — receives click / long-press AbstractEvents only. */
@@ -29,31 +34,33 @@ export interface RowSwipeOptions {
   ctx:       ReadonlyContext;
   /** Override the swipe slots (defaults to ROW_SWIPE_BINDINGS). */
   bindings?: SwipeBinding[];
-  /** Called when a swipe commits, so the row can play its file-away animation. */
-  onCommit?: () => void;
+  /** Called once a swipe produces a real write (not a picker), with its action. */
+  onCommit?: (action: ActionId) => void;
 }
 
-/** A trackpad-revealed, click-to-commit action snapped open on a row. */
+/** One clickable action in a trackpad reveal. */
+export interface RevealAction {
+  action: ActionId;
+  args:   Record<string, unknown>;
+  tone:   string;
+  icon:   IconName;
+  label:  string;
+}
+
 export interface RevealState {
   direction: 'start' | 'end';
-  awaySign:  number;   // sign to slide the tile fully off on commit
-  tone:      string;
-  icon:      IconName;
-  label:     string;
-  action:    ActionId;
-  args:      Record<string, unknown>;
+  /** Light first, heavy last; all tiers the scroll reached. */
+  actions: RevealAction[];
 }
 
 export interface RowSwipeApi {
-  /** Non-null when a trackpad scroll has snapped an action open on this row. */
   reveal: RevealState | null;
-  commitReveal: () => void;
+  commitReveal: (action: ActionId) => void;
   cancelReveal: () => void;
 }
 
-// How far the tile snaps open on a trackpad reveal — enough to show a tappable
-// action area.
-const REVEAL_PX = 80;
+// Width the tile snaps open per revealed action button.
+const REVEAL_PX = 72;
 
 function documentDirection(): 'ltr' | 'rtl' {
   return getComputedStyle(document.documentElement).direction === 'rtl' ? 'rtl' : 'ltr';
@@ -67,6 +74,12 @@ function clearPullVisuals(el: HTMLElement): void {
   delete el.dataset.revealed;
 }
 
+function rowTargets(el: HTMLElement, ctx: ReadonlyContext): ThreadRef[] {
+  if (ctx.selection.length > 0) return targetsFromSelection(ctx);
+  const t = targetFromRow(el);
+  return t ? [t] : [];
+}
+
 export function useRowSwipe(
   ref: RefObject<HTMLElement | null>,
   opts: RowSwipeOptions,
@@ -74,17 +87,13 @@ export function useRowSwipe(
   const optsRef = useRef(opts);
   useLayoutEffect(() => { optsRef.current = opts; });
 
-  // The action armed on the previous drag frame; a change buzzes the haptics.
   const armedActionRef = useRef<ActionId | null>(null);
-
   const [reveal, setReveal] = useState<RevealState | null>(null);
   const revealRef = useRef<RevealState | null>(null);
   useLayoutEffect(() => { revealRef.current = reveal; });
 
-  // Paint one frame of a live pull: tile offset, pull direction, armed tone/icon
-  // (with a haptic buzz when the armed action changes). Pointer + wheel share it.
   const paintPull = useCallback((el: HTMLElement, dx: number) => {
-    el.classList.remove('email--releasing'); // a new pull kills any spring-back transition
+    el.classList.remove('email--releasing');
     const direction = logicalInlineDirection(dx, documentDirection());
     const fraction  = inlineFraction(dx, el.clientWidth);
     const intent    = resolveSwipeIntent(direction, fraction, optsRef.current.bindings);
@@ -106,18 +115,21 @@ export function useRowSwipe(
     }
   }, []);
 
-  // Slide the tile fully off and dispatch. Shared by pointer release and the
-  // trackpad reveal's click. onCommit lets the row play its file-away collapse.
+  // Reset the tile to centre, clear the armed colour, then dispatch. The row's
+  // file-away collapse (onCommit) fires only for a real write, so a snooze /
+  // label swipe that merely opens a picker doesn't wrongly collapse the row.
   const commitCommand = useCallback(
-    (el: HTMLElement, command: { action: ActionId; args: Record<string, unknown> }, awaySign: number) => {
+    (el: HTMLElement, command: { action: ActionId; args: Record<string, unknown> }) => {
       armedActionRef.current = null;
       el.style.setProperty('--row-h', `${el.offsetHeight}px`);
       el.classList.add('email--releasing');
-      el.style.setProperty('--drag-x', `${awaySign * el.clientWidth}px`);
-      delete el.dataset.revealed;
+      clearPullVisuals(el);
       const { dispatch, ctx, onCommit } = optsRef.current;
-      onCommit?.();
-      void dispatch({ action: command.action, args: command.args, context: ctx });
+      void dispatch({ action: command.action, args: command.args, context: ctx }).then((result) => {
+        if (result.ok && result.affectedTargets && result.affectedTargets.length > 0) {
+          onCommit?.(command.action);
+        }
+      });
     },
     [],
   );
@@ -131,20 +143,19 @@ export function useRowSwipe(
     }
   }, []);
 
-  const commitReveal = useCallback(() => {
+  const commitReveal = useCallback((action: ActionId) => {
     const el = ref.current;
     const r = revealRef.current;
     if (!el || !r) return;
+    const picked = r.actions.find((a) => a.action === action);
     revealRef.current = null;
     setReveal(null);
-    commitCommand(el, { action: r.action, args: r.args }, r.awaySign);
+    if (picked) commitCommand(el, { action: picked.action, args: picked.args });
   }, [ref, commitCommand]);
 
   const cancelReveal = useCallback(() => { closeReveal(ref.current); }, [ref, closeReveal]);
 
   const onClick = useCallback((raw: ClickEvent) => {
-    // A tap on a snapped-open row just closes it (the action lives on its own
-    // button, which bypasses the gesture as an interactive element).
     if (revealRef.current) { closeReveal(ref.current); return; }
     const { surface, surfaceEl } = resolveSurface(raw.target);
     optsRef.current.onTrigger({ kind: 'gesture-click', surface, target: surfaceEl });
@@ -152,7 +163,6 @@ export function useRowSwipe(
 
   const onLongPress = useCallback((raw: PressEvent) => {
     const { surface, surfaceEl } = resolveSurface(raw.target);
-    // useGesture doesn't expose dt on long-press (see fromGesture); report 0.
     optsRef.current.onTrigger({ kind: 'gesture-long-press', surface, target: surfaceEl, dt: 0 });
   }, []);
 
@@ -162,18 +172,19 @@ export function useRowSwipe(
     el.classList.add('email--releasing');
     const direction = logicalInlineDirection(dx, documentDirection());
     const fraction  = inlineFraction(dx, el.clientWidth);
-    const command = swipeCommandFor(direction, fraction, targetFromRow(el), optsRef.current.ctx, optsRef.current.bindings);
-    if (!command) {
+    const intent    = resolveSwipeIntent(direction, fraction, optsRef.current.bindings);
+    if (!intent) {
       clearPullVisuals(el);
       return;
     }
-    commitCommand(el, command, Math.sign(dx));
+    const targets = rowTargets(el, optsRef.current.ctx);
+    commitCommand(el, { action: intent.binding.action, args: { targets, ...intent.binding.args } });
   }, [commitCommand]);
 
   const onDrag = useCallback((dx: number, dy: number) => {
     const el = ref.current;
     if (!el) return;
-    if (revealRef.current) closeReveal(el); // a fresh drag dismisses an open reveal
+    if (revealRef.current) closeReveal(el);
     if (Math.abs(dx) < Math.abs(dy)) {
       el.classList.remove('email--releasing');
       clearPullVisuals(el);
@@ -192,9 +203,7 @@ export function useRowSwipe(
 
   useGesture('row', ref, { onClick, onLongPress, onDrag, onDragEnd });
 
-  // Trackpad two-finger horizontal scroll: reveal + snap open (no auto-commit,
-  // since a wheel has no finger-lift). A short debounce stands in for the scroll
-  // settling; on settle the tile snaps to a fixed open width if a tier armed.
+  // Trackpad two-finger horizontal scroll: reveal + snap open (no auto-commit).
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -207,49 +216,41 @@ export function useRowSwipe(
     const settle = (dx: number) => {
       const direction = logicalInlineDirection(dx, documentDirection());
       const fraction  = inlineFraction(dx, el.clientWidth);
-      const intent    = resolveSwipeIntent(direction, fraction, optsRef.current.bindings);
-      if (!intent) {
+      const bindings = (optsRef.current.bindings ?? ROW_SWIPE_BINDINGS)
+        .filter((b) => b.direction === direction && fraction >= b.armAtFraction)
+        .sort((a, b) => a.armAtFraction - b.armAtFraction);
+      if (bindings.length === 0) {
         el.classList.add('email--releasing');
         clearPullVisuals(el);
         revealRef.current = null;
         setReveal(null);
         return;
       }
-      const command = swipeCommandFor(direction, fraction, targetFromRow(el), optsRef.current.ctx, optsRef.current.bindings);
-      if (!command) return;
-      // Snap the tile to a fixed reveal width and lock the armed action; the
-      // exposed strip becomes a clickable action button (rendered by the row).
+      const targets = rowTargets(el, optsRef.current.ctx);
+      const actions: RevealAction[] = bindings.map((b) => {
+        const p = ACTION_PRESENTATION[b.action];
+        return { action: b.action, args: { targets, ...b.args }, tone: p.tone, icon: p.icon, label: p.label };
+      });
+      // Snap open wide enough for every revealed button; buttons carry the
+      // colour, so clear the single-armed tone/icon.
       el.classList.add('email--releasing');
-      el.style.setProperty('--drag-x', `${Math.sign(dx) * REVEAL_PX}px`);
+      el.style.setProperty('--drag-x', `${Math.sign(dx) * REVEAL_PX * actions.length}px`);
       el.dataset.pull = direction;
-      el.dataset.armedTone = intent.presentation.tone;
-      el.dataset.armedIcon = intent.presentation.icon;
       el.dataset.revealed = 'true';
-      const next: RevealState = {
-        direction,
-        awaySign: Math.sign(dx),
-        tone: intent.presentation.tone,
-        icon: intent.presentation.icon,
-        label: intent.presentation.label,
-        action: command.action,
-        args: command.args,
-      };
+      delete el.dataset.armedTone;
+      delete el.dataset.armedIcon;
+      const next: RevealState = { direction, actions };
       revealRef.current = next;
       setReveal(next);
     };
 
     const onWheel = (e: WheelEvent) => {
-      // Outside a session, vertical-dominant wheel is list scrolling — let it
-      // through untouched. Once horizontal, keep every event so a wobbly stream
-      // doesn't tear the pull apart.
       if (!session && Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
-      e.preventDefault(); // stop the panels pager scroll / history back-nav
+      e.preventDefault();
       if (!session) { revealRef.current = null; setReveal(null); }
       session = true;
       accX += e.deltaX;
-      // Natural-scroll mapping: a rightward two-finger swipe reports negative
-      // deltaX, so negate to pull the tile rightward. Flip if it feels inverted.
-      wheelDx = -accX;
+      wheelDx = -accX; // natural-scroll mapping; flip if it feels inverted
       paintPull(el, wheelDx);
 
       if (timer !== null) clearTimeout(timer);

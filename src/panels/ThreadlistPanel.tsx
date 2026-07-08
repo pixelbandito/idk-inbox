@@ -6,6 +6,7 @@ import { useTriggerHandler } from '../triggers/useTriggerHandler';
 import { click, pressLong } from '../triggers/triggers';
 import type { TriggerName } from '../triggers/types';
 import type { IconName } from '../input/swipeIntents';
+import type { ActionId } from '../input/types';
 import { Icon } from '../ui/icons';
 import { fetchByLabel } from '../lib/gmail/fetchByLabel';
 import { cacheThreadSummaries } from '../state/threadSummaryCache';
@@ -16,6 +17,13 @@ import type { EmailSummary } from '../lib/gmail/types';
 // Taps still flow through the generic trigger pipeline; swipes are owned by
 // useRowSwipe (see src/input/swipeIntents.ts for the bindings).
 const ROW_TAP_PIPELINE: ReadonlySet<TriggerName> = new Set([click, pressLong]);
+
+// Swipe actions that take a thread out of the INBOX list — used for optimistic
+// removal so an archived/deleted/snoozed row disappears without waiting on the
+// eventually-consistent refetch. (Apply-label keeps the thread in the inbox.)
+const INBOX_REMOVING_ACTIONS: ReadonlySet<ActionId> = new Set([
+  'archive-thread', 'delete-thread', 'snooze-thread',
+]);
 
 // All reveal icons render once; CSS shows the one matching the row's
 // data-armed-icon (set imperatively by useRowSwipe — no re-render per frame).
@@ -29,19 +37,26 @@ export interface ThreadlistPanelProps {
   onClose?: () => void;
 }
 
-function Row({ email, isSelected }: { email: EmailSummary; isSelected: boolean }) {
+interface RowProps {
+  email: EmailSummary;
+  isSelected: boolean;
+  onCommitted: (threadId: string, action: ActionId) => void;
+}
+
+function Row({ email, isSelected, onCommitted }: RowProps) {
   const ref = useRef<HTMLLIElement>(null);
   const onTrigger = useTriggerHandler(ROW_TAP_PIPELINE);
   const dispatch = useDispatcher();
   const ctx = useDispatchContext();
-  // A committed swipe collapses the row away; the list refetch then removes it.
+  // A committed write collapses the row away; the panel also drops it optimistically.
   const [filing, setFiling] = useState(false);
   const { reveal, commitReveal } = useRowSwipe(ref, {
-    onTrigger, dispatch, ctx, onCommit: () => setFiling(true),
+    onTrigger, dispatch, ctx,
+    onCommit: (action) => { setFiling(true); onCommitted(email.threadId, action); },
   });
 
-  // Safety: if the write failed (row never removed by the refetch), un-collapse
-  // after the animation so the thread isn't left invisible-but-present.
+  // Safety: if the write failed (row never removed), un-collapse after the
+  // animation so the thread isn't left invisible-but-present.
   useEffect(() => {
     if (!filing) return;
     const t = setTimeout(() => setFiling(false), 1500);
@@ -52,11 +67,15 @@ function Row({ email, isSelected }: { email: EmailSummary; isSelected: boolean }
     'email',
     email.unread ? 'email--unread' : null,
     isSelected ? 'email--selected' : null,
-    // Keep the tile's slide-off transition alive across the commit re-render.
     filing ? 'email--releasing email--filing' : null,
   ]
     .filter(Boolean)
     .join(' ');
+
+  // For an end-pull the strip is on the inline-start edge (and vice versa);
+  // row-reverse there keeps the light action nearest the tile.
+  const side = reveal?.direction === 'end' ? 'start' : 'end';
+
   return (
     <li ref={ref} data-thread-id={email.threadId} data-surface="row" className={className}>
       <div className="email__reveal" aria-hidden="true">
@@ -66,19 +85,23 @@ function Row({ email, isSelected }: { email: EmailSummary; isSelected: boolean }
           </span>
         ))}
       </div>
-      {/* Trackpad reveal: the snapped-open action, clickable to commit. As a
-          real <button> it bypasses the row gesture and gets a native click. */}
+      {/* Trackpad reveal: snapped-open action button(s), clickable to commit.
+          Real <button>s, so they bypass the row gesture and get native clicks. */}
       {reveal && (
-        <button
-          type="button"
-          className="email__action"
-          data-tone={reveal.tone}
-          data-side={reveal.direction === 'end' ? 'start' : 'end'}
-          aria-label={reveal.label}
-          onClick={commitReveal}
-        >
-          <Icon name={reveal.icon} />
-        </button>
+        <div className="email__actions" data-side={side}>
+          {reveal.actions.map((a) => (
+            <button
+              key={a.action}
+              type="button"
+              className="email__action"
+              data-tone={a.tone}
+              aria-label={a.label}
+              onClick={() => commitReveal(a.action)}
+            >
+              <Icon name={a.icon} />
+            </button>
+          ))}
+        </div>
       )}
       <div className="email__tile">
         <span className="email__from">{email.from}</span>
@@ -99,8 +122,17 @@ export function ThreadlistPanel({
   const [failed, setFailed] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Threads dropped optimistically on a committed write so the row vanishes at
+  // once; a fresh load is authoritative and clears this.
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
   const ctx = useDispatchContext();
   const selectionSet = new Set(ctx.selection);
+
+  const onCommitted = useCallback((threadId: string, action: ActionId) => {
+    if (label === 'INBOX' && INBOX_REMOVING_ACTIONS.has(action)) {
+      setRemoved((prev) => new Set(prev).add(threadId));
+    }
+  }, [label]);
   const { threadsVersion, labelVersions } = useRefreshState();
   // Any thread write (or a refresh-panel aimed at this label) invalidates the
   // list; combining the two versions gives the effect one number to watch.
@@ -126,6 +158,7 @@ export function ThreadlistPanel({
       // Inbox arrivals feed the sender-fatigue heuristic.
       if (label === 'INBOX') recordSightings(result.emails);
       setEmails(result.emails);
+      setRemoved(new Set()); // the fresh list is authoritative
       setFailed(result.failed);
     } catch (e) {
       if (seq !== loadSeq.current) return;
@@ -179,17 +212,25 @@ export function ThreadlistPanel({
             {failed} message{failed === 1 ? '' : 's'} failed to load — try again.
           </p>
         )}
-        {emails.length === 0 && !loading && !error ? (
-          <p style={{ padding: '1rem', color: '#888' }}>
-            {label === 'INBOX' ? 'Inbox zero 🎉' : 'No messages here.'}
-          </p>
-        ) : (
-          <ul className="inbox-list">
-            {emails.map((e) => (
-              <Row key={e.id} email={e} isSelected={selectionSet.has(e.threadId)} />
-            ))}
-          </ul>
-        )}
+        {(() => {
+          const shown = emails.filter((e) => !removed.has(e.threadId));
+          return shown.length === 0 && !loading && !error ? (
+            <p style={{ padding: '1rem', color: '#888' }}>
+              {label === 'INBOX' ? 'Inbox zero 🎉' : 'No messages here.'}
+            </p>
+          ) : (
+            <ul className="inbox-list">
+              {shown.map((e) => (
+                <Row
+                  key={e.id}
+                  email={e}
+                  isSelected={selectionSet.has(e.threadId)}
+                  onCommitted={onCommitted}
+                />
+              ))}
+            </ul>
+          );
+        })()}
       </div>
     </>
   );

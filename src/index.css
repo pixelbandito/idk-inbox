@@ -140,12 +140,18 @@
   /* When snapped open the clickable action button carries the icon instead. */
   .email[data-revealed] .email__reveal-icon { display: none; }
 
-  /* Trackpad-revealed, click-to-commit action pinned to the pull-from edge. */
-  .email__action {
+  /* Trackpad-revealed, click-to-commit action button(s) pinned to the
+     pull-from edge. Scrolling far reveals more than one (light + heavy). */
+  .email__actions {
     position: absolute;
     inset-block: 0;
     z-index: 2;
-    width: 5rem;
+    display: flex;
+  }
+  .email__actions[data-side="start"] { inset-inline-start: 0; flex-direction: row-reverse; }
+  .email__actions[data-side="end"]   { inset-inline-end: 0; }
+  .email__action {
+    width: 4.5rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -153,8 +159,6 @@
     color: #fff;
     cursor: pointer;
   }
-  .email__action[data-side="start"] { inset-inline-start: 0; }
-  .email__action[data-side="end"]   { inset-inline-end: 0; }
   .email__action[data-tone="safe"]   { background: var(--tone-safe); }
   .email__action[data-tone="danger"] { background: var(--tone-danger); }
   .email__action[data-tone="info"]   { background: var(--tone-info); }
