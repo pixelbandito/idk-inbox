@@ -39,22 +39,54 @@ function panelKey(panel: Panel, index: number): string {
 const noop = () => {};
 
 export function LayoutContainer({ renderPanel }: LayoutContainerProps) {
-  const { panels, focusIndex } = useLayoutState();
+  const { panels, focusIndex, setFocusIndex } = useLayoutState();
   const ctx = useDispatchContext();
   const dispatch = useDispatcher();
   const containerRef = useRef<HTMLElement>(null);
+  const focusIndexRef = useRef(focusIndex);
+  useEffect(() => { focusIndexRef.current = focusIndex; }, [focusIndex]);
+  // Set when a focus change came from manual scrolling, so the scroll-into-view
+  // effect doesn't fight the user's own scroll.
+  const scrollDrivenRef = useRef(false);
 
-  // Smooth-scroll the focused panel into view when focusIndex changes.
+  // Smooth-scroll the focused panel into view when focus changes programmatically.
   useEffect(() => {
-    // The focused panel section is at index focusIndex + 1 since the
-    // first child is the left stash column placeholder. But the stash
-    // column null-renders when count is 0, so we look up via querySelector.
+    if (scrollDrivenRef.current) { scrollDrivenRef.current = false; return; }
     const sections = containerRef.current?.querySelectorAll('section.panel');
     const el = sections?.[focusIndex];
     if (el && el instanceof HTMLElement) {
       el.scrollIntoView({ inline: 'start', behavior: 'smooth' });
     }
   }, [focusIndex]);
+
+  // Manual sticky-scrolling between panels updates which one is "active", so the
+  // edge peek counts reflect where you actually are. The active panel is the one
+  // snapped to the container's start edge after the scroll settles.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const onScroll = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        const sections = container.querySelectorAll('section.panel');
+        if (sections.length === 0) return;
+        const start = container.getBoundingClientRect().left;
+        let best = 0;
+        let bestDist = Infinity;
+        sections.forEach((el, i) => {
+          const d = Math.abs(el.getBoundingClientRect().left - start);
+          if (d < bestDist) { bestDist = d; best = i; }
+        });
+        if (best !== focusIndexRef.current) {
+          scrollDrivenRef.current = true;
+          setFocusIndex(() => best);
+        }
+      }, 90);
+    };
+    container.addEventListener('scroll', onScroll, { passive: true });
+    return () => { container.removeEventListener('scroll', onScroll); if (timer) clearTimeout(timer); };
+  }, [setFocusIndex]);
 
   const stashedLeft  = focusIndex;
   const stashedRight = Math.max(0, panels.length - focusIndex - 1);

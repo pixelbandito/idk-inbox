@@ -171,18 +171,27 @@
     gap: 0.15rem;
     padding: 0.75rem;
     min-width: 0;                       /* let the ellipsised snippet clip, not stretch */
-    background: var(--backgroundColor);
     transform: translateX(var(--drag-x, 0));
     /* Horizontal motion belongs to the row-swipe handler, not the panels pager. */
     touch-action: pan-y pinch-zoom;
+    /* Read rows: dimmed text on a slightly-lifted background — a tint, not a
+       colour reversal. All theme-derived, so it follows light/dark. */
+    background: color-mix(in srgb, var(--foregroundColor) 7%, var(--backgroundColor));
+    color: color-mix(in srgb, var(--foregroundColor) 72%, var(--backgroundColor));
   }
   .email__from, .email__subject, .email__snippet { min-width: 0; max-width: 100%; }
   /* While dragging, the tile reads as a card lifting off the reveal track. */
   .email[data-pull] .email__tile { box-shadow: 0 0 0.6rem rgba(0, 0, 0, 0.25); }
   .email--releasing .email__tile { transition: transform 180ms ease; }
+  /* Unread rows: full-contrast text on the base background, bolder. */
   .email--unread { font-weight: 600; }
-  .email--unread .email__tile { background: #f6f9ff; }
-  .email--selected .email__tile { background: #eef6ff; }
+  .email--unread .email__tile {
+    background: var(--backgroundColor);
+    color: var(--foregroundColor);
+  }
+  .email--selected .email__tile {
+    background: color-mix(in srgb, var(--tone-info) 24%, var(--backgroundColor));
+  }
 
   /* On commit the row holds a beat (showing the action colour) then collapses
      vertically, so it reads as being filed away rather than blinking out. */
@@ -194,12 +203,12 @@
     0%,  40% { max-height: var(--row-h, 6rem); opacity: 1; }
     100%     { max-height: 0; opacity: 0; }
   }
-  .email__from { font-size: 0.85rem; color: #555; }
+  .email__from { font-size: 0.85rem; color: color-mix(in srgb, var(--foregroundColor) 55%, var(--backgroundColor)); }
   .email__subject { font-weight: inherit; }
   /* Snippet stays a one-line preview; the thread view shows the full body. */
   .email__snippet {
     font-size: 0.85rem;
-    color: #888;
+    color: color-mix(in srgb, var(--foregroundColor) 45%, var(--backgroundColor));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
