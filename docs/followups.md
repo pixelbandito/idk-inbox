@@ -18,10 +18,28 @@ ships, drop the bullet rather than checking it off — git history is the record
 
 ## Styling / markup
 
-- **Max widths + enforced wrapping** on email thread lists and thread details.
-- **Rich-text formatting** in thread bodies.
+- **Max widths + enforced wrapping** — done for inbox rows + thread bodies
+  (2026-07-07).
+- **HTML mail rendering with sanitization** — thread bodies are still plain
+  text. Rendering real HTML safely needs a sanitizer (DOMPurify or similar) +
+  CSS containment; it's a dependency/security decision, tracked as its own
+  slice.
 - Owner wants tight control over markup and CSS — use newest elegant patterns,
-  keep simple. Defer until there's explicit direction.
+  keep simple.
+
+## Swipe affordance (landed 2026-07-07)
+
+Live distance-tiered row drag shipped (`docs/plans/2026-07-07-swipe-affordance*`).
+Deferred / tunable:
+
+- **Thresholds** (25% arm, 70% heavy) live in `ROW_SWIPE_BINDINGS`
+  (`src/input/swipeIntents.ts`) — tune freely.
+- **Trackpad wheel sign**: `useRowSwipe`'s wheel session uses natural-scroll
+  mapping (`wheelDx = -accX`); flip the sign there if a two-finger swipe feels
+  inverted on your hardware.
+- **User-configurable swipe slots**: the bindings table is the seam — a
+  settings screen persists an override and passes it to `resolveSwipeIntent`.
+  No engine change needed.
 
 ## Auth / sign-out
 
