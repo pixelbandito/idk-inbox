@@ -38,7 +38,11 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
-    border-right: var(--borderSize) solid #eee;
+    /* Never let inner content stretch a panel past its own width and feed the
+       horizontal panels scroller (the flex min-width:auto trap). */
+    min-width: 0;
+    max-width: var(--w, 100dvw);
+    border-inline-end: var(--borderSize) solid #eee;
   }
 
   .panel__header {
@@ -56,6 +60,9 @@
     margin: 0;
     font-size: 1rem;
     font-weight: 600;
+    /* Shrinkable + wrapping so a long label/subject can't push the header wide. */
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .panel__actions {
@@ -65,9 +72,12 @@
 
   .panel__body {
     flex: 1;
-    overflow-y: auto;
+    /* Vertical scroll only; clip any horizontal overflow so a wide child can't
+       widen the panel or leak into the panels scroller (breaking swipe-left). */
+    overflow: hidden auto;
     overscroll-behavior-y: contain;
     min-height: 0;
+    min-width: 0;
   }
 
   @media (min-width: 768px) {
@@ -77,10 +87,11 @@
 
   /* ----- Inbox list rows (carried from 0a) ----- */
 
-  .inbox-list { list-style: none; padding: 0; margin: 0; }
+  .inbox-list { list-style: none; padding: 0; margin: 0; min-width: 0; }
   .email {
     position: relative;
-    overflow: hidden;                 /* clip the reveal to the row */
+    max-width: 100%;
+    overflow: hidden;                 /* clip the reveal + sliding tile to the row */
     border-bottom: var(--borderSize) solid #eee;
     /* Reserve horizontal motion for the row's gesture handlers — without this
        a horizontal mouse drag is eaten by the panel container's scroll-snap. */
@@ -126,9 +137,13 @@
     flex-direction: column;
     gap: 0.15rem;
     padding: 0.75rem;
+    min-width: 0;                       /* let the ellipsised snippet clip, not stretch */
     background: var(--backgroundColor);
     transform: translateX(var(--drag-x, 0));
+    /* Horizontal motion belongs to the row-swipe handler, not the panels pager. */
+    touch-action: pan-y pinch-zoom;
   }
+  .email__from, .email__subject, .email__snippet { min-width: 0; max-width: 100%; }
   /* While dragging, the tile reads as a card lifting off the reveal track. */
   .email[data-pull] .email__tile { box-shadow: 0 0 0.6rem rgba(0, 0, 0, 0.25); }
   .email--releasing .email__tile { transition: transform 180ms ease; }
