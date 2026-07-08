@@ -22,6 +22,13 @@
 
   /* ----- Layout primitive ----- */
 
+  /* Positioning context for the edge slivers, which overlay the scroller. */
+  .workspace {
+    position: relative;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
   .panels {
     display: flex;
     flex-direction: row;
@@ -29,7 +36,7 @@
     scroll-snap-type: inline mandatory;
     scroll-behavior: smooth;
     scroll-snap-stop: always;
-    height: 100dvh;
+    height: 100%;
   }
 
   .panel {
@@ -217,33 +224,41 @@
 
   .error { color: #c0392b; padding: 0 1rem; }
 
-  /* ----- Stash column (Task 13) ----- */
+  /* ----- Edge slivers (persistent off-screen-content hints) ----- */
 
   .stash-column {
-    flex: 0 0 44px;
+    position: absolute;
+    inset-block: 0;
+    z-index: 5;
+    width: 1.6rem;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0.15rem;
-    background: #f3f3f3;
+    gap: 0.2rem;
     border: 0;
-    border-inline-end: var(--borderSize) solid #ddd;
-    font-size: 0.8rem;
-    color: #555;
+    background: color-mix(in srgb, var(--foregroundColor) 8%, transparent);
+    backdrop-filter: blur(2px);
+    font-size: 0.72rem;
+    color: var(--foregroundColor);
     cursor: pointer;
   }
+  .stash-column[data-side="left"] {
+    inset-inline-start: 0;
+    border-inline-end: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 15%, transparent);
+  }
   .stash-column[data-side="right"] {
-    border-inline-end: 0;
-    border-inline-start: var(--borderSize) solid #ddd;
+    inset-inline-end: 0;
+    border-inline-start: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 15%, transparent);
   }
   .stash-column__chevron {
-    font-size: 1.4rem;
+    font-size: 1.3rem;
     line-height: 1;
-    color: #999;
+    opacity: 0.6;
   }
   .stash-column__count {
     font-weight: 600;
+    opacity: 0.8;
   }
 
   /* ----- Overlay surfaces (pickers, palette, toast) ----- */

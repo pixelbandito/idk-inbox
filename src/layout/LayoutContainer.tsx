@@ -54,8 +54,27 @@ export function LayoutContainer({ renderPanel }: LayoutContainerProps) {
   const stashedLeft  = focusIndex;
   const stashedRight = Math.max(0, panels.length - focusIndex - 1);
 
+  // Slivers live OUTSIDE the scroller as fixed edge overlays, so they stay
+  // visible while the panels scroll behind them — persistent "more this way"
+  // hints rather than something you only meet at the scroll extremes.
   return (
-    <main ref={containerRef} className="panels" role="region" aria-label="Workspace">
+    <div className="workspace">
+      <main ref={containerRef} className="panels" role="region" aria-label="Workspace">
+        {panels.map((panel, i) => (
+          <section
+            key={panelKey(panel, i)}
+            className="panel"
+            {...dataAttrs(panel)}
+          >
+            {renderPanel(panel, i, {
+              onOpenThread: noop,
+              onClose: () => {
+                void dispatch({ action: 'close-panel', args: { panelIndex: i }, context: ctx });
+              },
+            })}
+          </section>
+        ))}
+      </main>
       <StashColumn
         side="left"
         count={stashedLeft}
@@ -63,20 +82,6 @@ export function LayoutContainer({ renderPanel }: LayoutContainerProps) {
           void dispatch({ action: 'nav-panel-prev', args: {}, context: ctx });
         }}
       />
-      {panels.map((panel, i) => (
-        <section
-          key={panelKey(panel, i)}
-          className="panel"
-          {...dataAttrs(panel)}
-        >
-          {renderPanel(panel, i, {
-            onOpenThread: noop,
-            onClose: () => {
-              void dispatch({ action: 'close-panel', args: { panelIndex: i }, context: ctx });
-            },
-          })}
-        </section>
-      ))}
       <StashColumn
         side="right"
         count={stashedRight}
@@ -84,6 +89,6 @@ export function LayoutContainer({ renderPanel }: LayoutContainerProps) {
           void dispatch({ action: 'nav-panel-next', args: {}, context: ctx });
         }}
       />
-    </main>
+    </div>
   );
 }
