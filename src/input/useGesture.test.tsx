@@ -102,4 +102,25 @@ describe('useGesture', () => {
     expect(onSwipe).not.toHaveBeenCalled();
     expect(onClick).toHaveBeenCalledTimes(1);
   });
+
+  it('fires onDrag with running deltas during a drag', () => {
+    const onDrag = vi.fn();
+    const { getByTestId } = render(<Target onDrag={onDrag} />);
+    const el = getByTestId('target');
+    fireEvent.pointerDown(el, { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(el, { pointerId: 1, clientX: 130, clientY: 105 });
+    fireEvent.pointerMove(el, { pointerId: 1, clientX: 160, clientY: 90 });
+    expect(onDrag).toHaveBeenCalledTimes(2);
+    expect(onDrag).toHaveBeenNthCalledWith(1, 30, 5);
+    expect(onDrag).toHaveBeenNthCalledWith(2, 60, -10);
+  });
+
+  it('does not fire onDrag for a tap with no movement', () => {
+    const onDrag = vi.fn();
+    const { getByTestId } = render(<Target onDrag={onDrag} />);
+    const el = getByTestId('target');
+    fireEvent.pointerDown(el, { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerUp(el,   { pointerId: 1, clientX: 100, clientY: 100 });
+    expect(onDrag).not.toHaveBeenCalled();
+  });
 });

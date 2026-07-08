@@ -29,6 +29,8 @@ export interface GestureCallbacks {
   onClick?:     (e: ClickEvent) => void;
   onSwipe?:     (e: SwipeEvent) => void;
   onLongPress?: (e: PressEvent) => void;
+  /** Running deltas from the pointerdown point, fired on every pointermove of a captured drag. */
+  onDrag?:      (dx: number, dy: number) => void;
   /** Swipe threshold in pixels (default 60). */
   swipeMinPx?:  number;
   /** Click vs swipe boundary; below this any motion is still a click (default 20). */
@@ -108,6 +110,7 @@ export function useGesture(
       if (dx > tol || dy > tol) {
         clearLongPress();
       }
+      optsRef.current.onDrag?.(ev.clientX - startX, ev.clientY - startY);
     };
 
     const onUp = (ev: PointerEvent) => {
