@@ -75,27 +75,39 @@ export function LabelPicker({ getToken }: LabelPickerProps = {}) {
   const submit = (raw: string) => void fire(isAdd ? prefix(raw) : raw);
 
   return (
-    <div role="dialog" aria-label="Label picker" className="label-picker" data-surface="overlay">
-      <h2>{verb}</h2>
-      <ul>
-        {suggestions.map((s) => (
-          <li key={s.full}>
-            <button onClick={() => void fire(s.full)}>{s.display}</button>
-          </li>
-        ))}
-      </ul>
-      <label>
-        Label name
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="e.g. Receipts"
-        />
-      </label>
-      <button onClick={() => { const t = text.trim(); if (t) submit(t); }}>
-        {isAdd ? 'Apply' : 'Remove'}
-      </button>
-      <button onClick={() => void cancel()}>Cancel</button>
+    <div
+      className="picker-backdrop"
+      data-surface="overlay"
+      onClick={(e) => { if (e.target === e.currentTarget) void cancel(); }}
+    >
+      <div role="dialog" aria-label="Label picker" className="picker">
+        <h2 className="picker__title">{verb}</h2>
+        <div className="picker__options">
+          {suggestions.map((s) => (
+            <button key={s.full} className="picker__option" onClick={() => void fire(s.full)}>
+              {s.display}
+            </button>
+          ))}
+        </div>
+        <label className="picker__field">
+          <span>Label name</span>
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="e.g. Receipts"
+          />
+        </label>
+        <div className="picker__actions">
+          <button className="picker__cancel" onClick={() => void cancel()}>Cancel</button>
+          <button
+            className="picker__primary"
+            disabled={text.trim() === ''}
+            onClick={() => { const t = text.trim(); if (t) submit(t); }}
+          >
+            {isAdd ? 'Apply' : 'Remove'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

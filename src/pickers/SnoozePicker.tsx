@@ -103,35 +103,45 @@ export function SnoozePicker() {
   };
 
   return (
-    <div role="dialog" aria-label="Snooze picker" className="snooze-picker" data-surface="overlay">
-      <h2>Snooze until…</h2>
-      {eventOptions.map((option) => (
-        <button key={option.label} onClick={() => void fire(option.until)}>
-          {option.label}
-        </button>
-      ))}
-      <button onClick={() => void fire(later(4))}>Later today</button>
-      <button onClick={() => void fire(nextMorningAt(9, 1))}>Tomorrow</button>
-      <button onClick={() => void fire(nextWeekday(6, 9))}>This weekend</button>
-      <button onClick={() => void fire(nextWeekday(1, 9))}>Next week</button>
-      <label>
-        Pick a date
-        <input
-          type="datetime-local"
-          min={MIN_DATETIME_HINT}
-          value={custom.value}
-          onChange={(e) => onCustomChange(e.target.value)}
-        />
-      </label>
-      {custom.value !== '' && custom.target === null && (
-        <p className="error">Pick a time in the future.</p>
-      )}
-      <button disabled={custom.target === null} onClick={() => void fireCustom()}>
-        {custom.target
-          ? `Snooze until ${custom.target.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`
-          : 'Snooze'}
-      </button>
-      <button onClick={() => void cancel()}>Cancel</button>
+    <div
+      className="picker-backdrop"
+      data-surface="overlay"
+      onClick={(e) => { if (e.target === e.currentTarget) void cancel(); }}
+    >
+      <div role="dialog" aria-label="Snooze picker" className="picker">
+        <h2 className="picker__title">Snooze until…</h2>
+        <div className="picker__options">
+          {eventOptions.map((option) => (
+            <button key={option.label} className="picker__option" onClick={() => void fire(option.until)}>
+              {option.label}
+            </button>
+          ))}
+          <button className="picker__option" onClick={() => void fire(later(4))}>Later today</button>
+          <button className="picker__option" onClick={() => void fire(nextMorningAt(9, 1))}>Tomorrow</button>
+          <button className="picker__option" onClick={() => void fire(nextWeekday(6, 9))}>This weekend</button>
+          <button className="picker__option" onClick={() => void fire(nextWeekday(1, 9))}>Next week</button>
+        </div>
+        <label className="picker__field">
+          <span>Pick a date &amp; time</span>
+          <input
+            type="datetime-local"
+            min={MIN_DATETIME_HINT}
+            value={custom.value}
+            onChange={(e) => onCustomChange(e.target.value)}
+          />
+        </label>
+        {custom.value !== '' && custom.target === null && (
+          <p className="picker__hint">Pick a time in the future.</p>
+        )}
+        <div className="picker__actions">
+          <button className="picker__cancel" onClick={() => void cancel()}>Cancel</button>
+          <button className="picker__primary" disabled={custom.target === null} onClick={() => void fireCustom()}>
+            {custom.target
+              ? `Snooze until ${custom.target.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`
+              : 'Snooze'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

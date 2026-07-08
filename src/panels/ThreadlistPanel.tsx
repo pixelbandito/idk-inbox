@@ -158,7 +158,14 @@ export function ThreadlistPanel({
       // Inbox arrivals feed the sender-fatigue heuristic.
       if (label === 'INBOX') recordSightings(result.emails);
       setEmails(result.emails);
-      setRemoved(new Set()); // the fresh list is authoritative
+      // Keep suppressing an optimistically-removed thread only while the server
+      // still (staleley) returns it; once it's gone, stop tracking it. This
+      // holds an archived row hidden through an eventually-consistent refetch.
+      setRemoved((prev) => {
+        if (prev.size === 0) return prev;
+        const present = new Set(result.emails.map((e) => e.threadId));
+        return new Set([...prev].filter((id) => present.has(id)));
+      });
       setFailed(result.failed);
     } catch (e) {
       if (seq !== loadSeq.current) return;

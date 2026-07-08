@@ -234,41 +234,112 @@
     position: absolute;
     inset-block: 0;
     z-index: 5;
-    width: 1.6rem;
+    width: 1.75rem;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0.2rem;
+    gap: 0.25rem;
     border: 0;
-    background: color-mix(in srgb, var(--foregroundColor) 8%, transparent);
-    backdrop-filter: blur(2px);
-    font-size: 0.72rem;
-    color: var(--foregroundColor);
+    /* Solid, high-contrast rail: foreground fill, background-coloured marks, so
+       the chevron + count are always legible over any panel behind. */
+    background: color-mix(in srgb, var(--foregroundColor) 88%, transparent);
+    color: var(--backgroundColor);
+    backdrop-filter: blur(3px);
+    font-size: 0.75rem;
     cursor: pointer;
+    transition: transform 220ms ease;
   }
-  .stash-column[data-side="left"] {
-    inset-inline-start: 0;
-    border-inline-end: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 15%, transparent);
+  /* Hidden off-screen on hover devices until revealed by an edge-linger. */
+  .stash-column[data-side="left"]  { inset-inline-start: 0; transform: translateX(-100%); }
+  .stash-column[data-side="right"] { inset-inline-end: 0;  transform: translateX(100%); }
+  .stash-column[data-revealed]      { transform: translateX(0); }
+  /* Touch has no hover to trigger the reveal, so keep the slivers in view. */
+  @media (hover: none) {
+    .stash-column { transform: none; }
   }
-  .stash-column[data-side="right"] {
-    inset-inline-end: 0;
-    border-inline-start: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 15%, transparent);
-  }
-  .stash-column__chevron {
-    font-size: 1.3rem;
-    line-height: 1;
-    opacity: 0.6;
-  }
-  .stash-column__count {
-    font-weight: 600;
-    opacity: 0.8;
-  }
+  .stash-column__chevron { font-size: 1.35rem; line-height: 1; }
+  .stash-column__count { font-weight: 700; }
 
   /* ----- Overlay surfaces (pickers, palette, toast) ----- */
 
-  .snooze-picker,
-  .label-picker,
+  /* Dim backdrop; the dialog card sits at the bottom on phones, centred on
+     wider screens. Clicking the backdrop cancels (handled in the component). */
+  .picker-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 0.75rem;
+    background: rgba(20, 20, 25, 0.55);
+  }
+  @media (min-width: 640px) {
+    .picker-backdrop { justify-content: center; align-items: center; }
+  }
+
+  .picker {
+    width: 100%;
+    max-width: 26rem;
+    margin-inline: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--backgroundColor);
+    color: var(--foregroundColor);
+    border: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 12%, transparent);
+    border-radius: 14px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  }
+  .picker__title { margin: 0; font-size: 1.05rem; font-weight: 600; }
+  .picker__options { display: flex; flex-direction: column; gap: 0.35rem; }
+  .picker__option {
+    padding: 0.7rem 0.9rem;
+    font-size: 1rem;
+    text-align: start;
+    color: inherit;
+    background: color-mix(in srgb, var(--foregroundColor) 6%, transparent);
+    border: 0;
+    border-radius: 9px;
+    cursor: pointer;
+  }
+  .picker__option:hover { background: color-mix(in srgb, var(--foregroundColor) 12%, transparent); }
+  .picker__field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-size: 0.8rem;
+    opacity: 0.85;
+  }
+  .picker__field > input {
+    padding: 0.55rem 0.7rem;
+    font-size: 1rem;
+    color: inherit;
+    background: color-mix(in srgb, var(--foregroundColor) 5%, transparent);
+    border: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 20%, transparent);
+    border-radius: 8px;
+  }
+  .picker__hint { margin: 0; font-size: 0.8rem; color: var(--tone-danger); }
+  .picker__actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.25rem; }
+  .picker__cancel, .picker__primary {
+    padding: 0.55rem 1rem;
+    font-size: 0.95rem;
+    border-radius: 9px;
+    cursor: pointer;
+    border: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 18%, transparent);
+    background: transparent;
+    color: inherit;
+  }
+  .picker__primary {
+    border-color: transparent;
+    background: var(--tone-info);
+    color: #fff;
+    font-weight: 600;
+  }
+  .picker__primary:disabled { opacity: 0.45; cursor: default; }
+
   .command-palette {
     position: fixed;
     inset: 0;
@@ -276,77 +347,10 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    align-items: stretch;
-    justify-content: flex-start;
     padding: 1.5rem;
     background: rgba(20, 20, 25, 0.55);
   }
-
-  .snooze-picker > *,
-  .label-picker > *,
-  .command-palette > * {
-    background: var(--backgroundColor);
-    color: var(--foregroundColor);
-  }
-
-  .snooze-picker > h2,
-  .label-picker > h2 {
-    margin: 0;
-    padding: 1rem;
-    font-size: 1.05rem;
-    border-radius: 8px 8px 0 0;
-  }
-
-  .snooze-picker > button,
-  .label-picker > button {
-    padding: 0.75rem 1rem;
-    font-size: 1rem;
-    border: 0;
-    border-top: var(--borderSize) solid #eee;
-    text-align: left;
-    cursor: pointer;
-    color: var(--foregroundColor);
-  }
-  .snooze-picker > button:first-of-type,
-  .label-picker > button:first-of-type {
-    border-top: 0;
-  }
-  .snooze-picker > button:last-child,
-  .label-picker > button:last-child {
-    border-radius: 0 0 8px 8px;
-    opacity: 0.75;
-  }
-
-  .label-picker > ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-  .label-picker > ul > li > button {
-    width: 100%;
-    padding: 0.75rem 1rem;
-    border: 0;
-    border-top: var(--borderSize) solid #eee;
-    text-align: left;
-    background: inherit;
-    color: inherit;
-    cursor: pointer;
-  }
-  .label-picker > label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    padding: 0.75rem 1rem;
-    border-top: var(--borderSize) solid #eee;
-    font-size: 0.85rem;
-    color: #555;
-  }
-  .label-picker > label > input {
-    padding: 0.5rem 0.75rem;
-    font-size: 1rem;
-    border: var(--borderSize) solid #ddd;
-    border-radius: 4px;
-  }
+  .command-palette > * { background: var(--backgroundColor); color: var(--foregroundColor); }
 
   .command-palette > input {
     padding: 0.85rem 1rem;

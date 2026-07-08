@@ -1,7 +1,12 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Panel } from './types';
 import { useDispatchContext, useDispatcher, useLayoutState } from '../state/useDispatch';
 import { StashColumn } from './StashColumn';
+
+// The slivers stay off-screen until the mouse rests near a screen edge for a
+// beat, so they're a deliberate reveal rather than a permanent chrome band.
+const EDGE_ZONE_PX = 48;   // ~1 HIG unit (44pt), rounded up
+const LINGER_MS = 1000;
 
 export interface PanelRenderProps {
   onOpenThread: (sourceLabel: string, threadId: string) => void;
@@ -54,6 +59,26 @@ export function LayoutContainer({ renderPanel }: LayoutContainerProps) {
   const stashedLeft  = focusIndex;
   const stashedRight = Math.max(0, panels.length - focusIndex - 1);
 
+  // Mouse-linger reveal (hover devices only; touch shows the slivers via CSS).
+  const [edgeReveal, setEdgeReveal] = useState<'left' | 'right' | null>(null);
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function' || !window.matchMedia('(hover: hover)').matches) return;
+    let candidate: 'left' | 'right' | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const onMove = (e: MouseEvent) => {
+      const side = e.clientX <= EDGE_ZONE_PX ? 'left'
+        : e.clientX >= window.innerWidth - EDGE_ZONE_PX ? 'right'
+        : null;
+      if (side === candidate) return;
+      candidate = side;
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (side) timer = setTimeout(() => setEdgeReveal(side), LINGER_MS);
+      else setEdgeReveal(null);
+    };
+    window.addEventListener('mousemove', onMove);
+    return () => { window.removeEventListener('mousemove', onMove); if (timer) clearTimeout(timer); };
+  }, []);
+
   // Slivers live OUTSIDE the scroller as fixed edge overlays, so they stay
   // visible while the panels scroll behind them — persistent "more this way"
   // hints rather than something you only meet at the scroll extremes.
@@ -78,6 +103,7 @@ export function LayoutContainer({ renderPanel }: LayoutContainerProps) {
       <StashColumn
         side="left"
         count={stashedLeft}
+        revealed={edgeReveal === 'left'}
         onActivate={() => {
           void dispatch({ action: 'nav-panel-prev', args: {}, context: ctx });
         }}
@@ -85,6 +111,7 @@ export function LayoutContainer({ renderPanel }: LayoutContainerProps) {
       <StashColumn
         side="right"
         count={stashedRight}
+        revealed={edgeReveal === 'right'}
         onActivate={() => {
           void dispatch({ action: 'nav-panel-next', args: {}, context: ctx });
         }}

@@ -1,10 +1,12 @@
 export interface StashColumnProps {
   side: 'left' | 'right';
   count: number;
+  /** On hover devices, slides in only while true (mouse lingering at the edge). */
+  revealed: boolean;
   onActivate: () => void;
 }
 
-export function StashColumn({ side, count, onActivate }: StashColumnProps) {
+export function StashColumn({ side, count, revealed, onActivate }: StashColumnProps) {
   if (count <= 0) return null;
   // The chevron points the way tapping navigates; the count says how many
   // panels are stacked off-screen that direction.
@@ -14,6 +16,7 @@ export function StashColumn({ side, count, onActivate }: StashColumnProps) {
       type="button"
       className="stash-column"
       data-side={side}
+      data-revealed={revealed ? 'true' : undefined}
       onClick={onActivate}
       aria-label={`${count} panel${count === 1 ? '' : 's'} hidden to the ${side} — tap to go ${side === 'left' ? 'back' : 'forward'}`}
       title={`${count} more this way`}
