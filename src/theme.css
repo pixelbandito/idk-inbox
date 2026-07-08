@@ -28,6 +28,12 @@
     --backgroundColor: lightblue;
     --foregroundColor: #16161d;
     --colorScheme: light dark;
+
+    /* Swipe-reveal tones */
+    --tone-safe: #1a7f37;
+    --tone-danger: #c0392b;
+    --tone-info: #b7791f;
+    --tone-warn: #3f6fd1;
   }
 }
 
@@ -36,5 +42,11 @@
     --backgroundColor: #16161d;
     --foregroundColor: #F4F5FA;
     --colorScheme: dark light;
+
+    /* Swipe-reveal tones */
+    --tone-safe: #2ea043;
+    --tone-danger: #e5534b;
+    --tone-info: #d4a017;
+    --tone-warn: #5a8dee;
   }
 }

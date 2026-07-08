@@ -79,10 +79,8 @@
 
   .inbox-list { list-style: none; padding: 0; margin: 0; }
   .email {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    padding: 0.75rem 0.75rem;
+    position: relative;
+    overflow: hidden;                 /* clip the reveal to the row */
     border-bottom: var(--borderSize) solid #eee;
     /* Reserve horizontal motion for the row's gesture handlers — without this
        a horizontal mouse drag is eaten by the panel container's scroll-snap. */
@@ -91,8 +89,37 @@
     /* Long unbroken tokens (URLs, IDs) must wrap, not blow out the row. */
     overflow-wrap: anywhere;
   }
-  .email--unread { font-weight: 600; background: #f6f9ff; }
-  .email--selected { background: #eef6ff; }
+  .email__reveal {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    padding-inline: 1rem;
+    color: #fff;
+    opacity: 0;
+    /* Icon sits at the edge you pull FROM: end-drag reveals at inline-start. */
+  }
+  .email[data-armed-tone] .email__reveal { opacity: 1; }
+  .email[data-armed-tone="safe"]   .email__reveal { background: var(--tone-safe); }
+  .email[data-armed-tone="danger"] .email__reveal { background: var(--tone-danger); }
+  .email[data-armed-tone="info"]   .email__reveal { background: var(--tone-info); }
+  .email[data-armed-tone="warn"]   .email__reveal { background: var(--tone-warn); }
+  .email[data-pull="end"]   .email__reveal { justify-content: flex-start; }
+  .email[data-pull="start"] .email__reveal { justify-content: flex-end; }
+
+  .email__tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.75rem;
+    background: var(--backgroundColor);
+    transform: translateX(var(--drag-x, 0));
+  }
+  .email--releasing .email__tile { transition: transform 180ms ease; }
+  .email--unread { font-weight: 600; }
+  .email--unread .email__tile { background: #f6f9ff; }
+  .email--selected .email__tile { background: #eef6ff; }
   .email__from { font-size: 0.85rem; color: #555; }
   .email__subject { font-weight: inherit; }
   /* Snippet stays a one-line preview; the thread view shows the full body. */
