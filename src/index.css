@@ -235,6 +235,20 @@
     overflow-wrap: anywhere;
   }
 
+  /* Sanitised HTML mail (rendered in a shadow root inside .email-html__body). */
+  .email-html { margin-top: 0.5rem; }
+  .email-html__body { overflow-x: auto; }
+  .email-html__show-images {
+    margin-bottom: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.85rem;
+    color: inherit;
+    background: color-mix(in srgb, var(--foregroundColor) 8%, transparent);
+    border: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 20%, transparent);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
   .error { color: #c0392b; padding: 0 1rem; }
 
   /* ----- Edge slivers (persistent off-screen-content hints) ----- */

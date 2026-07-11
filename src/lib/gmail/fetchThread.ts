@@ -1,4 +1,4 @@
-import { extractPlainText } from './threadParse';
+import { extractPlainText, extractHtml } from './threadParse';
 
 const BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
@@ -23,7 +23,10 @@ export interface ThreadMessage {
   from: string;
   to: string;
   date: string;
+  /** Plain-text body (from text/plain, or stripped from HTML). */
   body: string;
+  /** Raw HTML body when the message has one; render sanitised. */
+  html: string | null;
 }
 
 export interface ThreadView {
@@ -45,6 +48,7 @@ function parseMessage(raw: RawMessage): ThreadMessage {
     to: header(headers, 'To'),
     date: header(headers, 'Date'),
     body: extractPlainText(raw.payload),
+    html: extractHtml(raw.payload),
   };
 }
 

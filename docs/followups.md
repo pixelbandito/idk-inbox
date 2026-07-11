@@ -20,10 +20,12 @@ ships, drop the bullet rather than checking it off — git history is the record
 
 - **Max widths + enforced wrapping** — done for inbox rows + thread bodies
   (2026-07-07).
-- **HTML mail rendering with sanitization** — thread bodies are still plain
-  text. Rendering real HTML safely needs a sanitizer (DOMPurify or similar) +
-  CSS containment; it's a dependency/security decision, tracked as its own
-  slice.
+- **HTML mail rendering with sanitization** — done (2026-07-10). DOMPurify +
+  shadow-DOM isolation (`src/mail/SanitizedEmailBody`, `lib/mail/sanitizeEmailHtml`);
+  remote images blocked by default with a per-message "Show images" reveal.
+  Follow-up: only `<img>` src/srcset are blocked — CSS `background-image: url()`
+  in inline styles can still load remote assets; strip `url()` from style attrs
+  for a fuller tracking block.
 - Owner wants tight control over markup and CSS — use newest elegant patterns,
   keep simple.
 

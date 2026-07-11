@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { PanelHeader } from '../layout/PanelHeader';
+import { SanitizedEmailBody } from '../mail/SanitizedEmailBody';
 import { fetchThread, type ThreadView } from '../lib/gmail/fetchThread';
 import { useOverscrollProducer } from '../triggers/producers/fromOverscroll';
 import { useTriggerHandler } from '../triggers/useTriggerHandler';
@@ -70,7 +71,9 @@ export function ThreadPanel({
                 <div className="thread__meta">
                   <strong>{m.from}</strong> · {m.date}
                 </div>
-                <pre className="thread__body">{m.body}</pre>
+                {m.html
+                  ? <SanitizedEmailBody html={m.html} />
+                  : <pre className="thread__body">{m.body}</pre>}
               </li>
             ))}
           </ol>
