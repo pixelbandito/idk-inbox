@@ -553,17 +553,46 @@
     cursor: pointer;
   }
 
-  .label-list { list-style: none; padding: 0; margin: 0; }
-  .label-list__item {
-    display: block;
-    width: 100%;
-    padding: 0.75rem 1rem;
+  /* ----- Label hierarchy (collapsible tree) ----- */
+
+  .label-tree, .label-tree__children { list-style: none; padding: 0; margin: 0; }
+
+  .label-tree__row {
+    display: flex;
+    align-items: center;
+    /* Each level indents by its depth; the twist keeps a fixed gutter so names
+       line up regardless of whether a row can expand. */
+    padding-inline-start: calc(var(--depth, 0) * 1rem);
+    border-bottom: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 10%, transparent);
+  }
+
+  .label-tree__twist {
+    flex: 0 0 1.75rem;
+    padding: 0.75rem 0;
     border: 0;
-    border-bottom: var(--borderSize) solid #eee;
+    background: transparent;
+    color: color-mix(in srgb, var(--foregroundColor) 55%, var(--backgroundColor));
+    font-size: 0.8rem;
+    text-align: center;
+    cursor: pointer;
+  }
+  .label-tree__twist[data-empty] { cursor: default; }
+
+  .label-tree__name {
+    flex: 1;
+    padding: 0.75rem 1rem 0.75rem 0;
+    border: 0;
     background: transparent;
     color: var(--foregroundColor);
     font-size: 1rem;
     text-align: start;
     cursor: pointer;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  /* A synthetic parent is an organiser, not a list you can open — read it dimmer. */
+  .label-tree__name--parent {
+    color: color-mix(in srgb, var(--foregroundColor) 70%, var(--backgroundColor));
+    font-weight: 600;
   }
 }
