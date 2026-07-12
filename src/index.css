@@ -244,6 +244,24 @@
     overflow-wrap: anywhere;
   }
 
+  /* Overscroll-to-close affordance, pinned to the bottom of the thread body. */
+  .thread__close-hint {
+    position: sticky;
+    bottom: 0;
+    padding: 0.6rem 1rem;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--backgroundColor);
+    background: color-mix(in srgb, var(--foregroundColor) 70%, transparent);
+    backdrop-filter: blur(2px);
+    transition: background-color 120ms ease;
+  }
+  .thread__close-hint[data-armed] {
+    background: var(--tone-info);
+    color: #fff;
+    font-weight: 600;
+  }
+
   /* Sanitised HTML mail (rendered in a shadow root inside .email-html__body). */
   .email-html { margin-top: 0.5rem; }
   .email-html__body { overflow-x: auto; }

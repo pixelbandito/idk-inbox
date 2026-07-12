@@ -22,8 +22,9 @@ const VALID_SURFACES: ReadonlySet<string> = new Set<Surface>([
   'row', 'panel-header', 'panel-body', 'document', 'overlay',
 ]);
 
-/** Threshold past which useOverscroll fires (pixels of overscroll). */
-const OVERSCROLL_PX = 80;
+/** Deliberate pull distance (px) required to close on release. Higher than the
+ *  old 80 so a quick scroll-to-bottom doesn't overshoot into a close. */
+const OVERSCROLL_PX = 130;
 
 function resolveSurface(el: Element | null): { surface: Surface; surfaceEl: Element } {
   if (el) {
@@ -57,6 +58,7 @@ function distanceFor(pixels: number, surfaceSize: number): Distance {
 export function useOverscrollProducer(
   ref:     RefObject<HTMLElement | null>,
   onEvent: (e: AbstractEvent) => void,
+  onProgress?: (fraction: number) => void,
 ): void {
   const onFire = useCallback(() => {
     const el = ref.current;
@@ -74,5 +76,5 @@ export function useOverscrollProducer(
     });
   }, [ref, onEvent]);
 
-  useOverscroll(ref, { edge: 'bottom', minPx: OVERSCROLL_PX, onFire });
+  useOverscroll(ref, { edge: 'bottom', minPx: OVERSCROLL_PX, onFire, onProgress });
 }

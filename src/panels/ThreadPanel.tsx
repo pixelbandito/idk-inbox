@@ -35,6 +35,7 @@ export function ThreadPanel({
 }: ThreadPanelProps) {
   const [view, setView] = useState<ThreadView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [closePull, setClosePull] = useState(0); // 0..1 overscroll-to-close progress
   const bodyRef = useRef<HTMLDivElement>(null);
   const onTrigger = useTriggerHandler(PANEL_BODY_NEW_PIPELINE);
 
@@ -54,7 +55,7 @@ export function ThreadPanel({
     });
   }, [threadId, getToken]);
 
-  useOverscrollProducer(bodyRef, onTrigger);
+  useOverscrollProducer(bodyRef, onTrigger, setClosePull);
 
   return (
     <>
@@ -77,6 +78,16 @@ export function ThreadPanel({
               </li>
             ))}
           </ol>
+        )}
+        {closePull > 0 && (
+          <div
+            className="thread__close-hint"
+            data-armed={closePull >= 1 ? 'true' : undefined}
+            style={{ opacity: Math.min(1, 0.4 + closePull * 0.6) }}
+            aria-hidden="true"
+          >
+            {closePull >= 1 ? 'Release to close ▾' : 'Keep pulling to close ▾'}
+          </div>
         )}
       </div>
     </>
