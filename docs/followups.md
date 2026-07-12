@@ -49,6 +49,30 @@ Deferred / tunable:
   no sample/demo data path exists, so the signed-out flow can't be exercised
   without re-auth.
 
+## Requested 2026-07-12 (in-progress batch)
+
+Done: auth-persists-across-refresh; swipe-removal fly-off-then-collapse.
+
+Queued, roughly small → large:
+- **Active-panel affordance** — a subtle indicator (border/header tint) on the
+  nominally active panel. Small.
+- **Gesture on a non-active panel activates it** — extend the scroll→active
+  logic so a tap/swipe on a non-focused panel focuses it. Small.
+- **Overscroll-to-close thread: affordance + min distance/duration** — quick
+  scroll-to-bottom currently closes thread detail by accident. Add a visible
+  "pull to close" affordance and a distance/dwell threshold. Small-medium.
+- **Overscroll-to-refresh** on inbox + tag threadlists. Medium.
+- **Animate panels in/out of view** when opened/closed. Medium.
+- **Label / snoozed pills on thread tiles** — small colour-coded tags from the
+  message's labelIds (already fetched). In a tag list, hide that tag's own pill
+  but show others. Medium.
+- **Labels panel: collapsible tree** (Gmail labels are `a/b/c` hierarchical). Medium-large.
+- **Snoozed panel: calendar view** optimised for narrow screens, with a
+  "+N / view as list" overflow affordance. NEEDS a viz decision. Large.
+- **Mobile design pass** + confirm the offline/local-install PWA story: install
+  once from a trusted local origin, cache only the app shell (not API calls),
+  still reach Gmail/Sheets/Apps-Script at runtime. Large; part design decision.
+
 ## Deferred from the functional-triage review (2026-07-07)
 
 - **No optimistic row removal / swipe visual.** Between finger-lift and the
