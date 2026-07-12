@@ -6,6 +6,7 @@ import { resetResolvedSuggestions } from '../lib/heuristics/resolvedSuggestions'
 import { resetAutoArchiveRules } from '../lib/rules/autoArchive';
 import { resetThreadSummaryCache } from '../state/threadSummaryCache';
 import { resetAppLabelResolver } from '../lib/gmail/appLabelResolver';
+import { resetProcessorSettings } from '../lib/automation/settings';
 
 export function resetLocalState(): void {
   resetTriageLog();
@@ -13,4 +14,5 @@ export function resetLocalState(): void {
   resetAutoArchiveRules();
   resetThreadSummaryCache();
   resetAppLabelResolver();
+  resetProcessorSettings();
 }

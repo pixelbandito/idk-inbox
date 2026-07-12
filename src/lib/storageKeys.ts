@@ -12,6 +12,8 @@ export const STORAGE_KEYS = {
   resolvedSuggestions: 'idk-inbox:dismissed-suggestions',
   /** User-accepted auto-archive rules. */
   autoArchiveRules: 'idk-inbox:auto-archive-rules',
+  /** Per-processor on/off overrides (absence means "enabled"). */
+  automationEnabled: 'idk-inbox:automation-enabled',
 } as const;
 
 // Account-scoped keys: Gmail label ids, sender history, and rules all belong to
@@ -21,6 +23,7 @@ const ACCOUNT_SCOPED_KEYS: string[] = [
   STORAGE_KEYS.triageLog,
   STORAGE_KEYS.resolvedSuggestions,
   STORAGE_KEYS.autoArchiveRules,
+  STORAGE_KEYS.automationEnabled,
 ];
 
 export function clearAccountScopedStorage(): void {

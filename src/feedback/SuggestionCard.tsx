@@ -3,6 +3,7 @@ import { useDispatchContext, useDispatcher } from '../state/useDispatch';
 import { senderStats, type SenderStats } from '../lib/heuristics/triageLog';
 import { findFatiguedSenders, FATIGUE_WINDOW_DAYS } from '../lib/heuristics/senderFatigue';
 import { resolveSuggestionFor, isSuggestionResolved } from '../lib/heuristics/resolvedSuggestions';
+import { isProcessorEnabled } from '../lib/automation/settings';
 import { addAutoArchiveRule } from '../lib/rules/autoArchive';
 import { isPlainEmailAddress, senderAddressOf } from '../lib/gmail/address';
 import type { EmailSummary } from '../lib/gmail/types';
@@ -26,6 +27,8 @@ export function SuggestionCard({ emails }: SuggestionCardProps) {
   // reads localStorage and "now".
   useEffect(() => {
     queueMicrotask(() => {
+      // Respect the user's switch in Settings → the heuristic goes quiet.
+      if (!isProcessorEnabled('sender-fatigue')) { setSuggestion(null); return; }
       const fatigued = findFatiguedSenders(senderStats(FATIGUE_WINDOW_DAYS));
       setSuggestion(fatigued.find((f) => !isSuggestionResolved(f.sender)) ?? null);
     });

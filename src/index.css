@@ -613,6 +613,165 @@
     cursor: pointer;
   }
 
+  /* ----- Settings panel ----- */
+
+  .settings { padding: 0.5rem 0; }
+
+  .settings-section { border-bottom: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 10%, transparent); }
+  .settings-section__header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+    padding: 0.9rem 1rem;
+    border: 0;
+    background: transparent;
+    color: var(--foregroundColor);
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-align: start;
+    cursor: pointer;
+  }
+  .settings-section__twist {
+    flex: 0 0 1rem;
+    font-size: 0.75rem;
+    color: color-mix(in srgb, var(--foregroundColor) 55%, var(--backgroundColor));
+  }
+  .settings-section__body { padding: 0 1rem 1rem; }
+
+  /* Automation hub */
+  .automation__intro {
+    margin: 0 0 0.75rem;
+    font-size: 0.9rem;
+    color: color-mix(in srgb, var(--foregroundColor) 70%, var(--backgroundColor));
+  }
+  .processor {
+    padding: 0.85rem;
+    margin-bottom: 0.75rem;
+    border: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 14%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--foregroundColor) 4%, transparent);
+  }
+  /* A disabled processor recedes so "off" reads at a glance. */
+  .processor:not([data-enabled]) { opacity: 0.6; }
+  .processor__head { display: flex; align-items: flex-start; gap: 0.75rem; justify-content: space-between; }
+  .processor__name {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0 0 0.2rem;
+    font-size: 0.95rem;
+  }
+  .processor__kind {
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--foregroundColor) 55%, var(--backgroundColor));
+  }
+  .processor__summary { margin: 0; font-size: 0.9rem; }
+  .processor__detail {
+    margin: 0.5rem 0 0;
+    font-size: 0.82rem;
+    color: color-mix(in srgb, var(--foregroundColor) 62%, var(--backgroundColor));
+  }
+
+  .rule-list { list-style: none; margin: 0.6rem 0 0; padding: 0; }
+  .rule-list__empty {
+    margin: 0.6rem 0 0;
+    font-size: 0.82rem;
+    color: color-mix(in srgb, var(--foregroundColor) 55%, var(--backgroundColor));
+  }
+  .rule-list__item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-top: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 10%, transparent);
+  }
+  .rule-list__sender { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 0.88rem; }
+  .rule-list__since {
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    color: color-mix(in srgb, var(--foregroundColor) 50%, var(--backgroundColor));
+  }
+  .rule-list__remove {
+    flex: 0 0 auto;
+    min-height: 2.25rem;
+    padding: 0 0.7rem;
+    border: var(--borderSize) solid color-mix(in srgb, var(--tone-danger) 55%, transparent);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--tone-danger);
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
+  /* On/off switch */
+  .toggle {
+    flex: 0 0 auto;
+    width: 2.6rem;
+    height: 1.5rem;
+    padding: 2px;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--foregroundColor) 25%, transparent);
+    cursor: pointer;
+    transition: background 140ms ease;
+  }
+  .toggle[data-on] { background: var(--tone-safe); }
+  .toggle__knob {
+    display: block;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 140ms ease;
+  }
+  .toggle[data-on] .toggle__knob { transform: translateX(1.1rem); }
+
+  /* Shortcuts reference */
+  .shortcuts__group-title {
+    margin: 0.75rem 0 0.4rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--foregroundColor) 60%, var(--backgroundColor));
+  }
+  .shortcuts__gesture-group {
+    margin-bottom: 0.5rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--foregroundColor) 5%, transparent);
+  }
+  .shortcuts__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.35rem 0;
+    font-size: 0.88rem;
+  }
+  .shortcuts__keys {
+    flex: 0 0 auto;
+    color: color-mix(in srgb, var(--foregroundColor) 65%, var(--backgroundColor));
+    font-size: 0.82rem;
+  }
+  kbd.shortcuts__keys {
+    padding: 0.1rem 0.4rem;
+    border: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 22%, transparent);
+    border-radius: 5px;
+    font-family: ui-monospace, monospace;
+  }
+  .shortcuts__action { flex: 1; text-align: end; }
+  .shortcuts__note {
+    margin: 0.75rem 0 0;
+    font-size: 0.78rem;
+    font-style: italic;
+    color: color-mix(in srgb, var(--foregroundColor) 55%, var(--backgroundColor));
+  }
+
   /* ----- Snoozed agenda (by-day calendar view) ----- */
 
   .agenda { padding-bottom: 1rem; }
