@@ -553,6 +553,34 @@
     cursor: pointer;
   }
 
+  /* ----- Snoozed agenda (by-day calendar view) ----- */
+
+  .agenda { padding-bottom: 1rem; }
+  .agenda__heading {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    margin: 0;
+    padding: 0.4rem 1rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: color-mix(in srgb, var(--foregroundColor) 65%, var(--backgroundColor));
+    background: color-mix(in srgb, var(--foregroundColor) 6%, var(--backgroundColor));
+    border-bottom: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 10%, transparent);
+  }
+  .agenda__more {
+    display: block;
+    width: 100%;
+    padding: 0.6rem 1rem;
+    border: 0;
+    background: transparent;
+    color: var(--tone-info);
+    font-size: 0.85rem;
+    text-align: start;
+    cursor: pointer;
+  }
+
   /* ----- Label hierarchy (collapsible tree) ----- */
 
   .label-tree, .label-tree__children { list-style: none; padding: 0; margin: 0; }

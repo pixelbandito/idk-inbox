@@ -12,6 +12,9 @@ import type { LabelPill } from '../lib/gmail/labelDirectory';
 import { Icon } from '../ui/icons';
 import { fetchByLabel } from '../lib/gmail/fetchByLabel';
 import { loadLabelDirectory, pillsFor } from '../lib/gmail/labelDirectory';
+import { SNOOZED_LABEL } from '../lib/gmail/labelBootstrap';
+import { groupByWakeDay } from '../lib/snooze/agenda';
+import { SnoozedAgenda } from './SnoozedAgenda';
 import { cacheThreadSummaries } from '../state/threadSummaryCache';
 import { recordSightings } from '../lib/heuristics/triageLog';
 import { SuggestionCard } from '../feedback/SuggestionCard';
@@ -178,6 +181,9 @@ export function ThreadlistPanel({
   const bodyRef = useRef<HTMLDivElement>(null);
   const [pullRefresh, setPullRefresh] = useState(0); // 0..1 pull-to-refresh progress
   const [directory, setDirectory] = useState<Map<string, string>>(() => new Map());
+  // The Snoozed list defaults to a by-day agenda; a toggle drops to the flat list.
+  const isSnoozed = label === SNOOZED_LABEL;
+  const [asList, setAsList] = useState(false);
 
   useEffect(() => {
     const token = getToken();
@@ -246,6 +252,11 @@ export function ThreadlistPanel({
         title={displayName}
         actions={
           <>
+            {isSnoozed && (
+              <button onClick={() => setAsList((v) => !v)}>
+                {asList ? 'Calendar' : 'List'}
+              </button>
+            )}
             <button onClick={() => void load()} disabled={loading} aria-label="Refresh">
               {loading ? '…' : '↻'}
             </button>
@@ -275,24 +286,33 @@ export function ThreadlistPanel({
         )}
         {(() => {
           const shown = emails.filter((e) => !removed.has(e.threadId));
-          return shown.length === 0 && !loading && !error ? (
-            <p style={{ padding: '1rem', color: '#888' }}>
-              {label === 'INBOX' ? 'Inbox zero 🎉' : 'No messages here.'}
-            </p>
-          ) : (
-            <ul className="inbox-list">
-              {shown.map((e) => (
-                <Row
-                  key={e.id}
-                  email={e}
-                  isSelected={selectionSet.has(e.threadId)}
-                  pills={pillsFor(e.labels, directory, label)}
-                  removesFromList={removesFromList}
-                  onCommitted={onCommitted}
-                />
-              ))}
-            </ul>
+          const renderRow = (e: EmailSummary) => (
+            <Row
+              key={e.id}
+              email={e}
+              isSelected={selectionSet.has(e.threadId)}
+              pills={pillsFor(e.labels, directory, label)}
+              removesFromList={removesFromList}
+              onCommitted={onCommitted}
+            />
           );
+          if (shown.length === 0 && !loading && !error) {
+            return (
+              <p style={{ padding: '1rem', color: '#888' }}>
+                {label === 'INBOX' ? 'Inbox zero 🎉' : 'No messages here.'}
+              </p>
+            );
+          }
+          if (isSnoozed && !asList) {
+            return (
+              <SnoozedAgenda
+                days={groupByWakeDay(shown, directory)}
+                now={new Date()}
+                renderEmail={renderRow}
+              />
+            );
+          }
+          return <ul className="inbox-list">{shown.map(renderRow)}</ul>;
         })()}
       </div>
     </>
