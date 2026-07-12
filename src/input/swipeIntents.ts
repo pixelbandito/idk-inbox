@@ -41,6 +41,13 @@ export const ACTION_PRESENTATION: Record<string, ActionPresentation> = {
 
 // Thresholds are intentionally low so the light action arms with a short pull;
 // the heavy action still needs a clearly longer, deliberate drag. Tune here.
+// Actions that open a picker instead of writing immediately. A swipe to one of
+// these springs the tile back and lets the picker take over, rather than flying
+// the row away (the write happens later, from the picker).
+export const ELICITING_ACTIONS: ReadonlySet<string> = new Set([
+  'snooze-thread', 'add-label-thread', 'remove-label-thread',
+]);
+
 export const ROW_SWIPE_BINDINGS: SwipeBinding[] = [
   { direction: 'end',   armAtFraction: 0.15, action: 'archive-thread' },
   { direction: 'end',   armAtFraction: 0.50, action: 'delete-thread' },

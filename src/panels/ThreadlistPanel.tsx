@@ -40,28 +40,35 @@ export interface ThreadlistPanelProps {
 interface RowProps {
   email: EmailSummary;
   isSelected: boolean;
+  removesFromList: (action: ActionId) => boolean;
   onCommitted: (threadId: string, action: ActionId) => void;
 }
 
-function Row({ email, isSelected, onCommitted }: RowProps) {
+// Fly-off slide + vertical collapse duration; the row is dropped from the list
+// after this so the animation is seen before the row unmounts.
+const EXIT_MS = 340;
+
+function Row({ email, isSelected, removesFromList, onCommitted }: RowProps) {
   const ref = useRef<HTMLLIElement>(null);
   const onTrigger = useTriggerHandler(ROW_TAP_PIPELINE);
   const dispatch = useDispatcher();
   const ctx = useDispatchContext();
-  // A committed write collapses the row away; the panel also drops it optimistically.
+  // A committed removing write flies the tile off then collapses the row; after
+  // the animation the panel drops it from the list.
   const [filing, setFiling] = useState(false);
+  const committedActionRef = useRef<ActionId | null>(null);
   const { reveal, commitReveal } = useRowSwipe(ref, {
-    onTrigger, dispatch, ctx,
-    onCommit: (action) => { setFiling(true); onCommitted(email.threadId, action); },
+    onTrigger, dispatch, ctx, removesFromList,
+    onCommit: (action) => { committedActionRef.current = action; setFiling(true); },
   });
 
-  // Safety: if the write failed (row never removed), un-collapse after the
-  // animation so the thread isn't left invisible-but-present.
   useEffect(() => {
     if (!filing) return;
-    const t = setTimeout(() => setFiling(false), 1500);
+    const t = setTimeout(() => {
+      if (committedActionRef.current) onCommitted(email.threadId, committedActionRef.current);
+    }, EXIT_MS);
     return () => clearTimeout(t);
-  }, [filing]);
+  }, [filing, email.threadId, onCommitted]);
 
   const className = [
     'email',
@@ -128,11 +135,18 @@ export function ThreadlistPanel({
   const ctx = useDispatchContext();
   const selectionSet = new Set(ctx.selection);
 
+  // Which swipe actions take a thread out of THIS list. Only these fly the row
+  // away; e.g. archiving from a tag list keeps the thread in that tag.
+  const removesFromList = useCallback((action: ActionId) => {
+    if (label === 'INBOX') return INBOX_REMOVING_ACTIONS.has(action);
+    return action === 'delete-thread';
+  }, [label]);
+
   const onCommitted = useCallback((threadId: string, action: ActionId) => {
-    if (label === 'INBOX' && INBOX_REMOVING_ACTIONS.has(action)) {
+    if (removesFromList(action)) {
       setRemoved((prev) => new Set(prev).add(threadId));
     }
-  }, [label]);
+  }, [removesFromList]);
   const { threadsVersion, labelVersions } = useRefreshState();
   // Any thread write (or a refresh-panel aimed at this label) invalidates the
   // list; combining the two versions gives the effect one number to watch.
@@ -232,6 +246,7 @@ export function ThreadlistPanel({
                   key={e.id}
                   email={e}
                   isSelected={selectionSet.has(e.threadId)}
+                  removesFromList={removesFromList}
                   onCommitted={onCommitted}
                 />
               ))}

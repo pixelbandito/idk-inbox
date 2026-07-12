@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, fireEvent, act, waitFor } from '@testing-library/react';
+import { render, fireEvent, act } from '@testing-library/react';
 import { useRef } from 'react';
 import { useRowSwipe, type RowSwipeApi, type RowSwipeOptions } from './useRowSwipe';
 import type { ReadonlyContext } from './types';
@@ -43,39 +43,47 @@ function swipe(el: HTMLElement, dx: number) {
 }
 
 describe('useRowSwipe — pointer drag-to-commit', () => {
-  it('dispatches archive-thread targeting the row on a ~30% drag release', () => {
+  it('dispatches archive-thread and flies the tile off in the action colour', () => {
     const { el, onTrigger, dispatch } = mountRow();
     swipe(el, 120); // 0.30 — past the 0.15 tier-1 threshold
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
       action: 'archive-thread', args: { targets: ['t1'] },
     }));
     expect(onTrigger).not.toHaveBeenCalled();
-    // Tile is reset to centre on commit (no lingering slid-off reveal).
+    // Removing write: tile slides the rest of the way off, coloured by the action.
+    expect(el.style.getPropertyValue('--drag-x')).toBe('400px');
+    expect(el.dataset.armedTone).toBe('safe');
+  });
+
+  it('fires onCommit for a removing write', () => {
+    const onCommit = vi.fn();
+    const { el } = mountRow({ onCommit });
+    swipe(el, 120);
+    expect(onCommit).toHaveBeenCalledWith('archive-thread');
+  });
+
+  it('springs back (no fly-off, no onCommit) when the action keeps the thread here', () => {
+    const onCommit = vi.fn();
+    const { el, dispatch } = mountRow({ onCommit, removesFromList: () => false });
+    swipe(el, 120);
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ action: 'archive-thread' }));
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(el.style.getPropertyValue('--drag-x')).toBe('0px'); // sprang back
+  });
+
+  it('an eliciting swipe (snooze) springs back and does not fly off / onCommit', () => {
+    const onCommit = vi.fn();
+    const { el, dispatch } = mountRow({ onCommit });
+    swipe(el, -120); // left ~30% → snooze-thread (opens a picker)
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ action: 'snooze-thread' }));
+    expect(onCommit).not.toHaveBeenCalled();
     expect(el.style.getPropertyValue('--drag-x')).toBe('0px');
-    expect(el.dataset.armedTone).toBeUndefined();
   });
 
   it('dispatches delete-thread past the ~50% threshold', () => {
     const { el, dispatch } = mountRow();
     swipe(el, 240); // 0.60
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ action: 'delete-thread' }));
-  });
-
-  it('fires onCommit(action) after the write resolves', async () => {
-    const onCommit = vi.fn();
-    const { el } = mountRow({ onCommit });
-    swipe(el, 120);
-    await waitFor(() => expect(onCommit).toHaveBeenCalledWith('archive-thread'));
-  });
-
-  it('does not fire onCommit when the write was a no-op picker (no affectedTargets)', async () => {
-    const onCommit = vi.fn();
-    const dispatch = vi.fn().mockResolvedValue({ ok: true, description: 'Picker opened' });
-    const { el } = mountRow({ onCommit, dispatch });
-    swipe(el, 120);
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(onCommit).not.toHaveBeenCalled();
   });
 
   it('dispatches nothing and springs back under the tier-1 threshold', () => {

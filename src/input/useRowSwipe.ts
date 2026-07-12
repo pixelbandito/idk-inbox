@@ -19,7 +19,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObje
 import { useGesture, type ClickEvent, type PressEvent } from './useGesture';
 import { logicalInlineDirection, inlineFraction } from './swipeGeometry';
 import {
-  resolveSwipeIntent, ACTION_PRESENTATION, ROW_SWIPE_BINDINGS,
+  resolveSwipeIntent, ACTION_PRESENTATION, ROW_SWIPE_BINDINGS, ELICITING_ACTIONS,
   type IconName, type SwipeBinding,
 } from './swipeIntents';
 import { targetFromRow, targetsFromSelection } from './helpers';
@@ -34,7 +34,9 @@ export interface RowSwipeOptions {
   ctx:       ReadonlyContext;
   /** Override the swipe slots (defaults to ROW_SWIPE_BINDINGS). */
   bindings?: SwipeBinding[];
-  /** Called once a swipe produces a real write (not a picker), with its action. */
+  /** Whether an action takes the thread out of THIS list — gates the fly-off. */
+  removesFromList?: (action: ActionId) => boolean;
+  /** Called when the row should animate out (an immediate, list-removing write). */
   onCommit?: (action: ActionId) => void;
 }
 
@@ -115,21 +117,40 @@ export function useRowSwipe(
     }
   }, []);
 
-  // Reset the tile to centre, clear the armed colour, then dispatch. The row's
-  // file-away collapse (onCommit) fires only for a real write, so a snooze /
-  // label swipe that merely opens a picker doesn't wrongly collapse the row.
+  // Dispatch the swipe. Three outcomes:
+  //   - Eliciting action (opens a picker) → spring the tile back; the picker
+  //     takes over and writes later.
+  //   - Immediate write that removes the thread from this list → fly the tile
+  //     the rest of the way off in the action colour, then onCommit collapses
+  //     the row (optimistic; the error toast covers a rare failed write).
+  //   - Immediate write that keeps the thread here (e.g. archive from a tag
+  //     list) → spring back; nothing to animate away.
   const commitCommand = useCallback(
-    (el: HTMLElement, command: { action: ActionId; args: Record<string, unknown> }) => {
+    (el: HTMLElement, command: { action: ActionId; args: Record<string, unknown> }, awaySign: number) => {
       armedActionRef.current = null;
-      el.style.setProperty('--row-h', `${el.offsetHeight}px`);
-      el.classList.add('email--releasing');
-      clearPullVisuals(el);
-      const { dispatch, ctx, onCommit } = optsRef.current;
-      void dispatch({ action: command.action, args: command.args, context: ctx }).then((result) => {
-        if (result.ok && result.affectedTargets && result.affectedTargets.length > 0) {
-          onCommit?.(command.action);
-        }
-      });
+      const { dispatch, ctx, onCommit, removesFromList } = optsRef.current;
+      const fire = () => void dispatch({ action: command.action, args: command.args, context: ctx });
+
+      if (ELICITING_ACTIONS.has(command.action)) {
+        el.classList.add('email--releasing');
+        clearPullVisuals(el);
+        fire();
+        return;
+      }
+      const removes = removesFromList ? removesFromList(command.action) : true;
+      if (removes) {
+        const p = ACTION_PRESENTATION[command.action];
+        el.style.setProperty('--row-h', `${el.offsetHeight}px`);
+        el.dataset.pull = awaySign >= 0 ? 'end' : 'start';
+        if (p) { el.dataset.armedTone = p.tone; el.dataset.armedIcon = p.icon; }
+        el.classList.add('email--releasing');
+        el.style.setProperty('--drag-x', `${awaySign * el.clientWidth}px`);
+        onCommit?.(command.action);
+      } else {
+        el.classList.add('email--releasing');
+        clearPullVisuals(el);
+      }
+      fire();
     },
     [],
   );
@@ -150,7 +171,7 @@ export function useRowSwipe(
     const picked = r.actions.find((a) => a.action === action);
     revealRef.current = null;
     setReveal(null);
-    if (picked) commitCommand(el, { action: picked.action, args: picked.args });
+    if (picked) commitCommand(el, { action: picked.action, args: picked.args }, r.direction === 'end' ? 1 : -1);
   }, [ref, commitCommand]);
 
   const cancelReveal = useCallback(() => { closeReveal(ref.current); }, [ref, closeReveal]);
@@ -178,7 +199,7 @@ export function useRowSwipe(
       return;
     }
     const targets = rowTargets(el, optsRef.current.ctx);
-    commitCommand(el, { action: intent.binding.action, args: { targets, ...intent.binding.args } });
+    commitCommand(el, { action: intent.binding.action, args: { targets, ...intent.binding.args } }, Math.sign(dx) || 1);
   }, [commitCommand]);
 
   const onDrag = useCallback((dx: number, dy: number) => {

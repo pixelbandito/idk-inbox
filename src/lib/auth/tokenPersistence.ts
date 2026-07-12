@@ -30,7 +30,8 @@ export function loadPersistedToken(now: number = Date.now()): PersistedToken | n
     const parsed = JSON.parse(raw) as PersistedToken;
     if (
       typeof parsed.accessToken !== 'string' ||
-      typeof parsed.expiresAt !== 'number'
+      !parsed.accessToken ||
+      !Number.isFinite(parsed.expiresAt)
     ) {
       ls.removeItem(KEY);
       return null;
