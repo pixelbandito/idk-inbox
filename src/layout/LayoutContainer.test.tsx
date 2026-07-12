@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import { LayoutContainer, type PanelRenderProps } from './LayoutContainer';
 import { DispatchProvider } from '../state/DispatchProvider';
@@ -55,6 +55,22 @@ describe('LayoutContainer', () => {
     expect(sections[1].getAttribute('data-kind')).toBe('threadlist');
     expect(sections[1].getAttribute('data-label')).toBe('INBOX');
     expect(sections[2].getAttribute('data-label')).toBe('idk-inbox/Snoozed');
+  });
+
+  it('scrolls the focused panel into view instantly, not smoothly', () => {
+    // Smooth programmatic scrolls get pinned by the scroller's
+    // `scroll-snap-stop: always`, leaving the focused panel just off-screen —
+    // the regression that broke opening a thread. Instant snaps straight to it.
+    const spy = vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {});
+    render(
+      <DispatchProvider initialPanels={initial}>
+        <LayoutContainer renderPanel={stubRender} />
+      </DispatchProvider>,
+    );
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ inline: 'start', behavior: 'instant' }),
+    );
+    spy.mockRestore();
   });
 
   it('marks the focused panel active and activates a panel on pointer-down', async () => {

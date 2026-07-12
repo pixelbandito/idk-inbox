@@ -10,6 +10,9 @@ const LINGER_MS = 1000;
 // Matches the panelExit animation in index.css; the close is dispatched only
 // after the panel has finished collapsing so the exit is actually seen.
 const PANEL_EXIT_MS = 260;
+// How long after a programmatic scroll to ignore scroll events, so the scroll
+// listener doesn't mistake our own in-flight scroll for a user snap.
+const PROGRAMMATIC_SCROLL_MS = 500;
 
 export interface PanelRenderProps {
   onOpenThread: (sourceLabel: string, threadId: string) => void;
@@ -51,6 +54,10 @@ export function LayoutContainer({ renderPanel }: LayoutContainerProps) {
   // Set when a focus change came from manual scrolling, so the scroll-into-view
   // effect doesn't fight the user's own scroll.
   const scrollDrivenRef = useRef(false);
+  // While we're running our own scroll-into-view, ignore the scroll events it
+  // emits — otherwise the scroll listener reads a half-finished position and
+  // yanks focus back, so the focused panel never actually lands.
+  const programmaticUntilRef = useRef(0);
 
   // Give a freshly-opened panel the enter animation while the initial set (and
   // any already-present panels) mount quietly. Tracked by key against the DOM
@@ -83,13 +90,17 @@ export function LayoutContainer({ renderPanel }: LayoutContainerProps) {
     }
   };
 
-  // Smooth-scroll the focused panel into view when focus changes programmatically.
+  // Scroll the focused panel into view when focus changes programmatically.
   useEffect(() => {
     if (scrollDrivenRef.current) { scrollDrivenRef.current = false; return; }
     const sections = containerRef.current?.querySelectorAll('section.panel');
     const el = sections?.[focusIndex];
     if (el && el instanceof HTMLElement) {
-      el.scrollIntoView({ inline: 'start', behavior: 'smooth' });
+      programmaticUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_MS;
+      // Instant, not smooth: under the scroller's `scroll-snap-stop: always`, a
+      // smooth programmatic scroll gets pinned and never lands, so an opened
+      // panel would stay just off-screen. Instant snaps straight to it.
+      el.scrollIntoView({ inline: 'start', behavior: 'instant' });
     }
   }, [focusIndex]);
 
@@ -103,6 +114,9 @@ export function LayoutContainer({ renderPanel }: LayoutContainerProps) {
     const onScroll = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
+        // Only a user's own snap should move focus; skip the scroll events our
+        // own scroll-into-view emits, or it fights itself and never settles.
+        if (Date.now() < programmaticUntilRef.current) return;
         const sections = container.querySelectorAll('section.panel');
         if (sections.length === 0) return;
         const start = container.getBoundingClientRect().left;
