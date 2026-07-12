@@ -14,12 +14,12 @@ export function SettingsPanel({ signedIn, onSignIn, onSignOut }: SettingsPanelPr
         {signedIn ? (
           <>
             <p>Signed in.</p>
-            <button onClick={onSignOut}>Sign out</button>
+            <button className="btn btn--ghost" onClick={onSignOut}>Sign out</button>
           </>
         ) : (
           <>
             <p>Not signed in.</p>
-            <button onClick={onSignIn}>Sign in with Google</button>
+            <button className="btn btn--primary" onClick={onSignIn}>Sign in with Google</button>
           </>
         )}
       </div>

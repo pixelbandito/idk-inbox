@@ -18,7 +18,39 @@
   body {
     background-color: var(--backgroundColor);
     color: var(--foregroundColor);
+    /* Don't let mobile Safari bump our type on rotate. */
+    -webkit-text-size-adjust: 100%;
   }
+
+  /* Controls inherit the app font by default rather than the UA's. */
+  button, input, select, textarea { font: inherit; }
+  /* Comfortable, drag-free tapping across the app's touch surfaces. */
+  button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+
+  /* Reusable action button. --primary is the one call-to-action per view; --ghost
+     is a quieter, bordered secondary. Both meet the 44px touch-target minimum. */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    padding: 0.5rem 1rem;
+    border: var(--borderSize) solid transparent;
+    border-radius: 10px;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn--primary {
+    background: var(--tone-warn);
+    color: #fff;
+  }
+  .btn--ghost {
+    background: transparent;
+    border-color: color-mix(in srgb, var(--foregroundColor) 25%, transparent);
+    color: var(--foregroundColor);
+  }
+  .btn:active { transform: translateY(1px); }
 
   /* ----- Layout primitive ----- */
 
@@ -56,7 +88,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.75rem 1rem;
+    /* Clear the notch on a standalone phone; falls back to the base padding. */
+    padding: max(0.75rem, env(safe-area-inset-top)) 1rem 0.75rem;
     border-bottom: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 12%, transparent);
     background: var(--backgroundColor);
     touch-action: pan-y pinch-zoom;
@@ -103,7 +136,32 @@
 
   .panel__actions {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.25rem;
+    flex: 0 0 auto;
+  }
+  /* Comfortable, thumb-sized tap targets for the header controls (↻, ×, view
+     toggle) — the bare UA button is too small to hit reliably on a phone. */
+  .panel__actions > button {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    padding: 0 0.6rem;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--foregroundColor);
+    font: inherit;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .panel__actions > button:disabled { opacity: 0.4; cursor: default; }
+  @media (hover: hover) {
+    .panel__actions > button:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--foregroundColor) 10%, transparent);
+    }
+  }
+  .panel__actions > button:active:not(:disabled) {
+    background: color-mix(in srgb, var(--foregroundColor) 16%, transparent);
   }
 
   .panel__body {
@@ -112,6 +170,8 @@
        widen the panel or leak into the panels scroller (breaking swipe-left). */
     overflow: hidden auto;
     overscroll-behavior-y: contain;
+    /* Keep the last row clear of the home indicator on a standalone phone. */
+    padding-bottom: env(safe-area-inset-bottom);
     min-height: 0;
     min-width: 0;
   }

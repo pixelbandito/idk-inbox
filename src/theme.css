@@ -24,8 +24,7 @@
 
 @container theme style(--isThemeLight: true) {
   body {
-    /* --backgroundColor: #F4F5FA; */
-    --backgroundColor: lightblue;
+    --backgroundColor: #f4f5fa;
     --foregroundColor: #16161d;
     --colorScheme: light dark;
 
