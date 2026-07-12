@@ -32,19 +32,25 @@ The one relationship users must grasp: **every rule remembers which assistant cr
 (provenance). That lets us say "this rule came from Sender fatigue" and "remove every rule this
 assistant made."
 
-**The kill-switch trap (must-fix).** Because the assistant (suggests) and its rules (act) are
-separate stores, turning an assistant *off* today would stop only *future suggestions* — the
-rules it already spawned keep firing. A lay user reads "off" as "stop messing with my mail," so
-this is a lie waiting to happen. Two obligations follow:
+**The kill-switch trap, and how we resolve it (decided 2026-07-12).** Because the assistant
+(suggests) and its rules (act) are separate stores, turning an assistant *off* stops only
+*future suggestions* — the rules it already spawned keep firing. A lay user reads "off" as "stop
+messing with my mail," so an off switch that quietly half-works is a lie waiting to happen.
 
-- Disabling or removing an assistant must **prompt about its children**: "Also stop the 4 rules
-  it created?" (using the `origin` link).
-- An assistant's off switch must **show its active-rule count**, so "off" is never silently
-  partial.
+We resolve it with **visibility + choice, not an interrupting prompt**:
 
-(Today's shipped hub sidesteps this by giving *Auto-archive rules* its own master switch and
-per-rule removal — so a real kill-switch already exists at the rule tier. The trap appears the
-moment rules become visible *children* of an assistant.)
+- Disabling a suggestion just stops the suggestion. It **never forces a decision** about existing
+  actions — some users deliberately want those to keep running.
+- Each suggestion's row carries a CTA labelled with its **live count** — "View 4 actions from
+  this suggestion" — which opens a panel listing exactly those actions (via the `origin` link).
+  The count *is* the honesty: you can always see children exist and there's an obvious door to
+  them.
+- That actions panel offers **one-click "disable all" and "delete all"** for this suggestion's
+  actions, so stopping everything is easy and deliberate — just not automatic.
+
+(Today's shipped hub already gives *Auto-archive rules* its own master switch and per-rule
+removal, so a real kill-switch exists at the rule tier now; this decision is how it evolves once
+rules are navigable *children* of a suggestion.)
 
 ---
 
