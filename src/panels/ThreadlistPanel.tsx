@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { PanelHeader } from '../layout/PanelHeader';
 import { useDispatchContext, useDispatcher, useRefreshState } from '../state/useDispatch';
 import { useRowSwipe } from '../input/useRowSwipe';
+import { useOverscroll } from '../input/useOverscroll';
 import { useTriggerHandler } from '../triggers/useTriggerHandler';
 import { click, pressLong } from '../triggers/triggers';
 import type { TriggerName } from '../triggers/types';
@@ -157,6 +158,8 @@ export function ThreadlistPanel({
   // Loads can overlap (write-triggered refetch + manual ↻); only the newest
   // may set state, or a slow stale response would resurrect old rows.
   const loadSeq = useRef(0);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [pullRefresh, setPullRefresh] = useState(0); // 0..1 pull-to-refresh progress
 
   const load = useCallback(async () => {
     const token = getToken();
@@ -198,6 +201,9 @@ export function ThreadlistPanel({
     });
   }, [load, refreshTick]);
 
+  // Pull down past the top of the list to refresh.
+  useOverscroll(bodyRef, { edge: 'top', minPx: 110, onFire: () => void load(), onProgress: setPullRefresh });
+
   const token = getToken();
   if (!token) {
     return (
@@ -225,7 +231,17 @@ export function ThreadlistPanel({
           </>
         }
       />
-      <div className="panel__body">
+      <div className="panel__body" ref={bodyRef}>
+        {(pullRefresh > 0 || loading) && (
+          <div
+            className="list__refresh-hint"
+            data-armed={pullRefresh >= 1 || loading ? 'true' : undefined}
+            style={{ opacity: loading ? 1 : Math.min(1, 0.4 + pullRefresh * 0.6) }}
+            aria-hidden="true"
+          >
+            {loading ? 'Refreshing…' : pullRefresh >= 1 ? 'Release to refresh ▴' : 'Pull to refresh ▴'}
+          </div>
+        )}
         {label === 'INBOX' && <SuggestionCard emails={emails} />}
         {error && <p className="error">{error}</p>}
         {failed > 0 && (

@@ -244,6 +244,25 @@
     overflow-wrap: anywhere;
   }
 
+  /* Pull-to-refresh affordance, pinned to the top of a thread list. */
+  .list__refresh-hint {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 0.5rem 1rem;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--backgroundColor);
+    background: color-mix(in srgb, var(--foregroundColor) 70%, transparent);
+    backdrop-filter: blur(2px);
+    transition: background-color 120ms ease;
+  }
+  .list__refresh-hint[data-armed] {
+    background: var(--tone-info);
+    color: #fff;
+    font-weight: 600;
+  }
+
   /* Overscroll-to-close affordance, pinned to the bottom of the thread body. */
   .thread__close-hint {
     position: sticky;
