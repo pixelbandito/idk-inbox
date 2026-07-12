@@ -232,7 +232,7 @@ describe('createThreadWriteActions', () => {
   describe('unsubscribe', () => {
     const summaryWithHeader = {
       id: 'm1', threadId: 't1', from: 'Deals <deals@shop.example>',
-      subject: 's', snippet: '', date: '', unread: true,
+      subject: 's', snippet: '', date: '', unread: true, labels: [],
       listUnsubscribe: '<mailto:leave@shop.example>, <https://shop.example/unsub?u=1>',
     };
 

@@ -98,7 +98,7 @@ describe('SnoozePicker', () => {
   it('offers event-relative options when the target thread mentions a date', async () => {
     cacheThreadSummaries([{
       id: 'm1', threadId: 't1', from: 'venue@example.com',
-      subject: 'Tickets for 2099-03-05', snippet: 'doors at 7', date: '', unread: true,
+      subject: 'Tickets for 2099-03-05', snippet: 'doors at 7', date: '', unread: true, labels: [],
     }]);
     const { modifyThreadLabels } = renderWithPicker(['t1']);
     await act(async () => { fireEvent.click(screen.getByTestId('open-snooze')); });
@@ -122,7 +122,7 @@ describe('SnoozePicker', () => {
   it('shows no event options for multi-target snoozes or dateless threads', async () => {
     cacheThreadSummaries([{
       id: 'm1', threadId: 't1', from: 'a@b.c',
-      subject: 'no dates here', snippet: '', date: '', unread: false,
+      subject: 'no dates here', snippet: '', date: '', unread: false, labels: [],
     }]);
     renderWithPicker(['t1']);
     await act(async () => { fireEvent.click(screen.getByTestId('open-snooze')); });

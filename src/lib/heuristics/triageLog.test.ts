@@ -12,7 +12,7 @@ const NOW = Date.UTC(2026, 6, 7, 12, 0);
 const DAY = 24 * 3600 * 1000;
 
 function email(id: string, threadId: string, from: string, unread = true): EmailSummary {
-  return { id, threadId, from, subject: 's', snippet: '', date: '', unread };
+  return { id, threadId, from, subject: 's', snippet: '', date: '', unread, labels: [] };
 }
 
 describe('triage log', () => {

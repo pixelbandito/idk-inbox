@@ -28,6 +28,7 @@ export function parseGmailMessage(msg: RawGmailMessage): EmailSummary {
     snippet: msg.snippet ?? '',
     date: header(headers, 'Date'),
     unread: (msg.labelIds ?? []).includes('UNREAD'),
+    labels: msg.labelIds ?? [],
     ...(header(headers, 'List-Unsubscribe')
       ? { listUnsubscribe: header(headers, 'List-Unsubscribe') }
       : {}),

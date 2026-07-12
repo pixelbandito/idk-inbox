@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { PanelHeader } from '../layout/PanelHeader';
 import { useDispatchContext, useDispatcher, useRefreshState } from '../state/useDispatch';
 import { useRowSwipe } from '../input/useRowSwipe';
@@ -8,8 +8,10 @@ import { click, pressLong } from '../triggers/triggers';
 import type { TriggerName } from '../triggers/types';
 import type { IconName } from '../input/swipeIntents';
 import type { ActionId } from '../input/types';
+import type { LabelPill } from '../lib/gmail/labelDirectory';
 import { Icon } from '../ui/icons';
 import { fetchByLabel } from '../lib/gmail/fetchByLabel';
+import { loadLabelDirectory, pillsFor } from '../lib/gmail/labelDirectory';
 import { cacheThreadSummaries } from '../state/threadSummaryCache';
 import { recordSightings } from '../lib/heuristics/triageLog';
 import { SuggestionCard } from '../feedback/SuggestionCard';
@@ -41,6 +43,7 @@ export interface ThreadlistPanelProps {
 interface RowProps {
   email: EmailSummary;
   isSelected: boolean;
+  pills: LabelPill[];
   removesFromList: (action: ActionId) => boolean;
   onCommitted: (threadId: string, action: ActionId) => void;
 }
@@ -49,7 +52,7 @@ interface RowProps {
 // after this so the animation is seen before the row unmounts.
 const EXIT_MS = 340;
 
-function Row({ email, isSelected, removesFromList, onCommitted }: RowProps) {
+function Row({ email, isSelected, pills, removesFromList, onCommitted }: RowProps) {
   const ref = useRef<HTMLLIElement>(null);
   const onTrigger = useTriggerHandler(ROW_TAP_PIPELINE);
   const dispatch = useDispatcher();
@@ -115,6 +118,20 @@ function Row({ email, isSelected, removesFromList, onCommitted }: RowProps) {
         <span className="email__from">{email.from}</span>
         <span className="email__subject">{email.subject}</span>
         <span className="email__snippet">{email.snippet}</span>
+        {pills.length > 0 && (
+          <div className="email__pills">
+            {pills.map((p) => (
+              <span
+                key={p.key}
+                className="email__pill"
+                data-snoozed={p.snoozed ? 'true' : undefined}
+                style={p.hue !== undefined ? { '--pill-hue': p.hue } as CSSProperties : undefined}
+              >
+                {p.text}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </li>
   );
@@ -160,6 +177,13 @@ export function ThreadlistPanel({
   const loadSeq = useRef(0);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [pullRefresh, setPullRefresh] = useState(0); // 0..1 pull-to-refresh progress
+  const [directory, setDirectory] = useState<Map<string, string>>(() => new Map());
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    loadLabelDirectory(token).then(setDirectory).catch(() => {});
+  }, [getToken, refreshTick]);
 
   const load = useCallback(async () => {
     const token = getToken();
@@ -262,6 +286,7 @@ export function ThreadlistPanel({
                   key={e.id}
                   email={e}
                   isSelected={selectionSet.has(e.threadId)}
+                  pills={pillsFor(e.labels, directory, label)}
                   removesFromList={removesFromList}
                   onCommitted={onCommitted}
                 />

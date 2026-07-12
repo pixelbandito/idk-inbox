@@ -189,6 +189,19 @@
     color: color-mix(in srgb, var(--foregroundColor) 72%, var(--backgroundColor));
   }
   .email__from, .email__subject, .email__snippet { min-width: 0; max-width: 100%; }
+  /* Colour-coded label / snoozed chips on a thread tile. */
+  .email__pills { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.2rem; }
+  .email__pill {
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1;
+    padding: 0.2rem 0.45rem;
+    border-radius: 999px;
+    color: #fff;
+    background: hsl(var(--pill-hue, 210) 45% 42%);
+    white-space: nowrap;
+  }
+  .email__pill[data-snoozed] { background: var(--tone-info); }
   /* While dragging, the tile reads as a card lifting off the reveal track. */
   .email[data-pull] .email__tile { box-shadow: 0 0 0.6rem rgba(0, 0, 0, 0.25); }
   .email--releasing .email__tile { transition: transform 180ms ease; }

@@ -14,7 +14,7 @@ const SENDER = 'deals@shop.example';
 function email(i: number, unread = true): EmailSummary {
   return {
     id: `m${i}`, threadId: `t${i}`, from: `Deals <${SENDER}>`,
-    subject: 'sale!', snippet: '', date: '', unread,
+    subject: 'sale!', snippet: '', date: '', unread, labels: [],
     listUnsubscribe: '<https://shop.example/unsub>',
   };
 }

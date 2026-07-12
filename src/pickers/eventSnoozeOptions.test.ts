@@ -5,7 +5,7 @@ import type { EmailSummary } from '../lib/gmail/types';
 const NOW = new Date(2026, 6, 7, 12, 0); // Tue Jul 7, noon local
 
 function summary(subject: string, snippet = ''): EmailSummary {
-  return { id: 'm1', threadId: 't1', from: 'a@b.c', subject, snippet, date: '', unread: false };
+  return { id: 'm1', threadId: 't1', from: 'a@b.c', subject, snippet, date: '', unread: false, labels: [] };
 }
 
 describe('eventSnoozeOptionsFor', () => {

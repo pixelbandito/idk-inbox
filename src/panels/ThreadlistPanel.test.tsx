@@ -13,8 +13,8 @@ vi.mock('../lib/gmail/fetchByLabel', () => ({
 import { fetchByLabel } from '../lib/gmail/fetchByLabel';
 
 const emails: EmailSummary[] = [
-  { id: 'm1', threadId: 't1', from: 'Alice', subject: 'Lunch?', snippet: 'hey', date: '', unread: true },
-  { id: 'm2', threadId: 't2', from: 'Bob', subject: 'Report', snippet: 'done', date: '', unread: false },
+  { id: 'm1', threadId: 't1', from: 'Alice', subject: 'Lunch?', snippet: 'hey', date: '', unread: true, labels: [] },
+  { id: 'm2', threadId: 't2', from: 'Bob', subject: 'Report', snippet: 'done', date: '', unread: false, labels: [] },
 ];
 
 const initialPanels: Panel[] = [

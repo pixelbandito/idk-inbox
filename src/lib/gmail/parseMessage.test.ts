@@ -25,7 +25,7 @@ describe('parseGmailMessage', () => {
       subject: 'Lunch?',
       snippet: 'Hello there, this is a preview',
       date: 'Fri, 16 May 2026 14:00:00 -0700',
-      unread: true,
+      unread: true, labels: ['INBOX', 'UNREAD'],
     });
   });
 

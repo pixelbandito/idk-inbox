@@ -138,7 +138,7 @@ describe('triage recording', () => {
     resetThreadSummaryCache();
     cacheThreadSummaries([{
       id: 'm1', threadId: 't1', from: 'noisy@x.example',
-      subject: 's', snippet: '', date: '', unread: true,
+      subject: 's', snippet: '', date: '', unread: true, labels: [],
     }]);
 
     function Fire() {
