@@ -27,6 +27,16 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: 'autoUpdate',
+        workbox: {
+          // The default precache covers the app shell (markup, code, icons,
+          // manifest). Every Google request — Gmail data and OAuth — is
+          // deliberately left to the network with NO runtimeCaching entry, so we
+          // never persist mail or tokens in the cache and always talk to a live
+          // API. The SPA navigation fallback is same-origin only; keep any
+          // future same-origin API/auth paths out of it just in case.
+          runtimeCaching: [],
+          navigateFallbackDenylist: [/^\/api\//, /^\/oauth/],
+        },
         manifest: {
           name: 'idk-inbox',
           short_name: 'idk-inbox',
