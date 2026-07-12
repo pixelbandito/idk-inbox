@@ -1,8 +1,28 @@
 import { describe, it, expect } from 'vitest';
-import { act, fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import { LayoutContainer, type PanelRenderProps } from './LayoutContainer';
 import { DispatchProvider } from '../state/DispatchProvider';
+import { useDispatchContext, useDispatcher } from '../state/useDispatch';
 import type { Panel } from './types';
+
+function OpenThreadButton() {
+  const dispatch = useDispatcher();
+  const ctx = useDispatchContext();
+  return (
+    <button
+      data-testid="open"
+      onClick={() =>
+        void dispatch({
+          action: 'open-panel',
+          args: { kind: 'thread', threadId: 't-new' },
+          context: ctx,
+        })
+      }
+    >
+      open
+    </button>
+  );
+}
 
 function stubRender(panel: Panel, _i: number, props: PanelRenderProps) {
   if (panel.kind === 'settings') return <div data-testid="p-settings">settings</div>;
@@ -53,6 +73,23 @@ describe('LayoutContainer', () => {
     expect(sections[1].getAttribute('data-active')).toBeNull();
   });
 
+  it('gives a freshly-opened panel the enter animation but not the initial ones', async () => {
+    const { container, getByTestId } = render(
+      <DispatchProvider initialPanels={initial}>
+        <LayoutContainer renderPanel={stubRender} />
+        <OpenThreadButton />
+      </DispatchProvider>,
+    );
+    // Nothing animates on the initial mount.
+    expect(container.querySelectorAll('section.panel--enter')).toHaveLength(0);
+
+    await act(async () => { fireEvent.click(getByTestId('open')); });
+
+    const entering = container.querySelectorAll('section.panel--enter');
+    expect(entering).toHaveLength(1);
+    expect(entering[0].getAttribute('data-thread-id')).toBe('t-new');
+  });
+
   it('removes the panel when its onClose prop is invoked (close-panel dispatch)', async () => {
     const panels: Panel[] = [
       { kind: 'settings' },
@@ -68,8 +105,11 @@ describe('LayoutContainer', () => {
     await act(async () => {
       fireEvent.click(getByLabelText('Close thread'));
     });
-    const sections = container.querySelectorAll('main.panels > section.panel');
-    expect(sections).toHaveLength(2);
+    // The panel plays its exit animation before the close-panel dispatch lands.
+    await waitFor(() => {
+      const sections = container.querySelectorAll('main.panels > section.panel');
+      expect(sections).toHaveLength(2);
+    });
     expect(queryByTestId('p-thread-t-42')).toBeNull();
   });
 });

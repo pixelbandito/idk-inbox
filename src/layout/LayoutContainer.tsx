@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Panel } from './types';
 import { useDispatchContext, useDispatcher, useLayoutState } from '../state/useDispatch';
 import { StashColumn } from './StashColumn';
@@ -7,6 +7,9 @@ import { StashColumn } from './StashColumn';
 // beat, so they're a deliberate reveal rather than a permanent chrome band.
 const EDGE_ZONE_PX = 48;   // ~1 HIG unit (44pt), rounded up
 const LINGER_MS = 1000;
+// Matches the panelExit animation in index.css; the close is dispatched only
+// after the panel has finished collapsing so the exit is actually seen.
+const PANEL_EXIT_MS = 260;
 
 export interface PanelRenderProps {
   onOpenThread: (sourceLabel: string, threadId: string) => void;
@@ -48,6 +51,37 @@ export function LayoutContainer({ renderPanel }: LayoutContainerProps) {
   // Set when a focus change came from manual scrolling, so the scroll-into-view
   // effect doesn't fight the user's own scroll.
   const scrollDrivenRef = useRef(false);
+
+  // Give a freshly-opened panel the enter animation while the initial set (and
+  // any already-present panels) mount quietly. Tracked by key against the DOM
+  // so reading the ref stays out of render.
+  const seenKeysRef = useRef<Set<string> | null>(null);
+  useLayoutEffect(() => {
+    const sections = containerRef.current?.querySelectorAll('section.panel');
+    if (!sections) return;
+    const previouslySeen = seenKeysRef.current;
+    const keys = new Set<string>();
+    sections.forEach((el) => {
+      const key = el.getAttribute('data-panel-key');
+      if (!key) return;
+      keys.add(key);
+      if (previouslySeen && !previouslySeen.has(key)) el.classList.add('panel--enter');
+    });
+    seenKeysRef.current = keys;
+  });
+
+  // Play the exit animation before removing the panel from state.
+  const closePanel = (index: number) => {
+    const el = document.querySelectorAll('main.panels > section.panel')[index];
+    const remove = () =>
+      void dispatch({ action: 'close-panel', args: { panelIndex: index }, context: ctx });
+    if (el instanceof HTMLElement) {
+      el.classList.add('panel--exit');
+      setTimeout(remove, PANEL_EXIT_MS);
+    } else {
+      remove();
+    }
+  };
 
   // Smooth-scroll the focused panel into view when focus changes programmatically.
   useEffect(() => {
@@ -121,6 +155,7 @@ export function LayoutContainer({ renderPanel }: LayoutContainerProps) {
           <section
             key={panelKey(panel, i)}
             className="panel"
+            data-panel-key={panelKey(panel, i)}
             data-active={i === focusIndex ? 'true' : undefined}
             // A gesture on a non-active panel makes it active (in place — no
             // scroll jump). Capture so it runs before the row's own handlers.
@@ -134,9 +169,7 @@ export function LayoutContainer({ renderPanel }: LayoutContainerProps) {
           >
             {renderPanel(panel, i, {
               onOpenThread: noop,
-              onClose: () => {
-                void dispatch({ action: 'close-panel', args: { panelIndex: i }, context: ctx });
-              },
+              onClose: () => closePanel(i),
             })}
           </section>
         ))}

@@ -72,6 +72,26 @@
     .panel:not([data-active]) { opacity: 1; } /* one panel at a time on phones */
   }
 
+  /* Opening a panel slides it in; closing it collapses its width so the
+     neighbour glides into place rather than the column snapping shut. */
+  .panel--enter { animation: panelEnter 260ms ease both; }
+  .panel--exit {
+    animation: panelExit 260ms ease forwards;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  @keyframes panelEnter {
+    from { opacity: 0; transform: translateX(1.5rem); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes panelExit {
+    from { opacity: 1; }
+    to   { opacity: 0; flex-basis: 0; max-width: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .panel--enter, .panel--exit { animation-duration: 1ms; }
+  }
+
   .panel__title {
     margin: 0;
     font-size: 1rem;
