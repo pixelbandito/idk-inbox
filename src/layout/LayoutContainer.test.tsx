@@ -37,6 +37,22 @@ describe('LayoutContainer', () => {
     expect(sections[2].getAttribute('data-label')).toBe('idk-inbox/Snoozed');
   });
 
+  it('marks the focused panel active and activates a panel on pointer-down', async () => {
+    const { container } = render(
+      <DispatchProvider initialPanels={initial}>
+        <LayoutContainer renderPanel={stubRender} />
+      </DispatchProvider>,
+    );
+    const sections = container.querySelectorAll('main.panels > section.panel');
+    // Default focus is the first non-settings panel (INBOX, index 1).
+    expect(sections[1].getAttribute('data-active')).toBe('true');
+    expect(sections[2].getAttribute('data-active')).toBeNull();
+
+    await act(async () => { fireEvent.pointerDown(sections[2]); });
+    expect(sections[2].getAttribute('data-active')).toBe('true');
+    expect(sections[1].getAttribute('data-active')).toBeNull();
+  });
+
   it('removes the panel when its onClose prop is invoked (close-panel dispatch)', async () => {
     const panels: Panel[] = [
       { kind: 'settings' },

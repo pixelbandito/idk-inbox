@@ -121,6 +121,15 @@ export function LayoutContainer({ renderPanel }: LayoutContainerProps) {
           <section
             key={panelKey(panel, i)}
             className="panel"
+            data-active={i === focusIndex ? 'true' : undefined}
+            // A gesture on a non-active panel makes it active (in place — no
+            // scroll jump). Capture so it runs before the row's own handlers.
+            onPointerDownCapture={() => {
+              if (i !== focusIndexRef.current) {
+                scrollDrivenRef.current = true;
+                setFocusIndex(() => i);
+              }
+            }}
             {...dataAttrs(panel)}
           >
             {renderPanel(panel, i, {
