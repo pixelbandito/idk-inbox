@@ -1,4 +1,5 @@
 import type { EmailSummary } from './types';
+import { deriveMessageSignals } from '../signals/messageSignals';
 
 interface GmailHeader {
   name: string;
@@ -29,6 +30,7 @@ export function parseGmailMessage(msg: RawGmailMessage): EmailSummary {
     date: header(headers, 'Date'),
     unread: (msg.labelIds ?? []).includes('UNREAD'),
     labels: msg.labelIds ?? [],
+    signals: deriveMessageSignals(msg),
     ...(header(headers, 'List-Unsubscribe')
       ? { listUnsubscribe: header(headers, 'List-Unsubscribe') }
       : {}),

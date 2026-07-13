@@ -18,7 +18,7 @@ const rawMessage = {
 describe('parseGmailMessage', () => {
   it('extracts fields from headers', () => {
     const result = parseGmailMessage(rawMessage);
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       id: 'm1',
       threadId: 't1',
       from: 'Alice <alice@example.com>',
@@ -27,6 +27,11 @@ describe('parseGmailMessage', () => {
       date: 'Fri, 16 May 2026 14:00:00 -0700',
       unread: true, labels: ['INBOX', 'UNREAD'],
     });
+  });
+
+  it('attaches derived signals', () => {
+    // parseMessage carries the header-derived fingerprint signals through.
+    expect(parseGmailMessage(rawMessage).signals?.fromDomain).toBe('example.com');
   });
 
   it('marks read when UNREAD label is absent', () => {

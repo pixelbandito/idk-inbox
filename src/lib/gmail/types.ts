@@ -1,3 +1,5 @@
+import type { MessageSignals } from '../signals/messageSignals';
+
 export interface GmailLabel {
   id: string;
   name: string;
@@ -15,4 +17,6 @@ export interface EmailSummary {
   labels: string[];
   /** Raw List-Unsubscribe header when the sender provides one. */
   listUnsubscribe?: string;
+  /** Header-derived fingerprint signals for measurement (see lib/signals). */
+  signals?: MessageSignals;
 }

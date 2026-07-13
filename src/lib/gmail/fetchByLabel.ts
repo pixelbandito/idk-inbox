@@ -39,9 +39,15 @@ export async function fetchByLabel(
     ids.map(({ id }) =>
       gmailJson<RawGmailMessage>(
         token,
+        // Headers only (never bodies): the display fields plus the ones the
+        // signal layer derives fingerprints from (see lib/signals).
         `/messages/${encodeURIComponent(id)}?format=metadata` +
           '&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date' +
-          '&metadataHeaders=List-Unsubscribe',
+          '&metadataHeaders=To&metadataHeaders=Cc&metadataHeaders=Reply-To' +
+          '&metadataHeaders=List-Unsubscribe&metadataHeaders=List-Unsubscribe-Post' +
+          '&metadataHeaders=List-Id&metadataHeaders=Precedence' +
+          '&metadataHeaders=Auto-Submitted&metadataHeaders=Authentication-Results' +
+          '&metadataHeaders=In-Reply-To&metadataHeaders=References',
         'message get',
       ),
     ),
