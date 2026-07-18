@@ -7,6 +7,7 @@ import { resetAutoArchiveRules } from '../lib/rules/autoArchive';
 import { resetThreadSummaryCache } from '../state/threadSummaryCache';
 import { resetAppLabelResolver } from '../lib/gmail/appLabelResolver';
 import { resetProcessorSettings } from '../lib/automation/settings';
+import { resetBehaviourLog } from '../lib/signals/behaviourLog';
 
 export function resetLocalState(): void {
   resetTriageLog();
@@ -15,4 +16,5 @@ export function resetLocalState(): void {
   resetThreadSummaryCache();
   resetAppLabelResolver();
   resetProcessorSettings();
+  resetBehaviourLog();
 }
