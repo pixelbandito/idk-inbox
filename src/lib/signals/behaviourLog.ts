@@ -51,10 +51,34 @@ interface BehaviourEvent {
   openedFirst?: boolean;
 }
 
+/**
+ * The message properties a fingerprint carries — captured so heuristics can
+ * combine "what kind of mail is this" with "what you do with it". Snapshotted
+ * from the most recent sighting (a sender's mail is consistent enough).
+ */
+export interface KeySignals {
+  hasUnsubscribe: boolean;
+  oneClickUnsubscribe: boolean;
+  rolePattern: string | null;
+  precedenceBulk: boolean;
+}
+
 interface KeyLog {
   /** messageId → first-seen timestamp; dedupes refetches so `seen` is honest. */
   sightings: Record<string, number>;
   events: BehaviourEvent[];
+  signals?: KeySignals;
+}
+
+function keySignalsOf(summary: EmailSummary): KeySignals | undefined {
+  const s = summary.signals;
+  if (!s) return undefined;
+  return {
+    hasUnsubscribe: s.hasUnsubscribe,
+    oneClickUnsubscribe: s.oneClickUnsubscribe,
+    rolePattern: s.rolePattern,
+    precedenceBulk: s.precedenceBulk,
+  };
 }
 
 interface BehaviourStore {
@@ -91,7 +115,7 @@ function prune(store: BehaviourStore, now: number): BehaviourStore {
     );
     const events = log.events.filter((e) => e.at >= cutoff);
     if (Object.keys(sightings).length > 0 || events.length > 0) {
-      keys[key] = { sightings, events };
+      keys[key] = { sightings, events, ...(log.signals ? { signals: log.signals } : {}) };
     }
   }
   const opens = Object.fromEntries(
@@ -109,8 +133,11 @@ export function recordSeen(summaries: EmailSummary[], now: number = Date.now()):
   if (summaries.length === 0) return;
   const store = prune(read(), now);
   for (const summary of summaries) {
+    const signals = keySignalsOf(summary);
     for (const key of fingerprintKeysFor(summary)) {
-      keyLog(store, key).sightings[summary.id] ??= now;
+      const log = keyLog(store, key);
+      log.sightings[summary.id] ??= now;
+      if (signals) log.signals = signals; // freshen to the latest sighting
     }
   }
   write(store);
@@ -206,6 +233,24 @@ export function allFingerprintStats(
 export function parseFingerprintKey(key: FingerprintKey): { kind: 'sender' | 'list'; value: string } {
   if (key.startsWith('list:')) return { kind: 'list', value: key.slice(5) };
   return { kind: 'sender', value: key.startsWith('addr:') ? key.slice(5) : key };
+}
+
+/** Everything a heuristic needs for one fingerprint: identity, stats, signals. */
+export interface FingerprintRecord {
+  key: FingerprintKey;
+  kind: 'sender' | 'list';
+  value: string;
+  stats: FingerprintStats;
+  signals?: KeySignals;
+}
+
+/** All tracked fingerprints with their windowed stats and signal snapshot. */
+export function allFingerprints(windowDays: number, now: number = Date.now()): FingerprintRecord[] {
+  const cutoff = now - windowDays * DAY_MS;
+  return Object.entries(read().keys).map(([key, log]) => {
+    const { kind, value } = parseFingerprintKey(key);
+    return { key, kind, value, stats: statsFor(key, log, cutoff), signals: log.signals };
+  });
 }
 
 export function resetBehaviourLog(): void {
