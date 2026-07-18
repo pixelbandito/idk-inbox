@@ -17,6 +17,7 @@ import { groupByWakeDay } from '../lib/snooze/agenda';
 import { SnoozedAgenda } from './SnoozedAgenda';
 import { cacheThreadSummaries } from '../state/threadSummaryCache';
 import { recordSightings } from '../lib/heuristics/triageLog';
+import { recordSeen } from '../lib/signals/behaviourLog';
 import { SuggestionCard } from '../feedback/SuggestionCard';
 import type { EmailSummary } from '../lib/gmail/types';
 
@@ -202,8 +203,8 @@ export function ThreadlistPanel({
       const result = await fetchByLabel(token, label);
       if (seq !== loadSeq.current) return;
       cacheThreadSummaries(result.emails);
-      // Inbox arrivals feed the sender-fatigue heuristic.
-      if (label === 'INBOX') recordSightings(result.emails);
+      // Inbox arrivals feed the sender-fatigue heuristic and the behaviour log.
+      if (label === 'INBOX') { recordSightings(result.emails); recordSeen(result.emails); }
       setEmails(result.emails);
       // Keep suppressing an optimistically-removed thread only while the server
       // still (staleley) returns it; once it's gone, stop tracking it. This

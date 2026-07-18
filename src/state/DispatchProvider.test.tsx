@@ -163,6 +163,47 @@ describe('triage recording', () => {
     resetTriageLog();
     resetThreadSummaryCache();
   });
+
+  it('records opens and actions to the behaviour log, conditioned on opening first', async () => {
+    const { resetBehaviourLog, fingerprintStats, senderKey } = await import('../lib/signals/behaviourLog');
+    const { cacheThreadSummaries, resetThreadSummaryCache } = await import('./threadSummaryCache');
+    resetBehaviourLog();
+    resetThreadSummaryCache();
+    cacheThreadSummaries([
+      { id: 'm1', threadId: 't1', from: 'noisy@x.example', subject: 's', snippet: '', date: '', unread: true, labels: [] },
+      { id: 'm2', threadId: 't2', from: 'noisy@x.example', subject: 's', snippet: '', date: '', unread: true, labels: [] },
+    ]);
+
+    function Fire() {
+      const dispatch = useDispatcher();
+      const ctx = useDispatchContext();
+      return (
+        <button data-testid="fire" onClick={async () => {
+          await dispatch({ action: 'open-panel', args: { kind: 'thread', threadId: 't1' }, context: ctx });
+          await dispatch({ action: 'archive-thread', args: { targets: ['t1'] }, context: ctx });
+          await dispatch({ action: 'archive-thread', args: { targets: ['t2'] }, context: ctx });
+        }}>fire</button>
+      );
+    }
+    render(
+      <DispatchProvider
+        signedIn
+        getToken={() => 'tok'}
+        threadWriteClient={alwaysSucceeds}
+        initialPanels={[{ kind: 'settings' }, { kind: 'threadlist', label: 'INBOX' }]}
+      >
+        <Fire />
+      </DispatchProvider>,
+    );
+    await act(async () => { screen.getByTestId('fire').click(); });
+
+    const stats = fingerprintStats(senderKey('noisy@x.example'), 14);
+    expect(stats.opened).toBe(1);
+    expect(stats.archived).toBe(2);
+    expect(stats.archivedWithoutOpen).toBe(1); // t2 was archived without opening
+    resetBehaviourLog();
+    resetThreadSummaryCache();
+  });
 });
 
 describe('refresh after thread writes', () => {

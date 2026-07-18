@@ -20,6 +20,7 @@ import { createLayoutActions } from '../actions/layout';
 import { createAppActions } from '../actions/app';
 import { createDispatcher } from '../input/dispatch';
 import { recordTriageForThreads, type TriageAction } from '../lib/heuristics/triageLog';
+import { recordAction, recordOpen, type BehaviourAction } from '../lib/signals/behaviourLog';
 import {
   DispatchContext,
   DispatcherContext,
@@ -75,6 +76,21 @@ const TRIAGE_BY_ACTION: Record<string, TriageAction> = {
   'delete-thread':  'delete',
   'spam-thread':    'spam',
 };
+
+// The richer behaviour log tracks more outcomes than the fatigue triage log.
+const BEHAVIOUR_BY_ACTION: Record<string, Exclude<BehaviourAction, 'open'>> = {
+  'archive-thread':     'archive',
+  'delete-thread':      'delete',
+  'spam-thread':        'spam',
+  'snooze-thread':      'snooze',
+  'add-label-thread':   'label',
+  'unsubscribe-thread': 'unsubscribe',
+};
+
+/** open-panel args for a thread carry a threadId; a threadlist open does not. */
+function openedThreadId(args: Record<string, unknown>): string | null {
+  return args.kind === 'thread' && typeof args.threadId === 'string' ? args.threadId : null;
+}
 
 function asAction(
   id: string,
@@ -378,6 +394,13 @@ export function DispatchProvider({
       if (result.ok && result.affectedTargets?.length) {
         const triageAction = TRIAGE_BY_ACTION[req.action];
         if (triageAction) recordTriageForThreads(result.affectedTargets, triageAction);
+        const behaviourAction = BEHAVIOUR_BY_ACTION[req.action];
+        if (behaviourAction) recordAction(result.affectedTargets, behaviourAction);
+      }
+      // Opening a thread feeds open-rate and the "opened before dismissing" flag.
+      if (result.ok && req.action === 'open-panel') {
+        const threadId = openedThreadId(req.args);
+        if (threadId) recordOpen(threadId);
       }
       // Nothing else renders ActionResults, so failures (and undo-less
       // outcomes that ask to be announced) surface here or nowhere. A silent
