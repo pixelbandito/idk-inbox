@@ -61,6 +61,8 @@ export interface KeySignals {
   oneClickUnsubscribe: boolean;
   rolePattern: string | null;
   precedenceBulk: boolean;
+  /** Normalized List-Id this mail belongs to, so a sender can be tied to its list. */
+  listId: string | null;
 }
 
 interface KeyLog {
@@ -78,6 +80,7 @@ function keySignalsOf(summary: EmailSummary): KeySignals | undefined {
     oneClickUnsubscribe: s.oneClickUnsubscribe,
     rolePattern: s.rolePattern,
     precedenceBulk: s.precedenceBulk,
+    listId: s.listId ? normalizeListId(s.listId) : null,
   };
 }
 

@@ -67,6 +67,18 @@ describe('evaluateHeuristics', () => {
     expect(evaluateHeuristics()).toEqual([]);
   });
 
+  it('folds a newsletter sender into its list suggestion — no duplicate', () => {
+    const emails = Array.from({ length: 6 }, (_, i) =>
+      email(`n-${i}`, 'news@list.example', { hasUnsubscribe: true, listId: 'Promos <promos.list.example>' }));
+    cacheThreadSummaries(emails);
+    recordSeen(emails);
+    recordAction(emails.slice(0, 5).map((e) => e.threadId), 'archive');
+
+    const results = evaluateHeuristics();
+    expect(results).toHaveLength(1);
+    expect(results[0].fingerprint).toEqual({ kind: 'list', value: 'promos.list.example' });
+  });
+
   it('ranks the worst offender first', () => {
     seed('mild@x.example', 6, 5);
     seed('worst@x.example', 30, 30);
