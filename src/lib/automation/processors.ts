@@ -28,7 +28,7 @@ export interface ProcessorInfo {
 const fatigueDetail = (): string => {
   const { minSeen, minDismissRate } = DEFAULT_FATIGUE_THRESHOLDS;
   const percent = Math.round(minDismissRate * 100);
-  return `Kicks in once you've seen ${minSeen}+ messages from a sender in ${FATIGUE_WINDOW_DAYS} days and archived at least ${percent}% of them while still unread.`;
+  return `Kicks in once you've seen ${minSeen}+ messages from a sender in ${FATIGUE_WINDOW_DAYS} days and archived at least ${percent}% of them without opening them.`;
 };
 
 export const PROCESSORS: ProcessorInfo[] = [

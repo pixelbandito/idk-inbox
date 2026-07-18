@@ -19,7 +19,6 @@ import { createSelectionActions } from '../actions/selection';
 import { createLayoutActions } from '../actions/layout';
 import { createAppActions } from '../actions/app';
 import { createDispatcher } from '../input/dispatch';
-import { recordTriageForThreads, type TriageAction } from '../lib/heuristics/triageLog';
 import { recordAction, recordOpen, type BehaviourAction } from '../lib/signals/behaviourLog';
 import {
   DispatchContext,
@@ -71,13 +70,7 @@ function needsElicitation(
 }
 
 // Discard-type writes feed the sender-fatigue heuristic.
-const TRIAGE_BY_ACTION: Record<string, TriageAction> = {
-  'archive-thread': 'archive',
-  'delete-thread':  'delete',
-  'spam-thread':    'spam',
-};
-
-// The richer behaviour log tracks more outcomes than the fatigue triage log.
+// Maps a dispatched action to the behaviour-log outcome it records.
 const BEHAVIOUR_BY_ACTION: Record<string, Exclude<BehaviourAction, 'open'>> = {
   'archive-thread':     'archive',
   'delete-thread':      'delete',
@@ -388,12 +381,10 @@ export function DispatchProvider({
           inverse: result.inverse,
         });
       }
-      // Triage is recorded here (user-initiated path) not in innerDispatcher,
+      // Behaviour is recorded here (user-initiated path) not in innerDispatcher,
       // so undo/redo re-dispatches don't double-count; keyed on the threads
       // that actually changed, not the requested targets.
       if (result.ok && result.affectedTargets?.length) {
-        const triageAction = TRIAGE_BY_ACTION[req.action];
-        if (triageAction) recordTriageForThreads(result.affectedTargets, triageAction);
         const behaviourAction = BEHAVIOUR_BY_ACTION[req.action];
         if (behaviourAction) recordAction(result.affectedTargets, behaviourAction);
       }

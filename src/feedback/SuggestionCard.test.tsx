@@ -4,7 +4,7 @@ import { SuggestionCard } from './SuggestionCard';
 import { DispatchProvider } from '../state/DispatchProvider';
 import { spyThreadWriteClient } from '../test/spyThreadWriteClient';
 import { resetLocalState } from '../test/resetLocalState';
-import { recordSightings, recordTriageForThreads } from '../lib/heuristics/triageLog';
+import { recordSeen, recordAction } from '../lib/signals/behaviourLog';
 import { autoArchiveRules } from '../lib/rules/autoArchive';
 import { cacheThreadSummaries } from '../state/threadSummaryCache';
 import type { EmailSummary } from '../lib/gmail/types';
@@ -19,12 +19,12 @@ function email(i: number, unread = true): EmailSummary {
   };
 }
 
-/** 6 sightings, 5 dismissed unread → over the 5-in-14-days / 80% bar. */
+/** 6 seen, 5 archived without opening → over the 5-in-14-days / 80% bar. */
 function seedFatigue() {
   const emails = Array.from({ length: 6 }, (_, i) => email(i));
   cacheThreadSummaries(emails);
-  recordSightings(emails);
-  recordTriageForThreads(emails.slice(0, 5).map((e) => e.threadId), 'archive');
+  recordSeen(emails);
+  recordAction(emails.slice(0, 5).map((e) => e.threadId), 'archive');
   return emails;
 }
 

@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { findFatiguedSenders } from './senderFatigue';
-import type { SenderStats } from './triageLog';
+import { findFatiguedSenders, type SenderStats } from './senderFatigue';
 
 function stats(sender: string, seen: number, dismissedUnread: number): SenderStats {
   return { sender, seen, dismissedUnread };

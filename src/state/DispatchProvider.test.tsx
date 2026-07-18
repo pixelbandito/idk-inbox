@@ -130,40 +130,7 @@ describe('dispatcher integration', () => {
   });
 });
 
-describe('triage recording', () => {
-  it('a successful archive records an unread dismissal for the sender', async () => {
-    const { resetTriageLog, senderStats } = await import('../lib/heuristics/triageLog');
-    const { cacheThreadSummaries, resetThreadSummaryCache } = await import('./threadSummaryCache');
-    resetTriageLog();
-    resetThreadSummaryCache();
-    cacheThreadSummaries([{
-      id: 'm1', threadId: 't1', from: 'noisy@x.example',
-      subject: 's', snippet: '', date: '', unread: true, labels: [],
-    }]);
-
-    function Fire() {
-      const dispatch = useDispatcher();
-      const ctx = useDispatchContext();
-      return (
-        <button data-testid="fire" onClick={async () => {
-          await dispatch({ action: 'archive-thread', args: { targets: ['t1'] }, context: ctx });
-        }}>fire</button>
-      );
-    }
-    render(
-      <DispatchProvider signedIn getToken={() => 'tok'} threadWriteClient={alwaysSucceeds}>
-        <Fire />
-      </DispatchProvider>,
-    );
-    await act(async () => { screen.getByTestId('fire').click(); });
-
-    expect(senderStats(14)).toEqual([
-      { sender: 'noisy@x.example', seen: 0, dismissedUnread: 1 },
-    ]);
-    resetTriageLog();
-    resetThreadSummaryCache();
-  });
-
+describe('behaviour recording', () => {
   it('records opens and actions to the behaviour log, conditioned on opening first', async () => {
     const { resetBehaviourLog, fingerprintStats, senderKey } = await import('../lib/signals/behaviourLog');
     const { cacheThreadSummaries, resetThreadSummaryCache } = await import('./threadSummaryCache');
