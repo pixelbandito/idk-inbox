@@ -597,19 +597,26 @@
   .suggestion-card {
     margin: 0.75rem;
     padding: 0.75rem 1rem;
-    border: var(--borderSize) solid #d8e4f5;
+    border: var(--borderSize) solid color-mix(in srgb, var(--tone-info) 40%, transparent);
     border-radius: 8px;
-    background: #f2f7ff;
+    background: color-mix(in srgb, var(--tone-info) 10%, var(--backgroundColor));
     font-size: 0.9rem;
   }
   .suggestion-card > p { margin: 0 0 0.5rem; }
+  /* The honest inbox-now consequence, set apart from the behavioural evidence. */
+  .suggestion-card__preview {
+    font-size: 0.85rem;
+    color: color-mix(in srgb, var(--foregroundColor) 70%, var(--backgroundColor));
+  }
   .suggestion-card > button {
     margin-right: 0.5rem;
-    padding: 0.4rem 0.75rem;
-    border: var(--borderSize) solid #c4d6ef;
-    border-radius: 4px;
+    min-height: 2.5rem;
+    padding: 0.4rem 0.9rem;
+    border: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 22%, transparent);
+    border-radius: 6px;
     background: var(--backgroundColor);
     color: var(--foregroundColor);
+    font: inherit;
     cursor: pointer;
   }
 

@@ -39,11 +39,11 @@ function seed(unsub?: string) {
   return emails;
 }
 
-function renderCard(emails: EmailSummary[]) {
+function renderCard(emails: EmailSummary[], getToken: () => string | null = () => null) {
   const { client } = spyThreadWriteClient();
   render(
     <DispatchProvider signedIn getToken={() => 'tok'} threadWriteClient={client}>
-      <SuggestionCard emails={emails} />
+      <SuggestionCard emails={emails} getToken={getToken} />
     </DispatchProvider>,
   );
 }
@@ -64,6 +64,17 @@ describe('SuggestionCard', () => {
     expect(card).toHaveTextContent('5 of the last 6');
     expect(card).toHaveTextContent(SENDER);
     expect(screen.queryByRole('button', { name: /^unsubscribe$/i })).toBeNull();
+  });
+
+  it('previews how many are already in the inbox before you confirm', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      { ok: true, status: 200, json: async () => ({ threads: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] }) } as Response,
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderCard(seed(), () => 'tok');
+    const card = await screen.findByRole('region', { name: /suggestion/i });
+    await waitFor(() => expect(card).toHaveTextContent(/archives 3 already in your inbox/i));
   });
 
   it('auto-archive stores a rule and settles the suggestion', async () => {

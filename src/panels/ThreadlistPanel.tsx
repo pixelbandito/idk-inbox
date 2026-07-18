@@ -277,7 +277,7 @@ export function ThreadlistPanel({
             {loading ? 'Refreshing…' : pullRefresh >= 1 ? 'Release to refresh ▴' : 'Pull to refresh ▴'}
           </div>
         )}
-        {label === 'INBOX' && <SuggestionCard emails={emails} />}
+        {label === 'INBOX' && <SuggestionCard emails={emails} getToken={getToken} />}
         {error && <p className="error">{error}</p>}
         {failed > 0 && (
           <p className="error">

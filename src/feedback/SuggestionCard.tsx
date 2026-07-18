@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useDispatchContext, useDispatcher } from '../state/useDispatch';
 import { topSuggestion } from '../lib/heuristics/evaluate';
 import type { Suggestion } from '../lib/heuristics/catalog';
+import { previewInboxMatches, type InboxPreview } from '../lib/heuristics/preview';
 import { resolveSuggestionFor } from '../lib/heuristics/resolvedSuggestions';
 import { isProcessorEnabled } from '../lib/automation/settings';
 import { addAutoArchiveRule } from '../lib/rules/autoArchive';
@@ -12,6 +13,16 @@ import type { EmailSummary } from '../lib/gmail/types';
 export interface SuggestionCardProps {
   /** The inbox rows currently shown — used to find an unsubscribe target. */
   emails: EmailSummary[];
+  getToken: () => string | null;
+}
+
+/** Honest, forward-looking consequence of accepting an auto-archive suggestion. */
+function previewText(preview: InboxPreview): string {
+  if (preview.count === 0) {
+    return 'Nothing from them is in your inbox right now — this only affects future mail.';
+  }
+  const n = preview.atLeast ? `${preview.count}+` : `${preview.count}`;
+  return `This archives ${n} already in your inbox, plus future mail.`;
 }
 
 /** Does this row belong to the suggestion's fingerprint (sender or list)? */
@@ -26,10 +37,11 @@ function matchesFingerprint(email: EmailSummary, fingerprint: Suggestion['finger
  * (unsubscribe / auto-archive) for a fingerprint you consistently ignore. The
  * user decides; the card never acts on its own.
  */
-export function SuggestionCard({ emails }: SuggestionCardProps) {
+export function SuggestionCard({ emails, getToken }: SuggestionCardProps) {
   const ctx = useDispatchContext();
   const dispatch = useDispatcher();
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
+  const [preview, setPreview] = useState<InboxPreview | null>(null);
 
   // Recomputed per list refresh; effect (not render) because it reads
   // localStorage and "now".
@@ -40,6 +52,20 @@ export function SuggestionCard({ emails }: SuggestionCardProps) {
       setSuggestion(topSuggestion());
     });
   }, [emails]);
+
+  // Fetch the honest "what would this do to my inbox now" count for an
+  // auto-archive suggestion — a live, read-only search, so the consequence is
+  // visible before the user confirms.
+  useEffect(() => {
+    setPreview(null);
+    const token = getToken();
+    if (!suggestion || suggestion.action.kind !== 'auto-archive' || !token) return;
+    let live = true;
+    previewInboxMatches(token, suggestion.fingerprint)
+      .then((p) => { if (live) setPreview(p); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [suggestion, getToken]);
 
   if (!suggestion) return null;
   const { fingerprint, action } = suggestion;
@@ -80,6 +106,9 @@ export function SuggestionCard({ emails }: SuggestionCardProps) {
     <section className="suggestion-card" aria-label="Suggestion">
       <p><strong>{suggestion.headline}</strong></p>
       <p>{suggestion.detail}</p>
+      {action.kind === 'auto-archive' && preview && (
+        <p className="suggestion-card__preview">{previewText(preview)}</p>
+      )}
       {action.kind === 'unsubscribe' && unsubscribeTarget && (
         <button onClick={() => void unsubscribe()}>Unsubscribe</button>
       )}
