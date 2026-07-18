@@ -5,6 +5,7 @@
 
 import { parseGmailMessage, type RawGmailMessage } from './parseMessage';
 import { gmailJson } from './http';
+import { loadAccountAddress } from './accountProfile';
 import { appLabelResolver } from './appLabelResolver';
 import type { LabelIdResolver } from './labelIds';
 import type { EmailSummary } from './types';
@@ -32,6 +33,11 @@ export async function fetchByLabel(
     'list',
   );
   const ids = listJson.messages ?? [];
+  if (ids.length === 0) return EMPTY;
+
+  // The account address (cached) lets the signal layer place us among a
+  // message's recipients. A failure here just leaves that one signal "unknown".
+  const accountAddress = await loadAccountAddress(token).catch(() => undefined);
 
   // format=metadata still returns labelIds, which parseGmailMessage needs for
   // the unread flag — keep that if changing this param.
@@ -56,7 +62,7 @@ export async function fetchByLabel(
   const emails: EmailSummary[] = [];
   let failed = 0;
   for (const r of settled) {
-    if (r.status === 'fulfilled') emails.push(parseGmailMessage(r.value));
+    if (r.status === 'fulfilled') emails.push(parseGmailMessage(r.value, accountAddress));
     else {
       failed++;
       console.warn('Gmail message fetch failed:', r.reason);

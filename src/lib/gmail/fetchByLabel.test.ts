@@ -1,10 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fetchByLabel } from './fetchByLabel';
+import { resetAccountProfile } from './accountProfile';
 import type { LabelIdResolver } from './labelIds';
 
 function jsonResponse(body: unknown) {
   return { ok: true, status: 200, json: async () => body } as Response;
 }
+
+// After the message list, fetchByLabel loads the account address (once, cached)
+// to place us among recipients. In these ordered mocks it's the call right
+// after the list request.
+const PROFILE = () => jsonResponse({ emailAddress: 'me@acct.example' });
 
 /** Names resolve to `id:<name>` except those listed as missing. */
 function stubResolver(missing: string[] = []): LabelIdResolver {
@@ -19,11 +25,12 @@ function stubResolver(missing: string[] = []): LabelIdResolver {
 }
 
 describe('fetchByLabel', () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => { vi.restoreAllMocks(); resetAccountProfile(); });
 
   it('lists by resolved label id then fetches and parses each message', async () => {
     const fetchMock = vi.fn();
     fetchMock.mockResolvedValueOnce(jsonResponse({ messages: [{ id: 'm1' }] }));
+    fetchMock.mockResolvedValueOnce(PROFILE());
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         id: 'm1', threadId: 't1', snippet: 'hi', labelIds: ['INBOX', 'UNREAD'],
@@ -43,7 +50,8 @@ describe('fetchByLabel', () => {
     expect(listUrl).toContain('/messages?labelIds=');
     expect(decodeURIComponent(listUrl)).toContain('id:INBOX');
     expect(listUrl).not.toContain('q=');
-    expect(fetchMock.mock.calls[1][0]).toContain('/messages/m1');
+    // call[1] is the profile fetch; the message get is call[2].
+    expect(fetchMock.mock.calls[2][0]).toContain('/messages/m1');
     expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer token123');
   });
 
@@ -72,6 +80,7 @@ describe('fetchByLabel', () => {
   it('returns successful messages and a failed count on per-message 429', async () => {
     const fetchMock = vi.fn();
     fetchMock.mockResolvedValueOnce(jsonResponse({ messages: [{ id: 'm1' }, { id: 'm2' }] }));
+    fetchMock.mockResolvedValueOnce(PROFILE());
     fetchMock.mockResolvedValueOnce(jsonResponse({
       id: 'm1', threadId: 't1', snippet: 'ok', labelIds: ['INBOX'],
       payload: { headers: [{ name: 'Subject', value: 'A' }] },

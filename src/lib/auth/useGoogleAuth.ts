@@ -5,6 +5,7 @@ import { loadGis } from './loadGis';
 import { loadPersistedToken, savePersistedToken } from './tokenPersistence';
 import { resetAppLabelResolver } from '../gmail/appLabelResolver';
 import { resetLabelDirectory } from '../gmail/labelDirectory';
+import { resetAccountProfile } from '../gmail/accountProfile';
 import { resetThreadSummaryCache } from '../../state/threadSummaryCache';
 import { clearAccountScopedStorage } from '../storageKeys';
 
@@ -74,6 +75,7 @@ export function useGoogleAuth() {
     // not leak into the next account.
     resetAppLabelResolver();
     resetLabelDirectory();
+    resetAccountProfile();
     resetThreadSummaryCache();
     clearAccountScopedStorage();
     setError(null);

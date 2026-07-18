@@ -19,7 +19,7 @@ function header(headers: GmailHeader[], name: string): string {
   return found ? found.value : '';
 }
 
-export function parseGmailMessage(msg: RawGmailMessage): EmailSummary {
+export function parseGmailMessage(msg: RawGmailMessage, accountAddress?: string): EmailSummary {
   const headers = msg.payload?.headers ?? [];
   return {
     id: msg.id,
@@ -30,7 +30,7 @@ export function parseGmailMessage(msg: RawGmailMessage): EmailSummary {
     date: header(headers, 'Date'),
     unread: (msg.labelIds ?? []).includes('UNREAD'),
     labels: msg.labelIds ?? [],
-    signals: deriveMessageSignals(msg),
+    signals: deriveMessageSignals(msg, accountAddress),
     ...(header(headers, 'List-Unsubscribe')
       ? { listUnsubscribe: header(headers, 'List-Unsubscribe') }
       : {}),
