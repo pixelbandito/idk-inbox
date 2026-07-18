@@ -2,6 +2,7 @@ import { PanelHeader } from '../layout/PanelHeader';
 import { SettingsSection } from './settings/SettingsSection';
 import { AutomationSettings } from './settings/AutomationSettings';
 import { NoticedTrends } from './settings/NoticedTrends';
+import { UnderTheHood } from './settings/UnderTheHood';
 import { ShortcutsReference } from './settings/ShortcutsReference';
 
 export interface SettingsPanelProps {
@@ -39,6 +40,10 @@ export function SettingsPanel({ signedIn, onSignIn, onSignOut }: SettingsPanelPr
 
         <SettingsSection title="Gestures & shortcuts">
           <ShortcutsReference />
+        </SettingsSection>
+
+        <SettingsSection title="Under the hood">
+          <UnderTheHood />
         </SettingsSection>
       </div>
     </>
