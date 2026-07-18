@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useDispatchContext, useDispatcher } from '../state/useDispatch';
-import { fatiguedSenders, type SenderStats } from '../lib/heuristics/senderFatigue';
-import { resolveSuggestionFor, isSuggestionResolved } from '../lib/heuristics/resolvedSuggestions';
+import { topSuggestion } from '../lib/heuristics/evaluate';
+import type { Suggestion } from '../lib/heuristics/catalog';
+import { resolveSuggestionFor } from '../lib/heuristics/resolvedSuggestions';
 import { isProcessorEnabled } from '../lib/automation/settings';
 import { addAutoArchiveRule } from '../lib/rules/autoArchive';
+import { normalizeListId } from '../lib/signals/behaviourLog';
 import { isPlainEmailAddress, senderAddressOf } from '../lib/gmail/address';
 import type { EmailSummary } from '../lib/gmail/types';
 
@@ -12,37 +14,44 @@ export interface SuggestionCardProps {
   emails: EmailSummary[];
 }
 
+/** Does this row belong to the suggestion's fingerprint (sender or list)? */
+function matchesFingerprint(email: EmailSummary, fingerprint: Suggestion['fingerprint']): boolean {
+  if (fingerprint.kind === 'sender') return senderAddressOf(email.from) === fingerprint.value;
+  const listId = email.signals?.listId;
+  return !!listId && normalizeListId(listId) === fingerprint.value;
+}
+
 /**
- * The proactive side of the fatigue heuristic: when a sender's mail keeps
- * getting dismissed unread, offer to unsubscribe or auto-archive. The user
- * decides; the card never acts on its own.
+ * The proactive side of the heuristics engine: it surfaces the top suggestion
+ * (unsubscribe / auto-archive) for a fingerprint you consistently ignore. The
+ * user decides; the card never acts on its own.
  */
 export function SuggestionCard({ emails }: SuggestionCardProps) {
   const ctx = useDispatchContext();
   const dispatch = useDispatcher();
-  const [suggestion, setSuggestion] = useState<SenderStats | null>(null);
+  const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
 
-  // Recomputed per list refresh; effect (not render) because the heuristic
-  // reads localStorage and "now".
+  // Recomputed per list refresh; effect (not render) because it reads
+  // localStorage and "now".
   useEffect(() => {
     queueMicrotask(() => {
-      // Respect the user's switch in Settings → the heuristic goes quiet.
+      // Respect the user's switch in Settings → suggestions go quiet.
       if (!isProcessorEnabled('sender-fatigue')) { setSuggestion(null); return; }
-      const fatigued = fatiguedSenders();
-      setSuggestion(fatigued.find((f) => !isSuggestionResolved(f.sender)) ?? null);
+      setSuggestion(topSuggestion());
     });
   }, [emails]);
 
   if (!suggestion) return null;
-
-  const unsubscribeTarget = emails.find(
-    (e) => senderAddressOf(e.from) === suggestion.sender && e.listUnsubscribe,
-  );
+  const { fingerprint, action } = suggestion;
 
   const resolve = () => {
-    resolveSuggestionFor(suggestion.sender);
+    resolveSuggestionFor(fingerprint.value);
     setSuggestion(null);
   };
+
+  const unsubscribeTarget = emails.find(
+    (e) => matchesFingerprint(e, fingerprint) && e.listUnsubscribe,
+  );
 
   const unsubscribe = async () => {
     if (!unsubscribeTarget) return;
@@ -51,28 +60,30 @@ export function SuggestionCard({ emails }: SuggestionCardProps) {
       args: { targets: [unsubscribeTarget.threadId] },
       context: ctx,
     });
-    // Only settle the card if the unsubscribe page actually opened — a blocked
-    // popup or missing link should leave the offer standing.
+    // Only settle if the unsubscribe page actually opened — a blocked popup or
+    // missing link should leave the offer standing.
     if (result.ok) resolve();
   };
 
   const autoArchive = () => {
-    addAutoArchiveRule(suggestion.sender);
+    addAutoArchiveRule(fingerprint.value);
     resolve();
     void dispatch({ action: 'apply-auto-archive', args: {}, context: ctx });
   };
 
+  const canAutoArchive =
+    action.kind === 'auto-archive' &&
+    fingerprint.kind === 'sender' &&
+    isPlainEmailAddress(fingerprint.value);
+
   return (
     <section className="suggestion-card" aria-label="Suggestion">
-      <p>
-        You’ve been dismissing mail from <strong>{suggestion.sender}</strong> without
-        reading it ({Math.min(suggestion.dismissedUnread, suggestion.seen)} of the
-        last {suggestion.seen} seen).
-      </p>
-      {unsubscribeTarget && (
+      <p><strong>{suggestion.headline}</strong></p>
+      <p>{suggestion.detail}</p>
+      {action.kind === 'unsubscribe' && unsubscribeTarget && (
         <button onClick={() => void unsubscribe()}>Unsubscribe</button>
       )}
-      {isPlainEmailAddress(suggestion.sender) && (
+      {canAutoArchive && (
         <button onClick={autoArchive}>Auto-archive this sender</button>
       )}
       <button onClick={resolve}>Don’t suggest again</button>
