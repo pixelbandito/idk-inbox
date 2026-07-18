@@ -731,6 +731,43 @@
   }
   .toggle[data-on] .toggle__knob { transform: translateX(1.1rem); }
 
+  /* What I've noticed (behaviour trends) */
+  .trends__intro, .trends__empty {
+    margin: 0 0 0.6rem;
+    font-size: 0.85rem;
+    color: color-mix(in srgb, var(--foregroundColor) 65%, var(--backgroundColor));
+  }
+  .trends { list-style: none; margin: 0; padding: 0; }
+  .trends__row {
+    padding: 0.55rem 0;
+    border-top: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 10%, transparent);
+  }
+  .trends__row:first-child { border-top: 0; }
+  /* A likely fatigue candidate (high volume, mostly archived unopened). */
+  .trends__row[data-fatigued] { border-inline-start: 3px solid var(--tone-info); padding-inline-start: 0.5rem; }
+  .trends__id { display: flex; align-items: baseline; gap: 0.4rem; min-width: 0; }
+  .trends__kind {
+    flex: 0 0 auto;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.1rem 0.35rem;
+    border-radius: 5px;
+    color: var(--backgroundColor);
+    background: color-mix(in srgb, var(--foregroundColor) 45%, var(--backgroundColor));
+  }
+  .trends__kind[data-kind="list"] { background: var(--tone-warn); color: #fff; }
+  .trends__label { min-width: 0; overflow-wrap: anywhere; font-size: 0.9rem; }
+  .trends__metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.9rem;
+    margin-top: 0.25rem;
+    font-size: 0.8rem;
+    color: color-mix(in srgb, var(--foregroundColor) 60%, var(--backgroundColor));
+  }
+
   /* Shortcuts reference */
   .shortcuts__group-title {
     margin: 0.75rem 0 0.4rem;

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   recordSeen, recordOpen, recordAction, fingerprintStats,
+  allFingerprintStats, parseFingerprintKey,
   senderKey, listKey, normalizeListId, fingerprintKeysFor, resetBehaviourLog,
 } from './behaviourLog';
 import { cacheThreadSummaries, resetThreadSummaryCache } from '../../state/threadSummaryCache';
@@ -79,5 +80,16 @@ describe('behaviourLog', () => {
     recordAction(['tm1'], 'archive', NOW - 20 * DAY);
     recordAction(['tm1'], 'archive', NOW);
     expect(fingerprintStats(senderKey('a@b.c'), 14, NOW).archived).toBe(1); // the old one aged out
+  });
+
+  it('allFingerprintStats returns one entry per tracked key', () => {
+    recordSeen([summary('m1', 'a@b.c'), summary('m2', 'x@y.z', 'Shop <deals.shop.example>')], NOW);
+    const keys = allFingerprintStats(14, NOW).map((s) => s.key).sort();
+    expect(keys).toEqual([senderKey('a@b.c'), senderKey('x@y.z'), listKey('deals.shop.example')].sort());
+  });
+
+  it('parseFingerprintKey splits a key into kind and value', () => {
+    expect(parseFingerprintKey(senderKey('a@b.c'))).toEqual({ kind: 'sender', value: 'a@b.c' });
+    expect(parseFingerprintKey(listKey('deals.shop.example'))).toEqual({ kind: 'list', value: 'deals.shop.example' });
   });
 });

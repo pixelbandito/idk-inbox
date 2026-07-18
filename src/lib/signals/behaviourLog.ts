@@ -165,14 +165,7 @@ export interface FingerprintStats {
   unsubscribed: number;
 }
 
-/** Windowed counts for one fingerprint key (empty stats if unseen). */
-export function fingerprintStats(
-  key: FingerprintKey,
-  windowDays: number,
-  now: number = Date.now(),
-): FingerprintStats {
-  const cutoff = now - windowDays * DAY_MS;
-  const log = read().keys[key] ?? { sightings: {}, events: [] };
+function statsFor(key: FingerprintKey, log: KeyLog, cutoff: number): FingerprintStats {
   const events = log.events.filter((e) => e.at >= cutoff);
   const count = (action: BehaviourAction) => events.filter((e) => e.action === action).length;
   return {
@@ -187,6 +180,32 @@ export function fingerprintStats(
     labeled: count('label'),
     unsubscribed: count('unsubscribe'),
   };
+}
+
+const EMPTY_LOG: KeyLog = { sightings: {}, events: [] };
+
+/** Windowed counts for one fingerprint key (empty stats if unseen). */
+export function fingerprintStats(
+  key: FingerprintKey,
+  windowDays: number,
+  now: number = Date.now(),
+): FingerprintStats {
+  return statsFor(key, read().keys[key] ?? EMPTY_LOG, now - windowDays * DAY_MS);
+}
+
+/** Windowed counts for every tracked fingerprint — for the trends view. */
+export function allFingerprintStats(
+  windowDays: number,
+  now: number = Date.now(),
+): FingerprintStats[] {
+  const cutoff = now - windowDays * DAY_MS;
+  return Object.entries(read().keys).map(([key, log]) => statsFor(key, log, cutoff));
+}
+
+/** Split a fingerprint key back into its dimension and value for display. */
+export function parseFingerprintKey(key: FingerprintKey): { kind: 'sender' | 'list'; value: string } {
+  if (key.startsWith('list:')) return { kind: 'list', value: key.slice(5) };
+  return { kind: 'sender', value: key.startsWith('addr:') ? key.slice(5) : key };
 }
 
 export function resetBehaviourLog(): void {

@@ -1,6 +1,7 @@
 import { PanelHeader } from '../layout/PanelHeader';
 import { SettingsSection } from './settings/SettingsSection';
 import { AutomationSettings } from './settings/AutomationSettings';
+import { NoticedTrends } from './settings/NoticedTrends';
 import { ShortcutsReference } from './settings/ShortcutsReference';
 
 export interface SettingsPanelProps {
@@ -30,6 +31,10 @@ export function SettingsPanel({ signedIn, onSignIn, onSignOut }: SettingsPanelPr
 
         <SettingsSection title="What this app automates" defaultOpen>
           <AutomationSettings />
+        </SettingsSection>
+
+        <SettingsSection title="What I’ve noticed">
+          <NoticedTrends />
         </SettingsSection>
 
         <SettingsSection title="Gestures & shortcuts">
