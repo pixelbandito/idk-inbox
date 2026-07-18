@@ -22,8 +22,8 @@
   ```
   Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
   ```
-- **Working directory:** project root `/Users/pixelbandito/Code/email`. The trigger system work is on `event-system` directly (no separate worktree — this is iterative within an active feature branch).
-- **Node 22.13+ required.** Prepend `export PATH="/Users/pixelbandito/.nvm/versions/node/v22.13.0/bin:$PATH" && ` to every npm command.
+- **Working directory:** project root `~/Code/email`. The trigger system work is on `event-system` directly (no separate worktree — this is iterative within an active feature branch).
+- **Node 22.13+ required.** Prepend `export PATH="~/.nvm/versions/node/v22.13.0/bin:$PATH" && ` to every npm command.
 - **Baseline at start:** 332 tests passing, build + lint clean.
 
 ## Vocabulary reminder
