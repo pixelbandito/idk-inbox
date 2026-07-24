@@ -57,13 +57,16 @@ export function SuggestionCard({ emails, getToken }: SuggestionCardProps) {
   // auto-archive suggestion — a live, read-only search, so the consequence is
   // visible before the user confirms.
   useEffect(() => {
-    setPreview(null);
-    const token = getToken();
-    if (!suggestion || suggestion.action.kind !== 'auto-archive' || !token) return;
     let live = true;
-    previewInboxMatches(token, suggestion.fingerprint)
-      .then((p) => { if (live) setPreview(p); })
-      .catch(() => {});
+    queueMicrotask(() => {
+      if (!live) return;
+      setPreview(null);
+      const token = getToken();
+      if (!suggestion || suggestion.action.kind !== 'auto-archive' || !token) return;
+      previewInboxMatches(token, suggestion.fingerprint)
+        .then((p) => { if (live) setPreview(p); })
+        .catch(() => {});
+    });
     return () => { live = false; };
   }, [suggestion, getToken]);
 
