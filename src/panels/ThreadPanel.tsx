@@ -3,6 +3,9 @@ import { PanelHeader } from '../layout/PanelHeader';
 import { SanitizedEmailBody } from '../mail/SanitizedEmailBody';
 import { fetchThread, type ThreadView } from '../lib/gmail/fetchThread';
 import { useOverscrollClose, type ClosePhase, type CloseMode } from '../input/useOverscrollClose';
+import { useDispatchContext, useDispatcher } from '../state/useDispatch';
+import { Icon } from '../ui/icons';
+import type { ActionId } from '../input/types';
 
 export interface ThreadPanelProps {
   threadId: string;
@@ -29,6 +32,16 @@ export function ThreadPanel({ threadId, getToken, onClose }: ThreadPanelProps) {
   const [error, setError] = useState<string | null>(null);
   const [close, setClose] = useState<{ phase: ClosePhase; mode: CloseMode }>({ phase: 'idle', mode: null });
   const bodyRef = useRef<HTMLDivElement>(null);
+  const dispatch = useDispatcher();
+  const ctx = useDispatchContext();
+
+  // Button fallbacks for the triage gestures — always available while reading.
+  // Archive/delete take the thread out of the inbox, so they close the panel;
+  // snooze opens its picker and leaves the panel for it to settle.
+  const triage = async (action: ActionId, closesPanel: boolean) => {
+    const result = await dispatch({ action, args: { targets: [threadId] }, context: ctx });
+    if (closesPanel && result.ok) onClose();
+  };
 
   useEffect(() => {
     // Defer to a microtask so the setState calls don't fire synchronously
@@ -55,7 +68,14 @@ export function ThreadPanel({ threadId, getToken, onClose }: ThreadPanelProps) {
     <>
       <PanelHeader
         title={view?.subject ?? ''}
-        actions={<button onClick={onClose} aria-label="Close thread">×</button>}
+        actions={
+          <>
+            <button onClick={() => void triage('archive-thread', true)} aria-label="Archive"><Icon name="archive" /></button>
+            <button onClick={() => void triage('snooze-thread', false)} aria-label="Snooze"><Icon name="clock" /></button>
+            <button onClick={() => void triage('delete-thread', true)} aria-label="Delete"><Icon name="trash" /></button>
+            <button onClick={onClose} aria-label="Close thread">×</button>
+          </>
+        }
       />
       {/* The stage doesn't scroll, so the reveal drawer stays pinned to the
           panel's visual bottom while the scroller's content lifts. */}
