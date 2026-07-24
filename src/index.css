@@ -356,22 +356,44 @@
     font-weight: 600;
   }
 
-  /* Overscroll-to-close affordance, pinned to the bottom of the thread body. */
-  .thread__close-hint {
+  /* Pull-to-close: the thread lifts by --close-pull (set imperatively by
+     useOverscrollClose), revealing a colour + affordance drawer beneath. Two
+     gates read from data-close-phase: armed (far enough) then ready (also long
+     enough) — colour and text together say "letting go now closes". */
+  .thread-scroll { position: relative; }
+  .thread-scroll .thread {
+    transform: translateY(calc(-1 * var(--close-pull, 0px)));
+    transition: transform var(--close-spring, 0ms) ease-out;
+  }
+  .thread-close-reveal {
     position: sticky;
     bottom: 0;
-    padding: 0.6rem 1rem;
-    text-align: center;
-    font-size: 0.85rem;
-    color: var(--backgroundColor);
-    background: color-mix(in srgb, var(--foregroundColor) 70%, transparent);
-    backdrop-filter: blur(2px);
-    transition: background-color 120ms ease;
+    height: var(--close-pull, 0px);
+    margin-top: calc(-1 * var(--close-pull, 0px)); /* don't add scroll length */
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Neutral, contrasty dark grey while merely pulling. */
+    background: color-mix(in srgb, var(--foregroundColor) 14%, var(--backgroundColor));
+    transition: height var(--close-spring, 0ms) ease-out, background-color 160ms ease;
   }
-  .thread__close-hint[data-armed] {
-    background: var(--tone-info);
-    color: #fff;
+  /* Armed → a distinct dark colour; ready → stronger still. */
+  .thread-scroll[data-close-phase="armed"] .thread-close-reveal {
+    background: color-mix(in srgb, var(--tone-info) 32%, var(--backgroundColor));
+  }
+  .thread-scroll[data-close-phase="ready"] .thread-close-reveal {
+    background: color-mix(in srgb, var(--tone-info) 60%, var(--backgroundColor));
+  }
+  .thread-close-reveal__label {
+    font-size: 0.85rem;
     font-weight: 600;
+    color: var(--foregroundColor);
+    white-space: nowrap;
+    opacity: 0.85;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .thread-scroll .thread, .thread-close-reveal { transition-duration: 1ms; }
   }
 
   /* Sanitised HTML mail (rendered in a shadow root inside .email-html__body). */

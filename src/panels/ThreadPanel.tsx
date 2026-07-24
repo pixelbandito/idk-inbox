@@ -2,42 +2,33 @@ import { useEffect, useRef, useState } from 'react';
 import { PanelHeader } from '../layout/PanelHeader';
 import { SanitizedEmailBody } from '../mail/SanitizedEmailBody';
 import { fetchThread, type ThreadView } from '../lib/gmail/fetchThread';
-import { useOverscrollProducer } from '../triggers/producers/fromOverscroll';
-import { useTriggerHandler } from '../triggers/useTriggerHandler';
-import { overscrollBlockEnd } from '../triggers/triggers';
-import type { TriggerName } from '../triggers/types';
+import { useOverscrollClose, type ClosePhase, type CloseMode } from '../input/useOverscrollClose';
 
 export interface ThreadPanelProps {
   threadId: string;
   /**
    * Layout index of this panel. No longer consumed by ThreadPanel —
    * close-panel reads the focused index from context via argsFor — but
-   * retained for callers that already pass it (e.g. App.tsx). Will be
-   * dropped in Step 5 once we're sure nothing relies on it.
+   * retained for callers that already pass it (e.g. App.tsx).
    */
   panelIndex?: number;
   getToken: () => string | null;
   onClose: () => void;
 }
 
-// Step 4 Task 15: panel-body overscroll → close-panel flows through the new
-// pipeline. The legacy useOverscroll consumer that called dispatch directly
-// is gone; the producer below emits a gesture-overscroll AbstractEvent that
-// the resolver maps to closePanelAction via ACTION_MAP['panel-body'].
-const PANEL_BODY_NEW_PIPELINE: ReadonlySet<TriggerName> = new Set([
-  overscrollBlockEnd,
-]);
+/** The affordance for the pull-to-close gesture, by phase and input. */
+function closeHint(phase: ClosePhase, mode: CloseMode): string {
+  if (phase === 'ready') return 'Release to close';
+  if (phase === 'armed') return mode === 'wheel' ? 'Scroll back to cancel' : 'Hold to close';
+  if (phase === 'pulling') return mode === 'wheel' ? 'Keep scrolling to close' : 'Keep pulling to close';
+  return '';
+}
 
-export function ThreadPanel({
-  threadId,
-  getToken,
-  onClose,
-}: ThreadPanelProps) {
+export function ThreadPanel({ threadId, getToken, onClose }: ThreadPanelProps) {
   const [view, setView] = useState<ThreadView | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [closePull, setClosePull] = useState(0); // 0..1 overscroll-to-close progress
+  const [close, setClose] = useState<{ phase: ClosePhase; mode: CloseMode }>({ phase: 'idle', mode: null });
   const bodyRef = useRef<HTMLDivElement>(null);
-  const onTrigger = useTriggerHandler(PANEL_BODY_NEW_PIPELINE);
 
   useEffect(() => {
     // Defer to a microtask so the setState calls don't fire synchronously
@@ -55,7 +46,10 @@ export function ThreadPanel({
     });
   }, [threadId, getToken]);
 
-  useOverscrollProducer(bodyRef, onTrigger, setClosePull);
+  useOverscrollClose(bodyRef, {
+    onFire: onClose,
+    onPhase: (phase, mode) => setClose({ phase, mode }),
+  });
 
   return (
     <>
@@ -63,7 +57,7 @@ export function ThreadPanel({
         title={view?.subject ?? ''}
         actions={<button onClick={onClose} aria-label="Close thread">×</button>}
       />
-      <div className="panel__body" data-surface="panel-body" ref={bodyRef}>
+      <div className="panel__body thread-scroll" data-surface="panel-body" ref={bodyRef}>
         {error && <p className="error">{error}</p>}
         {view && (
           <ol className="thread">
@@ -79,16 +73,11 @@ export function ThreadPanel({
             ))}
           </ol>
         )}
-        {closePull > 0 && (
-          <div
-            className="thread__close-hint"
-            data-armed={closePull >= 1 ? 'true' : undefined}
-            style={{ opacity: Math.min(1, 0.4 + closePull * 0.6) }}
-            aria-hidden="true"
-          >
-            {closePull >= 1 ? 'Release to close ▾' : 'Keep pulling to close ▾'}
-          </div>
-        )}
+        {/* Grows from the bottom as the thread lifts, revealing the colour +
+            affordance for the pull-to-close gesture. */}
+        <div className="thread-close-reveal" aria-hidden="true">
+          <span className="thread-close-reveal__label">{closeHint(close.phase, close.mode)}</span>
+        </div>
       </div>
     </>
   );
