@@ -106,9 +106,9 @@ export function LayoutContainer({ renderPanel }: LayoutContainerProps) {
     }
   }, [focusIndex]);
 
-  // Manual sticky-scrolling between panels updates which one is "active", so the
-  // edge peek counts reflect where you actually are. The active panel is the one
-  // snapped to the container's start edge after the scroll settles.
+  // Manual scrolling between panels updates which one is "active": the panel
+  // nearest screen centre wins, but the boundary panels — which can never
+  // centre — activate once you're pinned at that scroll edge and keep going.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -121,13 +121,22 @@ export function LayoutContainer({ renderPanel }: LayoutContainerProps) {
         if (Date.now() < programmaticUntilRef.current) return;
         const sections = container.querySelectorAll('section.panel');
         if (sections.length === 0) return;
-        const start = container.getBoundingClientRect().left;
+
+        const rect = container.getBoundingClientRect();
+        const viewportCentre = rect.left + rect.width / 2;
         let best = 0;
         let bestDist = Infinity;
         sections.forEach((el, i) => {
-          const d = Math.abs(el.getBoundingClientRect().left - start);
+          const r = el.getBoundingClientRect();
+          const d = Math.abs(r.left + r.width / 2 - viewportCentre);
           if (d < bestDist) { bestDist = d; best = i; }
         });
+        // At a scroll extreme, the edge panel can't be centred — let it activate.
+        if (container.scrollLeft <= 1) best = 0;
+        else if (container.scrollLeft + container.clientWidth >= container.scrollWidth - 1) {
+          best = sections.length - 1;
+        }
+
         if (best !== focusIndexRef.current) {
           scrollDrivenRef.current = true;
           setFocusIndex(() => best);
