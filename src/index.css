@@ -360,29 +360,35 @@
      useOverscrollClose), revealing a colour + affordance drawer beneath. Two
      gates read from data-close-phase: armed (far enough) then ready (also long
      enough) — colour and text together say "letting go now closes". */
-  .thread-scroll { position: relative; }
-  .thread-scroll .thread {
+  /* Non-scrolling stage: the scroller fills it, the reveal pins to its bottom
+     (= the panel's visual bottom), so the drawer always lines up. */
+  .thread-close-stage { flex: 1; position: relative; min-height: 0; overflow: hidden; }
+  .thread-close-stage .thread-scroll { position: absolute; inset: 0; flex: none; }
+  .thread-close-stage .thread {
     transform: translateY(calc(-1 * var(--close-pull, 0px)));
     transition: transform var(--close-spring, 0ms) ease-out;
   }
   .thread-close-reveal {
-    position: sticky;
+    position: absolute;
+    left: 0;
+    right: 0;
     bottom: 0;
     height: var(--close-pull, 0px);
-    margin-top: calc(-1 * var(--close-pull, 0px)); /* don't add scroll length */
+    z-index: 2;
     overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
+    pointer-events: none;
     /* Neutral, contrasty dark grey while merely pulling. */
     background: color-mix(in srgb, var(--foregroundColor) 14%, var(--backgroundColor));
     transition: height var(--close-spring, 0ms) ease-out, background-color 160ms ease;
   }
   /* Armed → a distinct dark colour; ready → stronger still. */
-  .thread-scroll[data-close-phase="armed"] .thread-close-reveal {
+  .thread-close-stage[data-close-phase="armed"] .thread-close-reveal {
     background: color-mix(in srgb, var(--tone-info) 32%, var(--backgroundColor));
   }
-  .thread-scroll[data-close-phase="ready"] .thread-close-reveal {
+  .thread-close-stage[data-close-phase="ready"] .thread-close-reveal {
     background: color-mix(in srgb, var(--tone-info) 60%, var(--backgroundColor));
   }
   .thread-close-reveal__label {
@@ -393,7 +399,7 @@
     opacity: 0.85;
   }
   @media (prefers-reduced-motion: reduce) {
-    .thread-scroll .thread, .thread-close-reveal { transition-duration: 1ms; }
+    .thread-close-stage .thread, .thread-close-reveal { transition-duration: 1ms; }
   }
 
   /* Sanitised HTML mail (rendered in a shadow root inside .email-html__body). */

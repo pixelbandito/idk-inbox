@@ -57,24 +57,26 @@ export function ThreadPanel({ threadId, getToken, onClose }: ThreadPanelProps) {
         title={view?.subject ?? ''}
         actions={<button onClick={onClose} aria-label="Close thread">×</button>}
       />
-      <div className="panel__body thread-scroll" data-surface="panel-body" ref={bodyRef}>
-        {error && <p className="error">{error}</p>}
-        {view && (
-          <ol className="thread">
-            {view.messages.map((m) => (
-              <li key={m.id} className="thread__message">
-                <div className="thread__meta">
-                  <strong>{m.from}</strong> · {m.date}
-                </div>
-                {m.html
-                  ? <SanitizedEmailBody html={m.html} />
-                  : <pre className="thread__body">{m.body}</pre>}
-              </li>
-            ))}
-          </ol>
-        )}
-        {/* Grows from the bottom as the thread lifts, revealing the colour +
-            affordance for the pull-to-close gesture. */}
+      {/* The stage doesn't scroll, so the reveal drawer stays pinned to the
+          panel's visual bottom while the scroller's content lifts. */}
+      <div className="thread-close-stage">
+        <div className="panel__body thread-scroll" data-surface="panel-body" ref={bodyRef}>
+          {error && <p className="error">{error}</p>}
+          {view && (
+            <ol className="thread">
+              {view.messages.map((m) => (
+                <li key={m.id} className="thread__message">
+                  <div className="thread__meta">
+                    <strong>{m.from}</strong> · {m.date}
+                  </div>
+                  {m.html
+                    ? <SanitizedEmailBody html={m.html} />
+                    : <pre className="thread__body">{m.body}</pre>}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
         <div className="thread-close-reveal" aria-hidden="true">
           <span className="thread-close-reveal__label">{closeHint(close.phase, close.mode)}</span>
         </div>

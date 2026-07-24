@@ -194,4 +194,34 @@ describe('useGesture', () => {
     // The gesture must not treat the button press as a row click.
     expect(onClick).not.toHaveBeenCalled();
   });
+
+  describe('guardActive (inactive-panel gating)', () => {
+    it('suppresses a swipe but still fires a tap when the guard is false', () => {
+      const onSwipe = vi.fn();
+      const onClick = vi.fn();
+      const { getByTestId } = render(
+        <Target onSwipe={onSwipe} onClick={onClick} guardActive={() => false} />,
+      );
+      const el = getByTestId('target');
+
+      // A full swipe does nothing (the panel would just activate)…
+      fireEvent.pointerDown(el, { pointerId: 1, clientX: 250, clientY: 50 });
+      fireEvent.pointerUp(el,   { pointerId: 1, clientX: 50, clientY: 50 });
+      expect(onSwipe).not.toHaveBeenCalled();
+
+      // …but a tap still opens (navigation is allowed).
+      fireEvent.pointerDown(el, { pointerId: 2, clientX: 50, clientY: 50 });
+      fireEvent.pointerUp(el,   { pointerId: 2, clientX: 51, clientY: 51 });
+      expect(onClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('allows the swipe when the guard is true', () => {
+      const onSwipe = vi.fn();
+      const { getByTestId } = render(<Target onSwipe={onSwipe} guardActive={() => true} />);
+      const el = getByTestId('target');
+      fireEvent.pointerDown(el, { pointerId: 1, clientX: 250, clientY: 50 });
+      fireEvent.pointerUp(el,   { pointerId: 1, clientX: 50, clientY: 50 });
+      expect(onSwipe).toHaveBeenCalledTimes(1);
+    });
+  });
 });

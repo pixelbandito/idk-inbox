@@ -31,7 +31,7 @@ describe('useOverscrollClose', () => {
       atBottom(el);
 
       fireEvent.touchStart(el, { touches: [{ clientY: 500 }] });
-      fireEvent.touchMove(el, { touches: [{ clientY: 390 }] }); // 110px up → armed
+      fireEvent.touchMove(el, { touches: [{ clientY: 300 }] }); // big pull past the (resisted) arm distance
       expect(phases).toContain('armed');
 
       vi.advanceTimersByTime(450); // hold past the dwell
@@ -48,7 +48,7 @@ describe('useOverscrollClose', () => {
       atBottom(el);
 
       fireEvent.touchStart(el, { touches: [{ clientY: 500 }] });
-      fireEvent.touchMove(el, { touches: [{ clientY: 390 }] }); // armed
+      fireEvent.touchMove(el, { touches: [{ clientY: 300 }] }); // armed
       vi.advanceTimersByTime(200); // let go early
       fireEvent.touchEnd(el);
       expect(onFire).not.toHaveBeenCalled();
@@ -75,7 +75,7 @@ describe('useOverscrollClose', () => {
       atBottom(el);
 
       fireEvent.wheel(el, { deltaY: 200 }); // 120px pull → armed
-      vi.advanceTimersByTime(130);          // wheel settles → buffer begins
+      vi.advanceTimersByTime(140);          // wheel settles → buffer begins
       expect(onFire).not.toHaveBeenCalled();
       vi.advanceTimersByTime(700);          // buffer elapses → commit
       expect(onFire).toHaveBeenCalledTimes(1);
@@ -88,7 +88,7 @@ describe('useOverscrollClose', () => {
       atBottom(el);
 
       fireEvent.wheel(el, { deltaY: 200 });   // armed
-      vi.advanceTimersByTime(130);            // buffer running
+      vi.advanceTimersByTime(140);            // buffer running
       fireEvent.wheel(el, { deltaY: -50 });   // scroll back = cancel
       vi.advanceTimersByTime(700);
       expect(onFire).not.toHaveBeenCalled();
@@ -101,9 +101,9 @@ describe('useOverscrollClose', () => {
       atBottom(el);
 
       fireEvent.wheel(el, { deltaY: 200 });
-      vi.advanceTimersByTime(130);            // buffer running
+      vi.advanceTimersByTime(140);            // buffer running
       fireEvent.wheel(el, { deltaY: 200 });   // push again → keeps alive
-      vi.advanceTimersByTime(130);            // re-settle → new buffer
+      vi.advanceTimersByTime(140);            // re-settle → new buffer
       vi.advanceTimersByTime(700);            // buffer elapses
       expect(onFire).toHaveBeenCalledTimes(1);
     });
@@ -114,7 +114,7 @@ describe('useOverscrollClose', () => {
       const el = getByTestId('t');
       atBottom(el);
       fireEvent.wheel(el, { deltaY: 60 }); // 36px pull, below arm
-      vi.advanceTimersByTime(130 + 700);
+      vi.advanceTimersByTime(140 + 700);
       expect(onFire).not.toHaveBeenCalled();
     });
   });
@@ -127,7 +127,7 @@ describe('useOverscrollClose', () => {
     Object.defineProperty(el, 'scrollHeight', { configurable: true, value: 1000 });
     Object.defineProperty(el, 'clientHeight', { configurable: true, value: 100 });
     fireEvent.wheel(el, { deltaY: 300 });
-    vi.advanceTimersByTime(130 + 700);
+    vi.advanceTimersByTime(140 + 700);
     expect(onFire).not.toHaveBeenCalled();
   });
 });

@@ -18,6 +18,7 @@
 // CSS ease), and reports phase changes to React for the hint text.
 
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
+import { isPanelActive } from './panelActive';
 
 export type ClosePhase = 'idle' | 'pulling' | 'armed' | 'ready';
 export type CloseMode = 'touch' | 'wheel' | null;
@@ -33,13 +34,22 @@ export interface OverscrollCloseOpts {
   bufferMs?: number;
 }
 
-const DEFAULTS = { armPx: 90, dwellMs: 450, bufferMs: 700 };
+// A deliberate pull: a fair distance to arm, and a clear hold/grace before it
+// commits, so the affordance can be read before you're past the point of return.
+const DEFAULTS = { armPx: 130, dwellMs: 700, bufferMs: 900 };
 // A wheel stream idle this long counts as "settled" → begin the buffer.
-const WHEEL_SETTLE_MS = 130;
-// Wheel deltas are coarse; damp them so the pull tracks the hand, not momentum.
-const WHEEL_DAMP = 0.6;
+const WHEEL_SETTLE_MS = 140;
 // Quick spring when a touch is released early (vs the slow wheel buffer ease).
 const TOUCH_SPRING_MS = 260;
+
+/**
+ * Progressive rubber-band resistance: each unit of input moves the pull less,
+ * and less still the further you've already pulled — so natural scroll momentum
+ * can't blow through it, and closing takes a hands-on, sustained effort.
+ */
+function resist(pull: number, armPx: number): number {
+  return Math.max(0.22, 0.7 - pull / (armPx * 4));
+}
 
 export function useOverscrollClose(ref: RefObject<HTMLElement | null>, opts: OverscrollCloseOpts): void {
   const optsRef = useRef(opts);
@@ -48,6 +58,10 @@ export function useOverscrollClose(ref: RefObject<HTMLElement | null>, opts: Ove
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    // The reveal drawer lives on the non-scrolling stage (the scroller's parent),
+    // pinned to the panel's visual bottom — so it lines up regardless of how much
+    // content there is or where the scroll sits. Styles/attrs go there.
+    const stage = el.parentElement ?? el;
     const cfg = () => ({ ...DEFAULTS, ...optsRef.current });
 
     let mode: CloseMode = null;
@@ -68,13 +82,13 @@ export function useOverscrollClose(ref: RefObject<HTMLElement | null>, opts: Ove
     const setPhase = (next: ClosePhase) => {
       if (next === phase) return;
       phase = next;
-      el.dataset.closePhase = next;
+      stage.dataset.closePhase = next;
       optsRef.current.onPhase?.(next, mode);
     };
 
     const paint = (springMs = 0) => {
-      el.style.setProperty('--close-pull', `${Math.round(pull)}px`);
-      el.style.setProperty('--close-spring', springMs > 0 ? `${springMs}ms` : '0ms');
+      stage.style.setProperty('--close-pull', `${Math.round(pull)}px`);
+      stage.style.setProperty('--close-spring', springMs > 0 ? `${springMs}ms` : '0ms');
     };
 
     // Return to rest — optionally easing (spring) rather than snapping.
@@ -84,7 +98,7 @@ export function useOverscrollClose(ref: RefObject<HTMLElement | null>, opts: Ove
       touchY = null;
       pull = 0;
       setPhase('idle');
-      delete el.dataset.closePhase;
+      delete stage.dataset.closePhase;
       paint(springMs);
     };
 
@@ -116,7 +130,7 @@ export function useOverscrollClose(ref: RefObject<HTMLElement | null>, opts: Ove
 
     // ---- Touch: pull-and-hold ------------------------------------------------
     const onTouchStart = (e: TouchEvent) => {
-      if (!atBottom()) return;
+      if (!atBottom() || !isPanelActive(el)) return; // only the active panel closes
       mode = 'touch';
       touchY = e.touches[0]?.clientY ?? null;
       pull = 0;
@@ -125,7 +139,8 @@ export function useOverscrollClose(ref: RefObject<HTMLElement | null>, opts: Ove
       if (mode !== 'touch' || touchY === null) return;
       if (!atBottom()) { reset(); return; }
       const y = e.touches[0]?.clientY ?? touchY;
-      pull = Math.max(0, pull + (touchY - y)); // up-drag past the bottom grows the pull
+      const raw = touchY - y; // up-drag past the bottom grows the pull
+      pull = Math.max(0, pull + (raw > 0 ? raw * resist(pull, cfg().armPx) : raw));
       touchY = y;
       reflectPull();
     };
@@ -146,13 +161,14 @@ export function useOverscrollClose(ref: RefObject<HTMLElement | null>, opts: Ove
     };
 
     const onWheel = (e: WheelEvent) => {
+      if (!isPanelActive(el)) { if (pull > 0) reset(); return; } // active panel only
       if (!atBottom()) { if (pull > 0) reset(); return; }
       mode = 'wheel';
 
       if (e.deltaY < 0) {
         // Scrolling back into the content.
         if (phase === 'armed' || phase === 'ready') { reset(TOUCH_SPRING_MS); return; } // active cancel
-        pull = Math.max(0, pull + e.deltaY * WHEEL_DAMP);
+        pull = Math.max(0, pull + e.deltaY * 0.6); // ease back a touch faster than it built
         reflectPull();
         return;
       }
@@ -160,7 +176,7 @@ export function useOverscrollClose(ref: RefObject<HTMLElement | null>, opts: Ove
 
       // Pushing further past the edge — (re)arm and keep it alive.
       if (bufferTimer) { clearTimeout(bufferTimer); bufferTimer = null; }
-      pull += e.deltaY * WHEEL_DAMP;
+      pull += e.deltaY * resist(pull, cfg().armPx);
       reflectPull();
       if (settleTimer) clearTimeout(settleTimer);
       settleTimer = setTimeout(() => {
@@ -183,9 +199,9 @@ export function useOverscrollClose(ref: RefObject<HTMLElement | null>, opts: Ove
       el.removeEventListener('touchmove', onTouchMove);
       el.removeEventListener('touchend', onTouchEnd);
       el.removeEventListener('touchcancel', onTouchEnd);
-      el.style.removeProperty('--close-pull');
-      el.style.removeProperty('--close-spring');
-      delete el.dataset.closePhase;
+      stage.style.removeProperty('--close-pull');
+      stage.style.removeProperty('--close-spring');
+      delete stage.dataset.closePhase;
     };
   }, [ref]);
 }

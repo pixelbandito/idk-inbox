@@ -23,6 +23,7 @@ import {
   type IconName, type SwipeBinding,
 } from './swipeIntents';
 import { targetFromRow, targetsFromSelection } from './helpers';
+import { isPanelActive } from './panelActive';
 import { resolveSurface } from '../triggers/producers/fromGesture';
 import type { AbstractEvent } from '../triggers/types';
 import type { ActionId, ActionResult, DispatchRequest, ReadonlyContext, ThreadRef } from './types';
@@ -222,7 +223,12 @@ export function useRowSwipe(
     else clearPullVisuals(el);
   }, [ref, releasePull]);
 
-  useGesture('row', ref, { onClick, onLongPress, onDrag, onDragEnd });
+  // Swipes only act on the active panel; on an inactive one the gesture just
+  // activates it (a tap still opens the row — that's navigation).
+  useGesture('row', ref, {
+    onClick, onLongPress, onDrag, onDragEnd,
+    guardActive: () => isPanelActive(ref.current),
+  });
 
   // Trackpad two-finger horizontal scroll: reveal + snap open (no auto-commit).
   useEffect(() => {
@@ -266,6 +272,8 @@ export function useRowSwipe(
     };
 
     const onWheel = (e: WheelEvent) => {
+      // Trackpad reveal is an in-panel action — only on the active panel.
+      if (!isPanelActive(el)) return;
       if (!session && Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
       e.preventDefault();
       if (!session) { revealRef.current = null; setReveal(null); }

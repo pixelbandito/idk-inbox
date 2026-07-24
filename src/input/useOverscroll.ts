@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
+import { isPanelActive } from './panelActive';
 
 export interface OverscrollOpts {
   edge: 'top' | 'bottom';
@@ -55,6 +56,7 @@ export function useOverscroll(ref: RefObject<HTMLElement | null>, opts: Overscro
 
     const onWheel = (e: WheelEvent) => {
       const o = optsRef.current;
+      if (!isPanelActive(el)) { resetTo(0); return; } // active panel only
       if (!atEdge()) { resetTo(0); return; }
       const delta = o.edge === 'bottom' ? Math.max(0, e.deltaY) : Math.max(0, -e.deltaY);
       if (delta <= 0) return;
@@ -65,6 +67,7 @@ export function useOverscroll(ref: RefObject<HTMLElement | null>, opts: Overscro
     };
 
     const onTouchStart = (e: TouchEvent) => {
+      if (!isPanelActive(el)) { touchY = null; return; } // active panel only
       touchY = e.touches[0]?.clientY ?? null;
       if (!atEdge()) resetTo(0);
     };
