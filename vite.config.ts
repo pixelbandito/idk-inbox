@@ -57,6 +57,9 @@ export default defineConfig(({ mode }) => {
       environment: 'jsdom',
       globals: true,
       setupFiles: './src/test/setup.ts',
+      // Headroom above the 5s async-util timeout (see src/test/setup.ts) so a
+      // test that legitimately waits under load isn't killed by the test timeout.
+      testTimeout: 15000,
     },
   };
 });
