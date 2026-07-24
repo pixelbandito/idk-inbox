@@ -736,6 +736,26 @@
     font-size: 0.8rem;
     cursor: pointer;
   }
+  /* A paused rule recedes so "off" reads at a glance. */
+  .rule-list__item[data-disabled] .rule-list__sender { opacity: 0.5; }
+
+  /* CTA from the hub into the dedicated actions panel. */
+  .processor__actions-link {
+    margin-top: 0.6rem;
+    padding: 0.5rem 0;
+    border: 0;
+    background: transparent;
+    color: var(--tone-info);
+    font: inherit;
+    font-size: 0.88rem;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  /* Bulk controls at the top of the actions panel. */
+  .actions-bulk { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+  .actions-bulk .btn { flex: 1; font-size: 0.85rem; }
+  .actions-bulk__danger { color: var(--tone-danger); border-color: color-mix(in srgb, var(--tone-danger) 45%, transparent); }
 
   /* On/off switch */
   .toggle {

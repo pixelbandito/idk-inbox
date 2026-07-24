@@ -5,6 +5,7 @@ import { SettingsPanel } from './panels/SettingsPanel';
 import { ThreadlistPanel } from './panels/ThreadlistPanel';
 import { ThreadPanel } from './panels/ThreadPanel';
 import { LabelsPanel } from './panels/LabelsPanel';
+import { AutomationActionsPanel } from './panels/AutomationActionsPanel';
 import { SnoozePicker } from './pickers/SnoozePicker';
 import { LabelPicker } from './pickers/LabelPicker';
 import { CommandPalette } from './palette/CommandPalette';
@@ -126,6 +127,9 @@ function AppInner({ getToken }: { getToken: () => string | null }) {
     }
     if (panel.kind === 'labels') {
       return <LabelsPanel getToken={getToken} />;
+    }
+    if (panel.kind === 'automations') {
+      return <AutomationActionsPanel onClose={props.onClose} />;
     }
     return (
       <ThreadPanel

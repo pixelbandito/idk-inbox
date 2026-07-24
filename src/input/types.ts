@@ -9,7 +9,7 @@ export type Mode =
   | 'picker-label'
   | 'cmd-k';
 
-export type PanelKindForCtx = 'settings' | 'threadlist' | 'thread' | 'labels';
+export type PanelKindForCtx = 'settings' | 'threadlist' | 'thread' | 'labels' | 'automations';
 
 export type ThreadRef = string; // Gmail threadId
 

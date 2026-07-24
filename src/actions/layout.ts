@@ -1,11 +1,12 @@
 import type { ActionResult, ReadonlyContext, ThreadRef } from '../input/types';
-import { openThread, openThreadlist, closeAt } from '../layout/operations';
+import { openThread, openThreadlist, openSingletonPanel, closeAt } from '../layout/operations';
 import { displayNameOf } from '../lib/gmail/labelDisplay';
 import type { Panel } from '../layout/types';
 
 export type OpenPanelArgs =
   | { kind: 'thread'; threadId: ThreadRef }
-  | { kind: 'threadlist'; label: string };
+  | { kind: 'threadlist'; label: string }
+  | { kind: 'automations' };
 
 interface LayoutSetters {
   setPanels:      (updater: (p: Panel[]) => Panel[]) => void;
@@ -30,6 +31,17 @@ export function createLayoutActions(s: LayoutSetters) {
         });
         if (focusAt >= 0) s.setFocusIndex(() => focusAt);
         return { ok: true, description: `Opened ${displayNameOf(args.label)}` };
+      }
+
+      if (args.kind === 'automations') {
+        let focusAt = -1;
+        s.setPanels((p) => {
+          const result = openSingletonPanel(p, { kind: 'automations', closable: true });
+          focusAt = result.focusIndex;
+          return result.panels;
+        });
+        if (focusAt >= 0) s.setFocusIndex(() => focusAt);
+        return { ok: true, description: 'Opened automations' };
       }
 
       const sourceLabel = ctx.focusedLabel ?? 'INBOX';

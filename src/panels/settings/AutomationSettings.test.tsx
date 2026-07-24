@@ -1,22 +1,41 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AutomationSettings } from './AutomationSettings';
+import { DispatchProvider } from '../../state/DispatchProvider';
+import { useLayoutState } from '../../state/useDispatch';
 import { resetLocalState } from '../../test/resetLocalState';
 import { isProcessorEnabled } from '../../lib/automation/settings';
-import { addAutoArchiveRule, autoArchiveRules } from '../../lib/rules/autoArchive';
+import { addAutoArchiveRule } from '../../lib/rules/autoArchive';
+import type { Panel } from '../../layout/types';
+
+const initialPanels: Panel[] = [{ kind: 'settings' }, { kind: 'threadlist', label: 'INBOX' }];
+
+function PanelCountProbe() {
+  const { panels } = useLayoutState();
+  return <div data-testid="panel-count">{panels.length}</div>;
+}
+
+function renderHub() {
+  render(
+    <DispatchProvider signedIn initialPanels={initialPanels}>
+      <AutomationSettings />
+      <PanelCountProbe />
+    </DispatchProvider>,
+  );
+}
 
 describe('AutomationSettings', () => {
   beforeEach(() => resetLocalState());
 
   it('lists each processor with a plain-language summary', () => {
-    render(<AutomationSettings />);
+    renderHub();
     expect(screen.getByText('Sender fatigue')).toBeInTheDocument();
     expect(screen.getByText('Auto-archive rules')).toBeInTheDocument();
     expect(screen.getByText(/keep archiving unread/i)).toBeInTheDocument();
   });
 
   it('toggling a processor persists its off state', () => {
-    render(<AutomationSettings />);
+    renderHub();
     const toggle = screen.getByRole('switch', { name: /enable sender fatigue/i });
     expect(toggle).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(toggle);
@@ -25,17 +44,17 @@ describe('AutomationSettings', () => {
   });
 
   it('shows an empty state when there are no auto-archive rules', () => {
-    render(<AutomationSettings />);
+    renderHub();
     expect(screen.getByText(/no rules yet/i)).toBeInTheDocument();
   });
 
-  it('lists auto-archive rules and removes one on demand', () => {
+  it('links to the actions panel with the live rule count', () => {
     addAutoArchiveRule('spam@shop.example');
-    render(<AutomationSettings />);
-    expect(screen.getByText('spam@shop.example')).toBeInTheDocument();
+    renderHub();
+    const cta = screen.getByRole('button', { name: /view 1 action/i });
 
-    fireEvent.click(screen.getByRole('button', { name: /remove auto-archive rule for spam@shop.example/i }));
-    expect(autoArchiveRules()).toHaveLength(0);
-    expect(screen.queryByText('spam@shop.example')).toBeNull();
+    fireEvent.click(cta);
+    // The automations panel is appended to the workspace.
+    expect(screen.getByTestId('panel-count').textContent).toBe('3');
   });
 });

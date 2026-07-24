@@ -33,6 +33,16 @@ export function openThreadlist(panels: Panel[], label: string): OpenThreadlistRe
   };
 }
 
+/**
+ * Opens a one-of-a-kind detail panel (e.g. the automations actions view), or
+ * focuses the existing one. Appends at the end so it reads as a drill-in.
+ */
+export function openSingletonPanel(panels: Panel[], panel: Panel): OpenThreadlistResult {
+  const existing = panels.findIndex((p) => p.kind === panel.kind);
+  if (existing !== -1) return { panels, focusIndex: existing };
+  return { panels: [...panels, panel], focusIndex: panels.length };
+}
+
 export function closeAt(panels: Panel[], index: number): Panel[] {
   if (index < 0 || index >= panels.length) return panels;
   return [...panels.slice(0, index), ...panels.slice(index + 1)];

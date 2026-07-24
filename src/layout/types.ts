@@ -4,6 +4,8 @@ export type Panel =
   // panel); the core workspace lists (INBOX, Snoozed) leave it unset.
   | { kind: 'threadlist'; label: string; closable?: boolean }
   | { kind: 'thread'; threadId: string; sourceLabel: string }
-  | { kind: 'labels' };
+  | { kind: 'labels' }
+  // The auto-archive actions detail, opened on demand from Settings.
+  | { kind: 'automations'; closable?: boolean };
 
 export type PanelKind = Panel['kind'];

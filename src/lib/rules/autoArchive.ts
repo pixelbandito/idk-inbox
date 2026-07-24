@@ -18,10 +18,17 @@ const MAX_THREADS_PER_RULE = 100;
 export interface AutoArchiveRule {
   sender: string;
   createdAt: number;
+  /** Absent = enabled; false = paused (kept, but skipped by the sweep). */
+  enabled?: boolean;
 }
 
 export interface AutoArchiveSweepResult {
   archived: number;
+}
+
+/** A rule runs unless it was explicitly paused. */
+export function ruleEnabled(rule: AutoArchiveRule): boolean {
+  return rule.enabled !== false;
 }
 
 export function autoArchiveRules(): AutoArchiveRule[] {
@@ -30,6 +37,26 @@ export function autoArchiveRules(): AutoArchiveRule[] {
   } catch {
     return [];
   }
+}
+
+function writeRules(rules: AutoArchiveRule[]): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(rules));
+}
+
+/** Pause or resume one rule without deleting it. */
+export function setAutoArchiveRuleEnabled(sender: string, enabled: boolean): void {
+  const address = senderAddressOf(sender);
+  writeRules(autoArchiveRules().map((r) => (r.sender === address ? { ...r, enabled } : r)));
+}
+
+/** Pause or resume every rule at once ("disable all"). */
+export function setAllAutoArchiveRulesEnabled(enabled: boolean): void {
+  writeRules(autoArchiveRules().map((r) => ({ ...r, enabled })));
+}
+
+/** Remove every rule ("delete all"). */
+export function removeAllAutoArchiveRules(): void {
+  writeRules([]);
 }
 
 export function addAutoArchiveRule(sender: string, now: number = Date.now()): void {
@@ -69,6 +96,7 @@ export async function sweepAutoArchive(
 ): Promise<AutoArchiveSweepResult> {
   let archived = 0;
   for (const rule of rules) {
+    if (!ruleEnabled(rule)) continue; // paused rules are kept but don't run
     // Defense in depth against hand-edited or legacy stored rules.
     if (!isPlainEmailAddress(rule.sender)) continue;
     try {

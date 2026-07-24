@@ -1,29 +1,33 @@
 import { useState } from 'react';
 import { PROCESSORS, type ProcessorInfo } from '../../lib/automation/processors';
 import { isProcessorEnabled, setProcessorEnabled } from '../../lib/automation/settings';
-import { autoArchiveRules, removeAutoArchiveRule } from '../../lib/rules/autoArchive';
+import { autoArchiveRules, ruleEnabled } from '../../lib/rules/autoArchive';
+import { useDispatchContext, useDispatcher } from '../../state/useDispatch';
 import { Toggle } from './Toggle';
 
 /**
  * The audit hub: every automatic processor, what it does in plain language, an
- * on/off switch, and — for the rule engine — the concrete rules it will apply,
- * each removable. This is the "what is this app doing to my mail?" answer.
+ * on/off switch, and — for the rule engine — a link to the concrete actions it
+ * will apply. This is the "what is this app doing to my mail?" answer.
  */
 export function AutomationSettings() {
-  // Storage is imperative; bump to re-read after a toggle or removal.
+  // Storage is imperative; bump to re-read after a toggle.
   const [, force] = useState(0);
-  const refresh = () => force((n) => n + 1);
+  const ctx = useDispatchContext();
+  const dispatch = useDispatcher();
 
   const toggle = (id: string, next: boolean) => {
     setProcessorEnabled(id, next);
-    refresh();
+    force((n) => n + 1);
   };
+  const openActions = () =>
+    void dispatch({ action: 'open-panel', args: { kind: 'automations' }, context: ctx });
 
   return (
     <div className="automation">
       <p className="automation__intro">
         These run automatically on your mail. You’re in control — switch any off,
-        or remove individual rules below.
+        or manage the individual actions they created.
       </p>
       {PROCESSORS.map((processor) => (
         <ProcessorCard
@@ -31,7 +35,7 @@ export function AutomationSettings() {
           processor={processor}
           enabled={isProcessorEnabled(processor.id)}
           onToggle={(next) => toggle(processor.id, next)}
-          onRulesChanged={refresh}
+          onOpenActions={openActions}
         />
       ))}
     </div>
@@ -42,10 +46,10 @@ interface ProcessorCardProps {
   processor: ProcessorInfo;
   enabled: boolean;
   onToggle: (next: boolean) => void;
-  onRulesChanged: () => void;
+  onOpenActions: () => void;
 }
 
-function ProcessorCard({ processor, enabled, onToggle, onRulesChanged }: ProcessorCardProps) {
+function ProcessorCard({ processor, enabled, onToggle, onOpenActions }: ProcessorCardProps) {
   return (
     <section className="processor" data-enabled={enabled ? 'true' : undefined}>
       <div className="processor__head">
@@ -61,12 +65,13 @@ function ProcessorCard({ processor, enabled, onToggle, onRulesChanged }: Process
         <Toggle checked={enabled} onChange={onToggle} label={`Enable ${processor.name}`} />
       </div>
       <p className="processor__detail">{processor.detail}</p>
-      {processor.id === 'auto-archive' && <RuleList onChanged={onRulesChanged} />}
+      {processor.id === 'auto-archive' && <RulesLink onOpen={onOpenActions} />}
     </section>
   );
 }
 
-function RuleList({ onChanged }: { onChanged: () => void }) {
+/** A CTA into the dedicated actions panel, labelled with the live rule count. */
+function RulesLink({ onOpen }: { onOpen: () => void }) {
   const rules = autoArchiveRules();
   if (rules.length === 0) {
     return (
@@ -75,27 +80,14 @@ function RuleList({ onChanged }: { onChanged: () => void }) {
       </p>
     );
   }
-  const remove = (sender: string) => {
-    removeAutoArchiveRule(sender);
-    onChanged();
-  };
+  const active = rules.filter(ruleEnabled).length;
+  const summary =
+    active === rules.length
+      ? `${rules.length} action${rules.length === 1 ? '' : 's'}`
+      : `${active} of ${rules.length} active`;
   return (
-    <ul className="rule-list">
-      {rules.map((rule) => (
-        <li key={rule.sender} className="rule-list__item">
-          <span className="rule-list__sender">{rule.sender}</span>
-          <span className="rule-list__since">
-            since {new Date(rule.createdAt).toLocaleDateString()}
-          </span>
-          <button
-            className="rule-list__remove"
-            aria-label={`Remove auto-archive rule for ${rule.sender}`}
-            onClick={() => remove(rule.sender)}
-          >
-            Remove
-          </button>
-        </li>
-      ))}
-    </ul>
+    <button className="processor__actions-link" onClick={onOpen}>
+      View {summary} →
+    </button>
   );
 }

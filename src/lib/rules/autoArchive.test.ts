@@ -5,6 +5,10 @@ import {
   removeAutoArchiveRule,
   resetAutoArchiveRules,
   sweepAutoArchive,
+  ruleEnabled,
+  setAutoArchiveRuleEnabled,
+  setAllAutoArchiveRulesEnabled,
+  removeAllAutoArchiveRules,
 } from './autoArchive';
 import { spyThreadWriteClient } from '../../test/spyThreadWriteClient';
 
@@ -93,5 +97,38 @@ describe('auto-archive rules', () => {
 
     const result = await sweepAutoArchive('tok', client);
     expect(result.archived).toBe(1);
+  });
+});
+
+describe('pausing rules', () => {
+  beforeEach(() => { resetAutoArchiveRules(); vi.restoreAllMocks(); });
+
+  it('defaults to enabled and can be paused and resumed', () => {
+    addAutoArchiveRule('a@b.c', 1);
+    expect(ruleEnabled(autoArchiveRules()[0])).toBe(true);
+    setAutoArchiveRuleEnabled('a@b.c', false);
+    expect(ruleEnabled(autoArchiveRules()[0])).toBe(false);
+    setAutoArchiveRuleEnabled('a@b.c', true);
+    expect(ruleEnabled(autoArchiveRules()[0])).toBe(true);
+  });
+
+  it('disable-all and delete-all act on every rule', () => {
+    addAutoArchiveRule('a@b.c', 1);
+    addAutoArchiveRule('d@e.f', 2);
+    setAllAutoArchiveRulesEnabled(false);
+    expect(autoArchiveRules().every((r) => !ruleEnabled(r))).toBe(true);
+    removeAllAutoArchiveRules();
+    expect(autoArchiveRules()).toEqual([]);
+  });
+
+  it('the sweep skips a paused rule', async () => {
+    addAutoArchiveRule('a@b.c', 1);
+    setAutoArchiveRuleEnabled('a@b.c', false);
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const { client } = spyThreadWriteClient();
+    const result = await sweepAutoArchive('tok', client);
+    expect(result.archived).toBe(0);
+    expect(fetchMock).not.toHaveBeenCalled(); // no search issued for a paused rule
   });
 });
