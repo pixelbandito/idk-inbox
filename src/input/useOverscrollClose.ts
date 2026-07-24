@@ -34,21 +34,23 @@ export interface OverscrollCloseOpts {
   bufferMs?: number;
 }
 
-// A deliberate pull: a fair distance to arm, and a clear hold/grace before it
-// commits, so the affordance can be read before you're past the point of return.
-const DEFAULTS = { armPx: 130, dwellMs: 700, bufferMs: 900 };
+// The drawer should APPEAR readily (so you see the affordance) but COMMIT
+// deliberately — the reading time comes from the hold/grace, not from making the
+// reveal hard to surface. So: a modest arm distance, and a long hold (touch) /
+// grace buffer (wheel) before it actually closes.
+const DEFAULTS = { armPx: 100, dwellMs: 800, bufferMs: 1100 };
 // A wheel stream idle this long counts as "settled" → begin the buffer.
 const WHEEL_SETTLE_MS = 140;
 // Quick spring when a touch is released early (vs the slow wheel buffer ease).
 const TOUCH_SPRING_MS = 260;
 
 /**
- * Progressive rubber-band resistance: each unit of input moves the pull less,
- * and less still the further you've already pulled — so natural scroll momentum
- * can't blow through it, and closing takes a hands-on, sustained effort.
+ * Rubber-band resistance: responsive at first so the drawer peeks out as soon as
+ * you push past the edge, then stiffer so momentum can't fling it straight to
+ * armed — but it stays easy enough to *see*.
  */
 function resist(pull: number, armPx: number): number {
-  return Math.max(0.22, 0.7 - pull / (armPx * 4));
+  return Math.max(0.35, 0.85 - pull / (armPx * 3));
 }
 
 export function useOverscrollClose(ref: RefObject<HTMLElement | null>, opts: OverscrollCloseOpts): void {
