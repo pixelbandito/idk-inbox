@@ -17,10 +17,22 @@ const SETTLE_MS = 90;
 
 export function PanelNavPrototype() {
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const thumbRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   const activeRef = useRef(0);
   useEffect(() => { activeRef.current = active; }, [active]);
   const programmaticUntil = useRef(0);
+
+  // The custom scrollbar thumb reflects viewport-vs-content: its width is the
+  // visible fraction, its offset the scroll position. Updated live (imperative).
+  const updateBar = useCallback(() => {
+    const sc = scrollerRef.current;
+    const thumb = thumbRef.current;
+    if (!sc || !thumb) return;
+    const total = sc.scrollWidth || 1;
+    thumb.style.width = `${(sc.clientWidth / total) * 100}%`;
+    thumb.style.left = `${(sc.scrollLeft / total) * 100}%`;
+  }, []);
 
   // Centre a panel in the viewport (used by tap + prev/next).
   const activate = useCallback((index: number) => {
@@ -39,6 +51,7 @@ export function PanelNavPrototype() {
     if (!scroller) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const onScroll = () => {
+      updateBar(); // live, every scroll event
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         if (Date.now() < programmaticUntil.current) return;
@@ -60,8 +73,14 @@ export function PanelNavPrototype() {
       }, SETTLE_MS);
     };
     scroller.addEventListener('scroll', onScroll, { passive: true });
-    return () => { scroller.removeEventListener('scroll', onScroll); if (timer) clearTimeout(timer); };
-  }, []);
+    window.addEventListener('resize', updateBar);
+    updateBar(); // initial
+    return () => {
+      scroller.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', updateBar);
+      if (timer) clearTimeout(timer);
+    };
+  }, [updateBar]);
 
   // Keyboard arrows for quick testing.
   useEffect(() => {
@@ -80,6 +99,10 @@ export function PanelNavPrototype() {
         <span className="proto__status">Active panel: <strong>{active + 1}</strong> / {PANEL_COUNT}</span>
         <button onClick={() => activate(active + 1)} disabled={active === PANEL_COUNT - 1} aria-label="Next panel">›</button>
       </header>
+
+      <div className="proto__scrollbar" aria-hidden="true">
+        <div className="proto__scrollbar-thumb" ref={thumbRef} />
+      </div>
 
       <div className="proto__scroller" ref={scrollerRef}>
         {Array.from({ length: PANEL_COUNT }, (_, i) => (

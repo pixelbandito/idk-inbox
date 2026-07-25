@@ -29,6 +29,23 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
 .proto__bar button:disabled { opacity: 0.3; cursor: default; }
 .proto__status { font-size: 0.95rem; }
 
+/* Custom h-scroll indicator: a 2px line, thumb = visible fraction + position. */
+.proto__scrollbar {
+  position: relative;
+  height: 2px;
+  margin: 0.75rem 1.5rem 0;
+  background: #2a2a33;
+  border-radius: 2px;
+}
+.proto__scrollbar-thumb {
+  position: absolute;
+  top: 0;
+  height: 2px;
+  min-width: 8px;
+  border-radius: 2px;
+  background: #7aa2f7;
+}
+
 .proto__scroller {
   flex: 1;
   display: flex;
