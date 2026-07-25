@@ -22,11 +22,19 @@ const SETTLE_MS = 90;
 export function PanelNavPrototype() {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLDivElement>(null);
+  const notchRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   const activeRef = useRef(0);
   useEffect(() => { activeRef.current = active; }, [active]);
   const programmaticUntil = useRef(0);
+
+  // The notch pointer C, in content px, ranging the WHOLE content [0,scrollWidth]
+  // — half a viewport past each clamp point. The panels follow scrollLeft
+  // (clamped); only the notch enters the edge buffer. `lastDriven` marks scrolls
+  // we drove (wheel / tap) so a plain native scroll re-centres the notch.
+  const centreRef = useRef(0);
+  const lastDriven = useRef(0);
 
   // The custom scrollbar thumb reflects viewport-vs-content: its width is the
   // visible fraction, its offset the scroll position. Updated live (imperative).
@@ -35,8 +43,18 @@ export function PanelNavPrototype() {
     const thumb = thumbRef.current;
     if (!sc || !thumb) return;
     const total = sc.scrollWidth || 1;
-    thumb.style.width = `${(sc.clientWidth / total) * 100}%`;
+    const view = sc.clientWidth;
+    thumb.style.width = `${(view / total) * 100}%`;
     thumb.style.left = `${(sc.scrollLeft / total) * 100}%`;
+
+    // The notch sits at C within the thumb: (C − scrollLeft) / viewport. Centre
+    // (0.5) in the interior; slides toward an edge (0 or 1) as C enters the
+    // buffer while the thumb stays clamped.
+    const notch = notchRef.current;
+    if (notch && view) {
+      const within = Math.max(0, Math.min(1, (centreRef.current - sc.scrollLeft) / view));
+      notch.style.left = `${within * 100}%`;
+    }
 
     // Map: each segment grows in proportion to its panel's current width, so
     // the whole line fills the track and reflects the relative panel sizes.
@@ -51,23 +69,55 @@ export function PanelNavPrototype() {
     }
   }, []);
 
-  // Centre a panel in the viewport (used by tap + prev/next).
+  // Point C at a panel's centre and scroll toward it. For an edge panel that
+  // can't be centred, the thumb clamps and the notch lands off-centre — the
+  // "cannot be centred" case made visible.
   const activate = useCallback((index: number) => {
+    const sc = scrollerRef.current;
     const clamped = Math.max(0, Math.min(PANEL_COUNT - 1, index));
-    const el = scrollerRef.current?.children[clamped];
-    if (el instanceof HTMLElement) {
+    const el = sc?.children[clamped];
+    if (sc && el instanceof HTMLElement) {
+      const total = sc.scrollWidth;
+      centreRef.current = Math.max(0, Math.min(total, el.offsetLeft + el.offsetWidth / 2));
+      lastDriven.current = Date.now();
       programmaticUntil.current = Date.now() + PROGRAMMATIC_MS;
-      el.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
+      sc.scrollTo({
+        left: Math.max(0, Math.min(sc.scrollWidth - sc.clientWidth, centreRef.current - sc.clientWidth / 2)),
+        behavior: 'smooth',
+      });
+      updateBar();
     }
     setActive(clamped);
-  }, []);
+  }, [updateBar]);
 
   // Active-panel detection on manual scroll.
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
+
+    // Take over the wheel so we can drive C past the native scroll limit into the
+    // edge buffer (½ a viewport each side), where the panels stay put and only
+    // the notch moves. Interior scrolling behaves normally (notch stays centred).
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      lastDriven.current = Date.now();
+      const delta = Math.abs(e.deltaX) >= Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      const total = scroller.scrollWidth;
+      centreRef.current = Math.max(0, Math.min(total, centreRef.current + delta));
+      scroller.scrollLeft = Math.max(
+        0,
+        Math.min(scroller.scrollWidth - scroller.clientWidth, centreRef.current - scroller.clientWidth / 2),
+      );
+      updateBar(); // at an edge scrollLeft is clamped (no scroll event) — update the notch here
+    };
+
     const onScroll = () => {
+      // A native scroll we didn't drive (touch, dragging the browser scrollbar)
+      // re-centres the notch on the viewport.
+      if (Date.now() - lastDriven.current > 150) {
+        centreRef.current = scroller.scrollLeft + scroller.clientWidth / 2;
+      }
       updateBar(); // live, every scroll event
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
@@ -90,10 +140,12 @@ export function PanelNavPrototype() {
       }, SETTLE_MS);
     };
     scroller.addEventListener('scroll', onScroll, { passive: true });
+    scroller.addEventListener('wheel', onWheel, { passive: false });
     window.addEventListener('resize', updateBar);
     updateBar(); // initial
     return () => {
       scroller.removeEventListener('scroll', onScroll);
+      scroller.removeEventListener('wheel', onWheel);
       window.removeEventListener('resize', updateBar);
       if (timer) clearTimeout(timer);
     };
@@ -108,6 +160,7 @@ export function PanelNavPrototype() {
     Array.from(scroller.children).forEach((el, i) => {
       if (el instanceof HTMLElement && INITIAL_WIDTHS[i]) el.style.width = `${INITIAL_WIDTHS[i]}px`;
     });
+    centreRef.current = scroller.clientWidth / 2; // notch centred at the start
     updateBar();
     const ro = new ResizeObserver(() => updateBar());
     Array.from(scroller.children).forEach((el) => ro.observe(el));
@@ -133,7 +186,9 @@ export function PanelNavPrototype() {
       </header>
 
       <div className="proto__scrollbar" aria-hidden="true">
-        <div className="proto__scrollbar-thumb" ref={thumbRef} />
+        <div className="proto__scrollbar-thumb" ref={thumbRef}>
+          <div className="proto__scrollbar-notch" ref={notchRef} />
+        </div>
       </div>
 
       {/* Map: colored segments in proportion to each panel's width. */}

@@ -45,9 +45,9 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
   border-radius: 2px;
   background: #7aa2f7;
 }
-/* Centre notch: a short vertical tick marking the thumb's centre. */
-.proto__scrollbar-thumb::after {
-  content: '';
+/* Notch: the C pointer within the thumb. Centred in the interior; slides to an
+   edge as C enters the buffer while the thumb stays clamped. `left` is set live. */
+.proto__scrollbar-notch {
   position: absolute;
   left: 50%;
   top: 50%;
