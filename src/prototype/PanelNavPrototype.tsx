@@ -11,6 +11,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 //   • Tapping a panel activates it and centres it.
 
 const PANEL_COUNT = 8;
+// Varied starting widths so edge cases surface immediately — e.g. panel 4 is
+// narrow (can it be centred?), panel 6 is wide. Drag a panel's right edge to
+// resize it further.
+const INITIAL_WIDTHS = [300, 120, 440, 90, 260, 520, 150, 340];
 // Ignore scroll events our own centring emits, so it doesn't fight itself.
 const PROGRAMMATIC_MS = 500;
 const SETTLE_MS = 90;
@@ -80,6 +84,21 @@ export function PanelNavPrototype() {
       window.removeEventListener('resize', updateBar);
       if (timer) clearTimeout(timer);
     };
+  }, [updateBar]);
+
+  // Seed the varied widths imperatively (not via a React style prop) so native
+  // `resize` can take over without a re-render resetting it. Keep the bar in
+  // sync when a resize changes the content width.
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    Array.from(scroller.children).forEach((el, i) => {
+      if (el instanceof HTMLElement && INITIAL_WIDTHS[i]) el.style.width = `${INITIAL_WIDTHS[i]}px`;
+    });
+    updateBar();
+    const ro = new ResizeObserver(() => updateBar());
+    Array.from(scroller.children).forEach((el) => ro.observe(el));
+    return () => ro.disconnect();
   }, [updateBar]);
 
   // Keyboard arrows for quick testing.

@@ -59,8 +59,14 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
 }
 
 .proto__panel {
-  flex: 0 0 min(70vw, 320px);
+  flex: 0 0 auto;
+  width: 300px;               /* default; overridden per-panel, then by resize */
+  min-width: 56px;
+  max-width: 92vw;
   scroll-snap-align: center;
+  /* Native drag-to-resize (horizontal) — needs a non-visible overflow. */
+  resize: horizontal;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -70,14 +76,12 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
   background: hsl(var(--hue) 40% 22%);
   border: 3px solid transparent;
   opacity: 0.55;
-  transform: scale(0.95);
-  transition: opacity 160ms ease, transform 160ms ease, border-color 160ms ease;
+  transition: opacity 160ms ease, border-color 160ms ease;
   cursor: pointer;
   user-select: none;
 }
 .proto__panel[data-active] {
   opacity: 1;
-  transform: scale(1);
   border-color: hsl(var(--hue) 70% 60%);
 }
 .proto__num { font-size: 4rem; font-weight: 700; }
