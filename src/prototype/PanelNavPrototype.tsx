@@ -5,19 +5,23 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // readout of which is active. No app content — 8 numbered skeleton panels.
 //
 // The rules we're iterating on:
-//   • Active = the panel nearest the screen centre after a scroll settles.
-//   • The first / last panels can never centre, so they activate once the
-//     scroller is pinned at that edge.
-//   • Tapping a panel activates it and centres it.
+//   • Scrolling moves an attention cursor C through the whole content, with a
+//     ½-viewport buffer past each end where the panels stay put and only the
+//     notch moves within the thumb.
+//   • Active = the panel C points at — the one whose content range contains C,
+//     nearest when C is in a gap or the edge buffer. So an edge panel activates
+//     as soon as C enters its buffer, even though it can never be centred.
+//   • Tapping a panel points C at its centre and scrolls toward it.
 
 const PANEL_COUNT = 8;
 // Varied starting widths so edge cases surface immediately — e.g. panel 4 is
 // narrow (can it be centred?), panel 6 is wide. Drag a panel's right edge to
 // resize it further.
 const INITIAL_WIDTHS = [300, 120, 440, 90, 260, 520, 150, 340];
-// Ignore scroll events our own centring emits, so it doesn't fight itself.
+// How long a driven scroll (tap-to-centre / wheel) suppresses the native-scroll
+// cursor re-centring, so our own scroll settling doesn't fight it.
 const PROGRAMMATIC_MS = 500;
-const SETTLE_MS = 90;
+const DRIVE_MS = 200;
 
 export function PanelNavPrototype() {
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -27,14 +31,14 @@ export function PanelNavPrototype() {
   const [active, setActive] = useState(0);
   const activeRef = useRef(0);
   useEffect(() => { activeRef.current = active; }, [active]);
-  const programmaticUntil = useRef(0);
+  // While we're driving the scroll (wheel / tap), a native scroll event must not
+  // re-centre the cursor — it's our own scroll settling.
+  const drivingUntil = useRef(0);
 
-  // The notch pointer C, in content px, ranging the WHOLE content [0,scrollWidth]
-  // — half a viewport past each clamp point. The panels follow scrollLeft
-  // (clamped); only the notch enters the edge buffer. `lastDriven` marks scrolls
-  // we drove (wheel / tap) so a plain native scroll re-centres the notch.
+  // The cursor C, in content px, ranging the WHOLE content [0, scrollWidth] —
+  // half a viewport past each clamp point. The panels follow scrollLeft
+  // (clamped); only the cursor enters the edge buffer.
   const centreRef = useRef(0);
-  const lastDriven = useRef(0);
 
   // The custom scrollbar thumb reflects viewport-vs-content: its width is the
   // visible fraction, its offset the scroll position. Updated live (imperative).
@@ -69,6 +73,28 @@ export function PanelNavPrototype() {
     }
   }, []);
 
+  // The active panel is the one the cursor C points at — the panel whose content
+  // range contains C, or the nearest when C sits in a gap or the edge padding.
+  // So an edge panel becomes active once C enters its buffer, even though it can
+  // never be centred.
+  const pickActive = useCallback(() => {
+    const sc = scrollerRef.current;
+    if (!sc) return;
+    const C = centreRef.current;
+    const scLeft = sc.getBoundingClientRect().left;
+    let best = 0;
+    let bestDist = Infinity;
+    Array.from(sc.children).forEach((el, i) => {
+      if (!(el instanceof HTMLElement)) return;
+      const r = el.getBoundingClientRect();
+      const left = r.left - scLeft + sc.scrollLeft;   // content-space left
+      const right = left + r.width;
+      const dist = C < left ? left - C : C > right ? C - right : 0; // 0 if inside
+      if (dist < bestDist) { bestDist = dist; best = i; }
+    });
+    if (best !== activeRef.current) setActive(best);
+  }, []);
+
   // Point C at a panel's centre and scroll toward it. For an edge panel that
   // can't be centred, the thumb clamps and the notch lands off-centre — the
   // "cannot be centred" case made visible.
@@ -78,9 +104,10 @@ export function PanelNavPrototype() {
     const el = sc?.children[clamped];
     if (sc && el instanceof HTMLElement) {
       const total = sc.scrollWidth;
-      centreRef.current = Math.max(0, Math.min(total, el.offsetLeft + el.offsetWidth / 2));
-      lastDriven.current = Date.now();
-      programmaticUntil.current = Date.now() + PROGRAMMATIC_MS;
+      const r = el.getBoundingClientRect();
+      const centre = r.left - sc.getBoundingClientRect().left + sc.scrollLeft + r.width / 2;
+      centreRef.current = Math.max(0, Math.min(total, centre));
+      drivingUntil.current = Date.now() + PROGRAMMATIC_MS;
       sc.scrollTo({
         left: Math.max(0, Math.min(sc.scrollWidth - sc.clientWidth, centreRef.current - sc.clientWidth / 2)),
         behavior: 'smooth',
@@ -90,18 +117,18 @@ export function PanelNavPrototype() {
     setActive(clamped);
   }, [updateBar]);
 
-  // Active-panel detection on manual scroll.
+  // Scroll wiring: drive the cursor, sync the visuals, pick the active panel from
+  // the cursor (not from viewport geometry).
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
-    let timer: ReturnType<typeof setTimeout> | null = null;
 
     // Take over the wheel so we can drive C past the native scroll limit into the
     // edge buffer (½ a viewport each side), where the panels stay put and only
     // the notch moves. Interior scrolling behaves normally (notch stays centred).
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      lastDriven.current = Date.now();
+      drivingUntil.current = Date.now() + DRIVE_MS;
       const delta = Math.abs(e.deltaX) >= Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       const total = scroller.scrollWidth;
       centreRef.current = Math.max(0, Math.min(total, centreRef.current + delta));
@@ -109,47 +136,33 @@ export function PanelNavPrototype() {
         0,
         Math.min(scroller.scrollWidth - scroller.clientWidth, centreRef.current - scroller.clientWidth / 2),
       );
-      updateBar(); // at an edge scrollLeft is clamped (no scroll event) — update the notch here
+      updateBar();   // at an edge scrollLeft is clamped (no scroll event) — update here
+      pickActive();  // active follows the cursor, live
     };
 
     const onScroll = () => {
       // A native scroll we didn't drive (touch, dragging the browser scrollbar)
-      // re-centres the notch on the viewport.
-      if (Date.now() - lastDriven.current > 150) {
+      // re-centres the cursor on the viewport.
+      if (Date.now() >= drivingUntil.current) {
         centreRef.current = scroller.scrollLeft + scroller.clientWidth / 2;
       }
-      updateBar(); // live, every scroll event
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        if (Date.now() < programmaticUntil.current) return;
-        const rect = scroller.getBoundingClientRect();
-        const centre = rect.left + rect.width / 2;
-        let best = 0;
-        let bestDist = Infinity;
-        Array.from(scroller.children).forEach((el, i) => {
-          const r = el.getBoundingClientRect();
-          const d = Math.abs(r.left + r.width / 2 - centre);
-          if (d < bestDist) { bestDist = d; best = i; }
-        });
-        // Edge panels can't centre — activate them when pinned at the edge.
-        if (scroller.scrollLeft <= 1) best = 0;
-        else if (scroller.scrollLeft + scroller.clientWidth >= scroller.scrollWidth - 1) {
-          best = PANEL_COUNT - 1;
-        }
-        if (best !== activeRef.current) setActive(best);
-      }, SETTLE_MS);
+      updateBar();
+      pickActive();
     };
+
+    const onResize = () => { updateBar(); pickActive(); };
+
     scroller.addEventListener('scroll', onScroll, { passive: true });
     scroller.addEventListener('wheel', onWheel, { passive: false });
-    window.addEventListener('resize', updateBar);
-    updateBar(); // initial
+    window.addEventListener('resize', onResize);
+    updateBar();
+    pickActive();
     return () => {
       scroller.removeEventListener('scroll', onScroll);
       scroller.removeEventListener('wheel', onWheel);
-      window.removeEventListener('resize', updateBar);
-      if (timer) clearTimeout(timer);
+      window.removeEventListener('resize', onResize);
     };
-  }, [updateBar]);
+  }, [updateBar, pickActive]);
 
   // Seed the varied widths imperatively (not via a React style prop) so native
   // `resize` can take over without a re-render resetting it. Keep the bar in
