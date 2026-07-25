@@ -112,3 +112,143 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
 }
 .proto__num { font-size: 4rem; font-weight: 700; }
 .proto__hint { font-size: 0.85rem; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* ============================================================
+   Prototype hub + shared chrome
+   ============================================================ */
+.proto__back {
+  color: #7aa2f7;
+  text-decoration: none;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+.proto__back:hover { text-decoration: underline; }
+
+.hub {
+  min-height: 100dvh;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+.hub__title { margin: 0 0 0.25rem; font-size: 1.6rem; }
+.hub__lede { margin: 0 0 2rem; color: #9aa0b4; }
+.hub__group { margin-bottom: 2rem; }
+.hub__group-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7f8496;
+}
+.hub__list { display: grid; gap: 0.75rem; }
+.hub__card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid #2e2e3a;
+  border-radius: 12px;
+  background: #1c1c24;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.hub__card:hover { border-color: #7aa2f7; background: #20212c; }
+.hub__card-title { font-weight: 600; }
+.hub__card-blurb { font-size: 0.85rem; color: #9aa0b4; }
+
+/* ============================================================
+   Embla nav variant — viewport + container (slides reuse .proto__panel)
+   ============================================================ */
+.embla { flex: 1; overflow: hidden; padding: 1.5rem; }
+.embla__container { display: flex; gap: 1rem; height: 100%; align-items: stretch; }
+
+/* ============================================================
+   Pull-to-trigger gesture rigs
+   ============================================================ */
+.pull {
+  flex: 1;
+  display: grid;
+  overflow: hidden;
+}
+/* Backdrop and panel share one grid cell so the panel sits in front of the
+   colour/text, which stays visible in the band the panel doesn't cover. */
+.pull__bg,
+.pull__panel {
+  grid-area: 1 / 1;
+}
+.pull__bg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  transition: background 160ms ease, color 160ms ease;
+}
+.pull__bg[data-state='idle']      { background: #202029; color: #6b7080; }
+.pull__bg[data-state='pulling']   { background: #40320f; color: #f0c65f; }
+.pull__bg[data-state='armed']     { background: #123d29; color: #74e2a4; }
+.pull__bg[data-state='activated'] { background: #12683b; color: #d4ffe6; }
+.pull__bg[data-state='reverting'] { background: #43201f; color: #f0a0a0; }
+.pull__label {
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.pull__meter {
+  width: min(320px, 70%);
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+.pull__meter-fill {
+  height: 100%;
+  background: currentColor;
+  border-radius: 4px;
+}
+
+.pull__panel {
+  place-self: stretch;
+  margin: 1rem 1rem 5rem;
+  padding: 1.5rem;
+  border-radius: 16px;
+  background: #1b1b23;
+  border: 1px solid #34343f;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  touch-action: none;
+  cursor: grab;
+}
+.pull__panel[data-dragging] { cursor: grabbing; }
+/* 1:1 drag when active; spring back / fling with a transition when released. */
+.pull__panel { transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1); }
+.pull__panel[data-dragging] { transition: none; }
+.pull__panel h2 { margin: 0 0 0.5rem; }
+.pull__panel p { margin: 0 0 0.6rem; color: #c3c7d4; line-height: 1.5; }
+.pull__panel-hint {
+  color: #7f8496 !important;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.pull__panel--scroll {
+  overflow-y: auto;
+  cursor: default;
+  transition: none; /* driven every frame while overscrolling */
+  overscroll-behavior: contain;
+}
+
+/* Live-tuning slider bar */
+.tuner-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid #333;
+  background: #191921;
+}
+.tuner { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
+.tuner__name { color: #9aa0b4; min-width: 4.5rem; }
+.tuner__value { min-width: 3.5rem; color: #7aa2f7; font-variant-numeric: tabular-nums; }
+.tuner input[type='range'] { width: 140px; accent-color: #7aa2f7; }

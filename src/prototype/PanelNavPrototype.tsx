@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { NavBar, PanelBody } from './nav/NavBar';
+import { PANEL_COUNT, INITIAL_WIDTHS, hue } from './nav/navShared';
 
 // A clean-room sandbox for JUST the horizontal multi-panel navigation:
 // h-scrolling to move between panels, tap/click to activate one, and a clear
@@ -13,11 +15,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 //     as soon as C enters its buffer, even though it can never be centred.
 //   • Tapping a panel points C at its centre and scrolls toward it.
 
-const PANEL_COUNT = 8;
-// Varied starting widths so edge cases surface immediately — e.g. panel 4 is
-// narrow (can it be centred?), panel 6 is wide. Drag a panel's right edge to
-// resize it further.
-const INITIAL_WIDTHS = [300, 120, 440, 90, 260, 520, 150, 340];
+// Panel count, varied widths, and hues are shared with the other nav variants
+// (see navShared) so all four are directly comparable.
+//
 // How long a driven scroll (tap-to-centre / wheel) suppresses the native-scroll
 // cursor re-centring, so our own scroll settling doesn't fight it.
 const PROGRAMMATIC_MS = 500;
@@ -192,11 +192,12 @@ export function PanelNavPrototype() {
 
   return (
     <div className="proto">
-      <header className="proto__bar">
-        <button onClick={() => activate(active - 1)} disabled={active === 0} aria-label="Previous panel">‹</button>
-        <span className="proto__status">Active panel: <strong>{active + 1}</strong> / {PANEL_COUNT}</span>
-        <button onClick={() => activate(active + 1)} disabled={active === PANEL_COUNT - 1} aria-label="Next panel">›</button>
-      </header>
+      <NavBar
+        title="Home-rolled"
+        active={active}
+        onPrev={() => activate(active - 1)}
+        onNext={() => activate(active + 1)}
+      />
 
       <div className="proto__scrollbar" aria-hidden="true">
         <div className="proto__scrollbar-thumb" ref={thumbRef}>
@@ -207,7 +208,7 @@ export function PanelNavPrototype() {
       {/* Map: colored segments in proportion to each panel's width. */}
       <div className="proto__map" ref={mapRef} aria-hidden="true">
         {Array.from({ length: PANEL_COUNT }, (_, i) => (
-          <div key={i} className="proto__map-seg" style={{ '--hue': (i * 360) / PANEL_COUNT } as React.CSSProperties} />
+          <div key={i} className="proto__map-seg" style={{ '--hue': hue(i) } as React.CSSProperties} />
         ))}
       </div>
 
@@ -217,11 +218,10 @@ export function PanelNavPrototype() {
             key={i}
             className="proto__panel"
             data-active={i === active ? 'true' : undefined}
-            style={{ '--hue': (i * 360) / PANEL_COUNT } as React.CSSProperties}
+            style={{ '--hue': hue(i) } as React.CSSProperties}
             onClick={() => activate(i)}
           >
-            <div className="proto__num">{i + 1}</div>
-            <div className="proto__hint">{i === active ? 'active' : 'tap to activate'}</div>
+            <PanelBody index={i} active={i === active} />
           </section>
         ))}
       </div>
