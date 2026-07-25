@@ -45,6 +45,32 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
   border-radius: 2px;
   background: #7aa2f7;
 }
+/* Centre notch: a short vertical tick marking the thumb's centre. */
+.proto__scrollbar-thumb::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 9px;
+  border-radius: 1px;
+  background: #fff;
+}
+
+/* Map: one colored segment per panel, widths in proportion to the panels. */
+.proto__map {
+  display: flex;
+  gap: 1px;
+  height: 6px;
+  margin: 0.4rem 1.5rem 0;
+}
+.proto__map-seg {
+  flex: 1 1 0;
+  min-width: 1px;
+  border-radius: 2px;
+  background: hsl(var(--hue) 50% 45%);
+}
 
 .proto__scroller {
   flex: 1;

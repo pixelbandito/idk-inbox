@@ -22,6 +22,7 @@ const SETTLE_MS = 90;
 export function PanelNavPrototype() {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   const activeRef = useRef(0);
   useEffect(() => { activeRef.current = active; }, [active]);
@@ -36,6 +37,18 @@ export function PanelNavPrototype() {
     const total = sc.scrollWidth || 1;
     thumb.style.width = `${(sc.clientWidth / total) * 100}%`;
     thumb.style.left = `${(sc.scrollLeft / total) * 100}%`;
+
+    // Map: each segment grows in proportion to its panel's current width, so
+    // the whole line fills the track and reflects the relative panel sizes.
+    const map = mapRef.current;
+    if (map) {
+      Array.from(sc.children).forEach((panel, i) => {
+        const seg = map.children[i];
+        if (seg instanceof HTMLElement && panel instanceof HTMLElement) {
+          seg.style.flexGrow = String(panel.getBoundingClientRect().width);
+        }
+      });
+    }
   }, []);
 
   // Centre a panel in the viewport (used by tap + prev/next).
@@ -121,6 +134,13 @@ export function PanelNavPrototype() {
 
       <div className="proto__scrollbar" aria-hidden="true">
         <div className="proto__scrollbar-thumb" ref={thumbRef} />
+      </div>
+
+      {/* Map: colored segments in proportion to each panel's width. */}
+      <div className="proto__map" ref={mapRef} aria-hidden="true">
+        {Array.from({ length: PANEL_COUNT }, (_, i) => (
+          <div key={i} className="proto__map-seg" style={{ '--hue': (i * 360) / PANEL_COUNT } as React.CSSProperties} />
+        ))}
       </div>
 
       <div className="proto__scroller" ref={scrollerRef}>
