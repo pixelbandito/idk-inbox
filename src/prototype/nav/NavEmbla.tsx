@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import useEmblaCarousel from 'embla-carousel-react';
+import { WheelGesturesPlugin } from 'embla-carousel-wheel-gestures';
 import { NavBar, PanelBody } from './NavBar';
 import { PANEL_COUNT, hue, useSeededWidths } from './navShared';
 
@@ -12,7 +13,11 @@ import { PANEL_COUNT, hue, useSeededWidths } from './navShared';
 // We only supply the markup and read back the selected snap.
 
 export function NavEmbla() {
-  const [emblaRef, emblaApi] = useEmblaCarousel({ axis: 'x', align: 'center', containScroll: false });
+  // WheelGestures lets a trackpad / mouse wheel drive Embla, so it navigates by
+  // scroll like the other variants (Embla is pointer-drag only out of the box).
+  const [emblaRef, emblaApi] = useEmblaCarousel({ axis: 'x', align: 'center', containScroll: false }, [
+    WheelGesturesPlugin(),
+  ]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   useSeededWidths(containerRef);

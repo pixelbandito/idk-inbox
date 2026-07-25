@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavBar, PanelBody } from './NavBar';
-import { PANEL_COUNT, hue, useSeededWidths } from './navShared';
+import { PANEL_COUNT, hue, useEdgeSelection, useSeededWidths } from './navShared';
 
 // Variant 2 — IDIOMATIC, the pattern you'll find in most React carousels.
 //
@@ -16,6 +16,7 @@ export function NavIdiomatic() {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   useSeededWidths(scrollerRef);
+  useEdgeSelection(scrollerRef, setActive); // the centre-line observer can't reach the un-centrable edges
 
   useEffect(() => {
     const scroller = scrollerRef.current;
@@ -23,6 +24,8 @@ export function NavIdiomatic() {
     const panels = Array.from(scroller.children);
     const observer = new IntersectionObserver(
       (entries) => {
+        // At an extreme the un-centrable edge panel is owned by useEdgeSelection.
+        if (scroller.scrollLeft <= 1 || scroller.scrollLeft + scroller.clientWidth >= scroller.scrollWidth - 1) return;
         for (const entry of entries) {
           if (entry.isIntersecting) setActive(panels.indexOf(entry.target));
         }

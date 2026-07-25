@@ -14,6 +14,11 @@ import { clamp, resist, type PullState } from './pullShared';
 
 const QUIET_MS = 140; // gap after which the wheel counts as "gone quiet"
 const VISUAL_CAP = 180; // px the panel lifts to reveal the backdrop
+// A short un-armed pull that stops is probably a cancel, so start easing back
+// soon after the wheel goes quiet — well before the (armed-only) buffer window.
+const REVERT_DELAY = 200;
+const DRAIN_FACTOR = 0.08; // per-frame ease toward neutral (gentle, so the settle reads)
+const DRAIN_MIN = 2;
 const now = () => Date.now();
 
 export function GestureOverscroll() {
@@ -59,16 +64,24 @@ export function GestureOverscroll() {
       setView({ phase: 'idle', pull: 0, progress: 0 });
     };
 
-    const fire = () => {
-      fired.current = true;
-      stopLoop();
-      setView({ phase: 'activated', pull: pull.current, progress: 1 });
-      setTimeout(reset, 900);
-    };
+    const ease = (v: number) => Math.max(0, v - Math.max(DRAIN_MIN, v * DRAIN_FACTOR));
 
     const tick = () => {
       const t = now();
       const { armPx: arm, dwellMs: dwell, bufferMs: buffer } = params.current;
+
+      // After a trigger, settle back to neutral to confirm — no forward fling.
+      if (fired.current) {
+        pull.current = ease(pull.current);
+        if (pull.current <= 0) {
+          reset();
+          stopLoop();
+          return;
+        }
+        setView({ phase: 'activated', pull: pull.current, progress: 1 });
+        raf.current = requestAnimationFrame(tick);
+        return;
+      }
 
       const quiet = t - lastWheel.current > QUIET_MS;
       if (quiet && quietSince.current === 0) quietSince.current = t;
@@ -79,13 +92,16 @@ export function GestureOverscroll() {
       if (!armed) armedSince.current = 0;
 
       if (armed && t - armedSince.current >= dwell) {
-        fire();
+        fired.current = true; // begin the settle-back confirmation
+        raf.current = requestAnimationFrame(tick);
         return;
       }
 
-      // Buffer: hold the pull alive until the quiet window exceeds bufferMs, then drain.
-      const draining = quietSince.current !== 0 && t - quietSince.current >= buffer;
-      if (draining) pull.current = Math.max(0, pull.current - Math.max(4, pull.current * 0.12));
+      // Ease back once quiet: an armed pull gets the full buffer (a window to
+      // hold or re-commit); an un-armed pull starts easing back much sooner.
+      const holdWindow = armed ? buffer : REVERT_DELAY;
+      const reverting = quietSince.current !== 0 && t - quietSince.current >= holdWindow;
+      if (reverting) pull.current = ease(pull.current);
 
       if (pull.current <= 0) {
         reset();
@@ -93,7 +109,7 @@ export function GestureOverscroll() {
         return;
       }
 
-      const phase: PullState = draining ? 'reverting' : armed ? 'armed' : 'pulling';
+      const phase: PullState = reverting ? 'reverting' : armed ? 'armed' : 'pulling';
       const progress = armed ? (t - armedSince.current) / dwell : pull.current / arm;
       setView({ phase, pull: pull.current, progress });
       raf.current = requestAnimationFrame(tick);

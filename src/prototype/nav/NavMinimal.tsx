@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavBar, PanelBody } from './NavBar';
-import { PANEL_COUNT, hue, useSeededWidths } from './navShared';
+import { PANEL_COUNT, hue, useEdgeSelection, useSeededWidths } from './navShared';
 
 // Variant 1 — MINIMAL, modern platform features do the work.
 //
@@ -18,11 +18,15 @@ export function NavMinimal() {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   useSeededWidths(scrollerRef);
+  useEdgeSelection(scrollerRef, setActive); // scrollsnapchange can't reach the un-centrable edges
 
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
+    const atEdge = () =>
+      scroller.scrollLeft <= 1 || scroller.scrollLeft + scroller.clientWidth >= scroller.scrollWidth - 1;
     const onSnap = (e: Event) => {
+      if (atEdge()) return; // edges are owned by useEdgeSelection (they can't centre-snap)
       const target = (e as SnapEvent).snapTargetInline;
       if (!target) return;
       const index = Array.from(scroller.children).indexOf(target);
