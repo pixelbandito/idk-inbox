@@ -1,0 +1,67 @@
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color: #f4f5fa; }
+
+.proto {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.proto__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #333;
+}
+.proto__bar button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  border: 1px solid #444;
+  border-radius: 8px;
+  background: #22222b;
+  color: inherit;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+.proto__bar button:disabled { opacity: 0.3; cursor: default; }
+.proto__status { font-size: 0.95rem; }
+
+.proto__scroller {
+  flex: 1;
+  display: flex;
+  gap: 1rem;
+  padding: 1.5rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  /* Room to centre the first and last panels. */
+  scroll-padding-inline: 50%;
+}
+
+.proto__panel {
+  flex: 0 0 min(70vw, 320px);
+  scroll-snap-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 16px;
+  background: hsl(var(--hue) 40% 22%);
+  border: 3px solid transparent;
+  opacity: 0.55;
+  transform: scale(0.95);
+  transition: opacity 160ms ease, transform 160ms ease, border-color 160ms ease;
+  cursor: pointer;
+  user-select: none;
+}
+.proto__panel[data-active] {
+  opacity: 1;
+  transform: scale(1);
+  border-color: hsl(var(--hue) 70% 60%);
+}
+.proto__num { font-size: 4rem; font-weight: 700; }
+.proto__hint { font-size: 0.85rem; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em; }
