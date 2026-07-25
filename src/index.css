@@ -269,6 +269,49 @@
     color: color-mix(in srgb, var(--foregroundColor) 72%, var(--backgroundColor));
   }
   .email__from, .email__subject, .email__snippet { min-width: 0; max-width: 100%; }
+
+  /* "⋯" button + its inline action strip (button fallback for row swipes). */
+  .email__menu-wrap { position: absolute; top: 0; right: 0; z-index: 3; }
+  .email__more {
+    min-width: 2rem;
+    height: 2rem;
+    margin: 0.35rem;
+    border: 0;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--foregroundColor) 8%, var(--backgroundColor));
+    color: var(--foregroundColor);
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.55;
+  }
+  .email__more:hover, .email__more[aria-expanded="true"] { opacity: 1; }
+  /* The actions overlay the row's right edge, within its height (no clip). */
+  .email__menu {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0 0.4rem;
+    background: var(--backgroundColor);
+    box-shadow: -0.6rem 0 0.6rem var(--backgroundColor);
+  }
+  .email__menu-item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--foregroundColor);
+    cursor: pointer;
+  }
+  .email__menu-item:active { background: color-mix(in srgb, var(--foregroundColor) 12%, transparent); }
   /* Colour-coded label / snoozed chips on a thread tile. */
   .email__pills { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.2rem; }
   .email__pill {

@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { ThreadlistPanel } from './ThreadlistPanel';
 import { DispatchProvider } from '../state/DispatchProvider';
 import { useDispatchContext, useDispatcher } from '../state/useDispatch';
 import { LayoutContainer } from '../layout/LayoutContainer';
+import { spyThreadWriteClient } from '../test/spyThreadWriteClient';
 import type { EmailSummary } from '../lib/gmail/types';
 import type { Panel } from '../layout/types';
 
@@ -61,6 +62,23 @@ describe('ThreadlistPanel', () => {
     await waitFor(() => expect(fetchByLabel).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByTestId('archive'));
     await waitFor(() => expect(fetchByLabel).toHaveBeenCalledTimes(2));
+  });
+
+  it('archives a row from the ⋯ actions menu', async () => {
+    (fetchByLabel as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ emails, failed: 0 });
+    const { client, modifyThreadLabels } = spyThreadWriteClient();
+    render(
+      <DispatchProvider signedIn initialPanels={initialPanels} getToken={() => 'tok'} threadWriteClient={client}>
+        <ThreadlistPanel label="INBOX" displayName="Inbox" getToken={() => 'tok'} />
+      </DispatchProvider>,
+    );
+    await waitFor(() => screen.getByText('Lunch?'));
+    const row = screen.getByText('Lunch?').closest('li')!;
+
+    fireEvent.click(within(row).getByRole('button', { name: /actions/i }));
+    fireEvent.click(within(row).getByRole('menuitem', { name: /archive/i }));
+    await waitFor(() =>
+      expect(modifyThreadLabels).toHaveBeenCalledWith('tok', ['t1'], { add: [], remove: ['INBOX'] }));
   });
 
   it('shows a close button only when onClose is provided (on-demand lists)', () => {

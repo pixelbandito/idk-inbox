@@ -35,6 +35,14 @@ const INBOX_REMOVING_ACTIONS: ReadonlySet<ActionId> = new Set([
 // data-armed-icon (set imperatively by useRowSwipe — no re-render per frame).
 const REVEAL_ICONS: readonly IconName[] = ['archive', 'trash', 'clock', 'tag'];
 
+// The "⋯" menu: a button fallback for the swipe actions, always available.
+const ROW_MENU_ACTIONS: readonly { action: ActionId; icon: IconName; label: string }[] = [
+  { action: 'archive-thread',   icon: 'archive', label: 'Archive' },
+  { action: 'snooze-thread',    icon: 'clock',   label: 'Snooze' },
+  { action: 'add-label-thread', icon: 'tag',     label: 'Label' },
+  { action: 'delete-thread',    icon: 'trash',   label: 'Delete' },
+];
+
 export interface ThreadlistPanelProps {
   label: string;
   displayName: string;
@@ -63,6 +71,8 @@ function Row({ email, isSelected, pills, removesFromList, onCommitted }: RowProp
   // A committed removing write flies the tile off then collapses the row; after
   // the animation the panel drops it from the list.
   const [filing, setFiling] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const committedActionRef = useRef<ActionId | null>(null);
   const { reveal, commitReveal } = useRowSwipe(ref, {
     onTrigger, dispatch, ctx, removesFromList,
@@ -76,6 +86,21 @@ function Row({ email, isSelected, pills, removesFromList, onCommitted }: RowProp
     }, EXIT_MS);
     return () => clearTimeout(t);
   }, [filing, email.threadId, onCommitted]);
+
+  // Close the "⋯" menu on any press outside it.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: Event) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    return () => document.removeEventListener('pointerdown', onDown, true);
+  }, [menuOpen]);
+
+  const runAction = (action: ActionId) => {
+    setMenuOpen(false);
+    void dispatch({ action, args: { targets: [email.threadId] }, context: ctx });
+  };
 
   const className = [
     'email',
@@ -132,6 +157,34 @@ function Row({ email, isSelected, pills, removesFromList, onCommitted }: RowProp
               >
                 {p.text}
               </span>
+            ))}
+          </div>
+        )}
+      </div>
+      {/* Button fallback for the swipe actions — always reachable. */}
+      <div className="email__menu-wrap" ref={menuRef}>
+        <button
+          type="button"
+          className="email__more"
+          aria-label="Actions"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((v) => !v)}
+        >
+          ⋯
+        </button>
+        {menuOpen && (
+          <div className="email__menu" role="menu">
+            {ROW_MENU_ACTIONS.map((a) => (
+              <button
+                key={a.action}
+                type="button"
+                role="menuitem"
+                className="email__menu-item"
+                aria-label={a.label}
+                onClick={() => runAction(a.action)}
+              >
+                <Icon name={a.icon} />
+              </button>
             ))}
           </div>
         )}
