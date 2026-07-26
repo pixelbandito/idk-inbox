@@ -6,6 +6,9 @@ import { clamp, resist, type PullState } from './pullShared';
 // Rig 2 — OVERSCROLL + DISTANCE + TIMER, a faithful port of the app's
 // overscroll-to-close. Scroll the article to the bottom, then keep scrolling:
 //
+//   • rest gate — a scroll that just reaches the bottom stops there; overscroll
+//     only arms once you're rested at the bottom and start a fresh scroll, so a
+//     fast flick down can't blow straight through into a trigger
 //   • distance — resisted pull must pass `armPx` to arm (momentum can't blow it)
 //   • timer    — stay armed for `dwellMs` to fire (reading time before commit)
 //   • buffer   — when the wheel goes quiet, the pull is held alive for
@@ -19,6 +22,9 @@ const VISUAL_CAP = 180; // px the panel lifts to reveal the backdrop
 const REVERT_DELAY = 200;
 const DRAIN_FACTOR = 0.08; // per-frame ease toward neutral (gentle, so the settle reads)
 const DRAIN_MIN = 2;
+// Overscroll is gated behind resting at the bottom: a scroll that just arrives
+// there stops, and only a fresh scroll (after this quiet gap) begins to pull.
+const NEW_GESTURE_MS = 150;
 const now = () => Date.now();
 
 export function GestureOverscroll() {
@@ -45,6 +51,7 @@ export function GestureOverscroll() {
   const quietSince = useRef(0);
   const armedSince = useRef(0);
   const fired = useRef(false);
+  const restedAtBottom = useRef(false); // have we settled at the bottom (so overscroll is armed)?
   const raf = useRef(0);
 
   useEffect(() => {
@@ -121,19 +128,36 @@ export function GestureOverscroll() {
 
     const onWheel = (e: WheelEvent) => {
       if (fired.current) return;
+      const t = now();
+      const gap = t - lastWheel.current;
       const arm = params.current.armPx;
       const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
+      if (!atBottom) restedAtBottom.current = false; // left the bottom — must land again to arm
 
       if (e.deltaY > 0) {
-        if (!atBottom && pull.current <= 0) return; // still real scrolling
+        if (!atBottom) {
+          lastWheel.current = t;
+          return; // scrolling through the article
+        }
+        // At the bottom. A scroll that just *arrives* here stops; overscroll only
+        // begins once we've rested at the bottom and a fresh scroll starts.
+        const canPull = pull.current > 0 || (restedAtBottom.current && gap >= NEW_GESTURE_MS);
+        restedAtBottom.current = true;
+        if (!canPull) {
+          lastWheel.current = t;
+          return;
+        }
         e.preventDefault();
         pull.current = clamp(pull.current + e.deltaY * resist(pull.current, arm), 0, arm * 3);
       } else if (e.deltaY < 0) {
-        if (pull.current <= 0) return; // bleed pull first, then hand back to native scroll
+        if (pull.current <= 0) {
+          lastWheel.current = t;
+          return; // bleed pull first, then hand back to native scroll
+        }
         e.preventDefault();
         pull.current = Math.max(0, pull.current + e.deltaY);
       }
-      lastWheel.current = now();
+      lastWheel.current = t;
       quietSince.current = 0;
       ensureLoop();
     };
@@ -165,7 +189,7 @@ export function GestureOverscroll() {
               arm the archive action.
             </p>
           ))}
-          <p className="pull__panel-hint">↓ keep scrolling past here</p>
+          <p className="pull__panel-hint">↓ rest at the bottom, then scroll again to pull</p>
         </div>
       </div>
 

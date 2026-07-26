@@ -2,21 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import { NavBar, PanelBody } from './NavBar';
 import { PANEL_COUNT, hue, useSeededWidths } from './navShared';
 
-// Variant 1 — MINIMAL, modern platform features do the work.
+// Variant — PADDED, the pragmatic pure-CSS fix for the un-centrable edges.
 //
-//   • Scrolling + snapping: pure CSS scroll-snap (`.proto__scroller`). Zero JS.
-//   • Active panel: the `scrollsnapchange` event (Chrome 129+) hands us the
-//     newly snapped element directly — no geometry maths, no observers.
-//   • Centre a panel: `Element.scrollIntoView({ inline: 'center' })`.
+// The other snap-based variants can't select the first/last panel because there
+// is nothing to scroll past them, so they never reach centre. Add real half-a-
+// viewport padding on each side of the scroller (`.proto__scroller--padded`) and
+// that empty room lets even the edge panels scroll to centre — so plain CSS
+// scroll-snap + the `scrollsnapchange` event now handles all eight, no JS hack.
 //
-// That's the whole mechanic. Everything else is chrome. The honest trade-off:
-// the first/last panels can't reach centre, so this pure approach never selects
-// them — see the Padded variant for the CSS fix, or Home-rolled for the JS one.
+// The trade-off is right there on screen: visible empty space at the two ends.
 
-// `scrollsnapchange` isn't in the DOM lib types yet; this is the shape we read.
 type SnapEvent = Event & { snapTargetInline: Element | null };
 
-export function NavMinimal() {
+export function NavPadded() {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   useSeededWidths(scrollerRef);
@@ -46,8 +44,8 @@ export function NavMinimal() {
 
   return (
     <div className="proto">
-      <NavBar title="Minimal" active={active} onPrev={() => centre(active - 1)} onNext={() => centre(active + 1)} />
-      <div className="proto__scroller" ref={scrollerRef}>
+      <NavBar title="Padded" active={active} onPrev={() => centre(active - 1)} onNext={() => centre(active + 1)} />
+      <div className="proto__scroller proto__scroller--padded" ref={scrollerRef}>
         {Array.from({ length: PANEL_COUNT }, (_, i) => (
           <section
             key={i}

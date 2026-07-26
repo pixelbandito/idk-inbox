@@ -15,7 +15,10 @@ import { PANEL_COUNT, hue, useSeededWidths } from './navShared';
 export function NavEmbla() {
   // WheelGestures lets a trackpad / mouse wheel drive Embla, so it navigates by
   // scroll like the other variants (Embla is pointer-drag only out of the box).
-  const [emblaRef, emblaApi] = useEmblaCarousel({ axis: 'x', align: 'center', containScroll: false }, [
+  // containScroll 'keepSnaps' contains the scroll so there's no empty over-scroll
+  // room at the ends (the odd side padding), while keeping a snap for every
+  // panel — so all eight stay selectable, with the edge ones sitting flush.
+  const [emblaRef, emblaApi] = useEmblaCarousel({ axis: 'x', align: 'center', containScroll: 'keepSnaps' }, [
     WheelGesturesPlugin(),
   ]);
   const containerRef = useRef<HTMLDivElement>(null);

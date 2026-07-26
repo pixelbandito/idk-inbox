@@ -80,8 +80,17 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
-  /* Room to centre the first and last panels. */
+  /* Snap alignment is offset to the centre; note this alone does NOT give the
+     edge panels room to reach it (see the Padded variant). */
   scroll-padding-inline: 50%;
+}
+
+/* Padded variant: real half-viewport padding on each side creates actual scroll
+   room, so even the first/last panel can scroll to centre. The empty space at
+   the two ends is the visible trade-off. */
+.proto__scroller--padded {
+  padding-inline: 50%;
+  scroll-padding-inline: 0;
 }
 
 .proto__panel {
@@ -236,6 +245,12 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
   overflow-y: auto;
   cursor: default;
   transition: none; /* driven every frame while overscrolling */
+  overscroll-behavior: contain;
+}
+/* Drag rig: same scrollable article, but the drag (not the wheel) scrolls and
+   then pulls, so keep the release transition and grab cursor from the base. */
+.pull__panel--dragscroll {
+  overflow-y: auto;
   overscroll-behavior: contain;
 }
 

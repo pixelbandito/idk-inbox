@@ -29,23 +29,3 @@ export function useSeededWidths(ref: RefObject<HTMLElement | null>) {
     });
   }, [ref]);
 }
-
-/**
- * Make the first and last panels selectable in variants that pick the active
- * panel by centre-of-view. Those panels can never reach the centre (there's no
- * content to scroll past them), so a pure centre test leaves them permanently
- * unselectable; when the scroller is pinned at either extreme, claim the edge
- * panel instead. (The home-rolled variant avoids this with its cursor buffer.)
- */
-export function useEdgeSelection(ref: RefObject<HTMLElement | null>, setActive: (index: number) => void) {
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const onScroll = () => {
-      if (el.scrollLeft <= 1) setActive(0);
-      else if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 1) setActive(PANEL_COUNT - 1);
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, [ref, setActive]);
-}

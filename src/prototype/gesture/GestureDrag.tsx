@@ -5,22 +5,26 @@ import { clamp, type PullState } from './pullShared';
 
 // Rig 1 — CLICK-AND-DRAG only, for feeling out "pull-to-trigger".
 //
-// One pointer, 1:1 mapping, no timers, no momentum: drag the card up and it
-// tracks your finger exactly, so you can inch right up to the threshold and
-// watch the backdrop flip armed ⇄ pulling. Release past the threshold fires;
-// either way the card settles back to neutral — it never flings away.
-// Vertical, to match the overscroll rig for an apples-to-apples comparison.
+// A single drag does everything: it scrolls the article, and once you reach the
+// bottom, the same continued drag pulls past the edge to arm. 1:1, no timers, no
+// momentum — you can inch right up to the threshold and watch armed ⇄ pulling.
+// Release past the threshold fires; either way the panel settles back to neutral,
+// it never flings away. Same scrollable content and same "reach the bottom then
+// pull further" flow as the overscroll rig — only the trigger gate differs.
 
-const MAX_PULL = 340; // how far up the card can travel
+const MAX_PULL = 340; // how far past the bottom the drag can pull
+const VISUAL_CAP = 180; // px the panel lifts to reveal the backdrop
 
 export function GestureDrag() {
   const [threshold, setThreshold] = useState(120);
-  const [offset, setOffset] = useState(0); // panel offset; negative = pulled up
+  const [pull, setPull] = useState(0); // distance dragged past the bottom
   const [phase, setPhase] = useState<PullState>('idle');
   const [dragActive, setDragActive] = useState(false); // drives the 1:1 (no-transition) state
+  const scrollRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const startY = useRef(0);
-  const offsetRef = useRef(0);
+  const startScrollTop = useRef(0);
+  const pullRef = useRef(0);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearReset = () => {
@@ -29,9 +33,9 @@ export function GestureDrag() {
   };
   useEffect(() => clearReset, []);
 
-  const move = (next: number) => {
-    offsetRef.current = next;
-    setOffset(next);
+  const setPullValue = (next: number) => {
+    pullRef.current = next;
+    setPull(next);
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -41,35 +45,42 @@ export function GestureDrag() {
     dragging.current = true;
     setDragActive(true);
     startY.current = e.clientY;
-    move(0);
-    setPhase('pulling');
+    startScrollTop.current = scrollRef.current?.scrollTop ?? 0;
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
     if (!dragging.current) return;
-    const next = clamp(e.clientY - startY.current, -MAX_PULL, 0);
-    move(next);
-    const distance = -next;
-    setPhase(distance >= threshold ? 'armed' : distance > 0 ? 'pulling' : 'idle');
+    const el = scrollRef.current;
+    if (!el) return;
+    // Drag up first scrolls toward the bottom; only travel past the bottom pulls.
+    const up = startY.current - e.clientY;
+    const maxScroll = el.scrollHeight - el.clientHeight;
+    const desired = startScrollTop.current + up;
+    el.scrollTop = clamp(desired, 0, maxScroll);
+    const next = clamp(desired - maxScroll, 0, MAX_PULL);
+    setPullValue(next);
+    setPhase(next >= threshold ? 'armed' : next > 0 ? 'pulling' : 'idle');
   };
 
   const endDrag = () => {
     if (!dragging.current) return;
     dragging.current = false;
     setDragActive(false);
-    const distance = -offsetRef.current;
-    // Both outcomes settle back to neutral; only the label/colour differs.
-    move(0);
+    const distance = pullRef.current;
+    setPullValue(0); // settle back to neutral (CSS transition eases the lift home)
     if (distance >= threshold) {
       setPhase('activated');
       resetTimer.current = setTimeout(() => setPhase('idle'), 700);
-    } else {
+    } else if (distance > 0) {
       setPhase('reverting');
       resetTimer.current = setTimeout(() => setPhase('idle'), 350);
+    } else {
+      setPhase('idle');
     }
   };
 
-  const progress = phase === 'activated' ? 1 : clamp(-offset / threshold, 0, 1);
+  const lift = Math.min(pull, VISUAL_CAP);
+  const progress = phase === 'activated' ? 1 : clamp(pull / threshold, 0, 1);
 
   return (
     <div className="proto">
@@ -81,19 +92,25 @@ export function GestureDrag() {
 
       <div className="pull">
         <PullBackdrop state={phase} progress={progress} />
-        <article
-          className="pull__panel"
+        <div
+          className="pull__panel pull__panel--dragscroll"
+          ref={scrollRef}
           data-dragging={dragActive || undefined}
-          style={{ transform: `translateY(${offset}px)` }}
+          style={{ transform: `translateY(${-lift}px)` }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
         >
           <h2>Weekly digest</h2>
-          <p>Drag this card upward. Past the threshold it arms; let go to archive.</p>
-          <p className="pull__panel-hint">↑ drag up</p>
-        </article>
+          {Array.from({ length: 14 }, (_, i) => (
+            <p key={i}>
+              Paragraph {i + 1}. Drag to scroll through the article; once you hit the bottom, keep dragging past the
+              edge to arm the archive action.
+            </p>
+          ))}
+          <p className="pull__panel-hint">↑ drag past the bottom to archive</p>
+        </div>
       </div>
 
       <footer className="tuner-bar">
