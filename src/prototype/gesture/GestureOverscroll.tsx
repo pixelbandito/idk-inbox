@@ -1,36 +1,36 @@
 import { useEffect, useRef, useState } from 'react';
 import { PullBackdrop } from './PullBackdrop';
 import { Tuner } from './Tuner';
-import { clamp, resist, type PullState } from './pullShared';
+import { resist, type PullState } from './pullShared';
 
-// Rig 2 — OVERSCROLL + DISTANCE + TIMER, a faithful port of the app's
-// overscroll-to-close. Scroll the article to the bottom, then keep scrolling:
+// Rig 2 — OVERSCROLL, stepped so momentum can't run the whole thing in one go.
+// Reaching the archive takes THREE separate scrolls, each ending at a stop:
 //
-//   • rest gate — a scroll that just reaches the bottom stops there; overscroll
-//     only arms once you're rested at the bottom and start a fresh scroll, so a
-//     fast flick down can't blow straight through into a trigger
-//   • distance — resisted pull must pass `armPx` to arm (momentum can't blow it)
-//   • timer    — stay armed for `dwellMs` to fire (reading time before commit)
-//   • buffer   — when the wheel goes quiet, the pull is held alive for
-//     `bufferMs` before it drains, so a momentary pause doesn't cancel; scroll
-//     back up inside the buffer to bleed it off and cancel on purpose.
+//   1. scroll to the page bottom — content ends, you stop there.
+//   2. rest, then a fresh scroll overscrolls into "activating" (green). The pull
+//      clamps at the arm distance — you can't blow past it; you stop, armed.
+//   3. rest, then one more fresh scroll confirms and fires.
+//
+// If you don't take the next step, the pull creeps back to neutral on its own —
+// gently at first, then accelerating. The green "activating" window gives you a
+// beat to decide before it reverts.
 
 const QUIET_MS = 140; // gap after which the wheel counts as "gone quiet"
 const VISUAL_CAP = 180; // px the panel lifts to reveal the backdrop
-// A short un-armed pull that stops is probably a cancel, so start easing back
-// soon after the wheel goes quiet — well before the (armed-only) buffer window.
-const REVERT_DELAY = 200;
-const DRAIN_FACTOR = 0.08; // per-frame ease toward neutral (gentle, so the settle reads)
-const DRAIN_MIN = 2;
-// Overscroll is gated behind resting at the bottom: a scroll that just arrives
-// there stops, and only a fresh scroll (after this quiet gap) begins to pull.
+// A fresh scroll (after this quiet gap) is what advances each step, so a fast
+// continuous flick can't chain them — it just stops at the next boundary.
 const NEW_GESTURE_MS = 150;
+// Idle ease-back: starts almost still and speeds up, growing its per-frame step
+// by this much each frame. Small = a real creep before it gets going.
+const REVERT_ACCEL = 0.12;
+const DRAIN_FACTOR = 0.08; // gentle decelerating ease for the post-confirm settle
+const DRAIN_MIN = 2;
 const now = () => Date.now();
 
 export function GestureOverscroll() {
   const [armPx, setArmPx] = useState(100);
-  const [dwellMs, setDwellMs] = useState(800);
-  const [bufferMs, setBufferMs] = useState(1100);
+  const [revertDelayMs, setRevertDelayMs] = useState(700);
+  const [greenHoldMs, setGreenHoldMs] = useState(1300);
   const [view, setView] = useState<{ phase: PullState; pull: number; progress: number }>({
     phase: 'idle',
     pull: 0,
@@ -38,20 +38,20 @@ export function GestureOverscroll() {
   });
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  // Latest slider values, mirrored into a ref so the rAF loop reads them live
-  // without re-subscribing the wheel listener.
-  const params = useRef({ armPx, dwellMs, bufferMs });
+  // Latest slider values, mirrored into a ref so the rAF loop reads them live.
+  const params = useRef({ armPx, revertDelayMs, greenHoldMs });
   useEffect(() => {
-    params.current = { armPx, dwellMs, bufferMs };
-  }, [armPx, dwellMs, bufferMs]);
+    params.current = { armPx, revertDelayMs, greenHoldMs };
+  }, [armPx, revertDelayMs, greenHoldMs]);
 
   // Gesture bookkeeping, all in refs so the rAF loop reads live values.
   const pull = useRef(0);
   const lastWheel = useRef(0);
   const quietSince = useRef(0);
-  const armedSince = useRef(0);
+  const restedAtBottom = useRef(false); // rested at the page bottom → may start pulling
+  const restedInArmed = useRef(false); // rested while armed → a fresh scroll confirms
+  const revertVel = useRef(0); // accelerating velocity for the idle ease-back
   const fired = useRef(false);
-  const restedAtBottom = useRef(false); // have we settled at the bottom (so overscroll is armed)?
   const raf = useRef(0);
 
   useEffect(() => {
@@ -65,8 +65,9 @@ export function GestureOverscroll() {
 
     const reset = () => {
       pull.current = 0;
-      armedSince.current = 0;
       quietSince.current = 0;
+      restedInArmed.current = false;
+      revertVel.current = 0;
       fired.current = false;
       setView({ phase: 'idle', pull: 0, progress: 0 });
     };
@@ -75,9 +76,9 @@ export function GestureOverscroll() {
 
     const tick = () => {
       const t = now();
-      const { armPx: arm, dwellMs: dwell, bufferMs: buffer } = params.current;
+      const { armPx: arm, revertDelayMs: revertDelay, greenHoldMs: greenHold } = params.current;
 
-      // After a trigger, settle back to neutral to confirm — no forward fling.
+      // After a confirm, settle back to neutral to confirm — no forward fling.
       if (fired.current) {
         pull.current = ease(pull.current);
         if (pull.current <= 0) {
@@ -95,20 +96,19 @@ export function GestureOverscroll() {
       if (!quiet) quietSince.current = 0;
 
       const armed = pull.current >= arm;
-      if (armed && armedSince.current === 0) armedSince.current = t;
-      if (!armed) armedSince.current = 0;
+      if (!armed) restedInArmed.current = false; // dropped out of the green zone
 
-      if (armed && t - armedSince.current >= dwell) {
-        fired.current = true; // begin the settle-back confirmation
-        raf.current = requestAnimationFrame(tick);
-        return;
+      // Ease back once quiet: armed (green) waits the longer green-hold window;
+      // a plain pull waits revertDelay. The motion is an accelerating creep.
+      const holdWindow = armed ? greenHold : revertDelay;
+      const quietElapsed = quietSince.current === 0 ? 0 : t - quietSince.current;
+      const reverting = quietElapsed >= holdWindow;
+      if (reverting) {
+        revertVel.current += REVERT_ACCEL;
+        pull.current = Math.max(0, pull.current - revertVel.current);
+      } else {
+        revertVel.current = 0;
       }
-
-      // Ease back once quiet: an armed pull gets the full buffer (a window to
-      // hold or re-commit); an un-armed pull starts easing back much sooner.
-      const holdWindow = armed ? buffer : REVERT_DELAY;
-      const reverting = quietSince.current !== 0 && t - quietSince.current >= holdWindow;
-      if (reverting) pull.current = ease(pull.current);
 
       if (pull.current <= 0) {
         reset();
@@ -117,7 +117,8 @@ export function GestureOverscroll() {
       }
 
       const phase: PullState = reverting ? 'reverting' : armed ? 'armed' : 'pulling';
-      const progress = armed ? (t - armedSince.current) / dwell : pull.current / arm;
+      // Pulling: fill toward the arm distance. Armed: the green window draining.
+      const progress = armed ? 1 - Math.min(1, quietElapsed / greenHold) : pull.current / arm;
       setView({ phase, pull: pull.current, progress });
       raf.current = requestAnimationFrame(tick);
     };
@@ -132,23 +133,31 @@ export function GestureOverscroll() {
       const gap = t - lastWheel.current;
       const arm = params.current.armPx;
       const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
-      if (!atBottom) restedAtBottom.current = false; // left the bottom — must land again to arm
+      if (!atBottom) restedAtBottom.current = false; // left the bottom — must land again
 
       if (e.deltaY > 0) {
         if (!atBottom) {
           lastWheel.current = t;
-          return; // scrolling through the article
+          return; // scrolling through the article (stop 1 is the content end)
         }
-        // At the bottom. A scroll that just *arrives* here stops; overscroll only
-        // begins once we've rested at the bottom and a fresh scroll starts.
-        const canPull = pull.current > 0 || (restedAtBottom.current && gap >= NEW_GESTURE_MS);
+        // Stop 1 → 2: only a fresh scroll after resting at the bottom starts pulling.
+        const canStart = pull.current > 0 || (restedAtBottom.current && gap >= NEW_GESTURE_MS);
         restedAtBottom.current = true;
-        if (!canPull) {
+        if (!canStart) {
           lastWheel.current = t;
           return;
         }
         e.preventDefault();
-        pull.current = clamp(pull.current + e.deltaY * resist(pull.current, arm), 0, arm * 3);
+        if (pull.current < arm) {
+          // Pulling toward the arm distance — clamps there (stop 2).
+          pull.current = Math.min(arm, pull.current + e.deltaY * resist(pull.current, arm));
+        } else {
+          // Armed (green). Stop 2 → 3: a fresh scroll after resting confirms.
+          const canConfirm = restedInArmed.current && gap >= NEW_GESTURE_MS;
+          restedInArmed.current = true;
+          if (canConfirm) fired.current = true;
+          pull.current = arm; // stay clamped at the arm distance
+        }
       } else if (e.deltaY < 0) {
         if (pull.current <= 0) {
           lastWheel.current = t;
@@ -156,9 +165,11 @@ export function GestureOverscroll() {
         }
         e.preventDefault();
         pull.current = Math.max(0, pull.current + e.deltaY);
+        if (pull.current < arm) restedInArmed.current = false;
       }
       lastWheel.current = t;
       quietSince.current = 0;
+      revertVel.current = 0;
       ensureLoop();
     };
 
@@ -170,6 +181,7 @@ export function GestureOverscroll() {
   }, []);
 
   const lift = Math.min(view.pull, VISUAL_CAP);
+  const armedLabel = view.phase === 'armed' ? 'Scroll again to archive' : undefined;
 
   return (
     <div className="proto">
@@ -180,23 +192,23 @@ export function GestureOverscroll() {
       </header>
 
       <div className="pull">
-        <PullBackdrop state={view.phase} progress={view.progress} label={view.phase === 'armed' ? 'Hold to archive…' : undefined} />
+        <PullBackdrop state={view.phase} progress={view.progress} label={armedLabel} />
         <div className="pull__panel pull__panel--scroll" ref={scrollRef} style={{ transform: `translateY(${-lift}px)` }}>
           <h2>Weekly digest</h2>
           {Array.from({ length: 14 }, (_, i) => (
             <p key={i}>
-              Paragraph {i + 1}. Scroll all the way down, then keep scrolling to overscroll past the bottom edge and
-              arm the archive action.
+              Paragraph {i + 1}. Scroll to the bottom, rest, then scroll again to arm, rest, and scroll once more to
+              confirm. Three deliberate steps.
             </p>
           ))}
-          <p className="pull__panel-hint">↓ rest at the bottom, then scroll again to pull</p>
+          <p className="pull__panel-hint">↓ bottom · scroll to arm · scroll again to confirm</p>
         </div>
       </div>
 
       <footer className="tuner-bar">
         <Tuner label="Distance" value={armPx} min={40} max={260} step={5} unit="px" onChange={setArmPx} />
-        <Tuner label="Dwell" value={dwellMs} min={200} max={1600} step={50} unit="ms" onChange={setDwellMs} />
-        <Tuner label="Buffer" value={bufferMs} min={300} max={2000} step={50} unit="ms" onChange={setBufferMs} />
+        <Tuner label="Revert" value={revertDelayMs} min={200} max={2000} step={50} unit="ms" onChange={setRevertDelayMs} />
+        <Tuner label="Green hold" value={greenHoldMs} min={500} max={3000} step={50} unit="ms" onChange={setGreenHoldMs} />
       </footer>
     </div>
   );
