@@ -48,8 +48,13 @@ export function GestureOverscroll() {
   const pull = useRef(0);
   const lastWheel = useRef(0);
   const quietSince = useRef(0);
-  const restedAtBottom = useRef(false); // rested at the page bottom → may start pulling
-  const restedInArmed = useRef(false); // rested while armed → a fresh scroll confirms
+  // A wheel event is a "fresh" gesture only if the wheel was idle (no event for
+  // NEW_GESTURE_MS) just before it. Each stop advances only on a fresh scroll,
+  // so inertia or a continuous flick can't chain steps — and, unlike per-event
+  // gaps or an at-bottom flag, this doesn't drop a scroll when you land at the
+  // bottom (that landing event is evaluated before the scroll applies).
+  const idle = useRef(true);
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const revertVel = useRef(0); // accelerating velocity for the idle ease-back
   const fired = useRef(false);
   const raf = useRef(0);
@@ -66,7 +71,6 @@ export function GestureOverscroll() {
     const reset = () => {
       pull.current = 0;
       quietSince.current = 0;
-      restedInArmed.current = false;
       revertVel.current = 0;
       fired.current = false;
       setView({ phase: 'idle', pull: 0, progress: 0 });
@@ -96,7 +100,6 @@ export function GestureOverscroll() {
       if (!quiet) quietSince.current = 0;
 
       const armed = pull.current >= arm;
-      if (!armed) restedInArmed.current = false; // dropped out of the green zone
 
       // Ease back once quiet: armed (green) waits the longer green-hold window;
       // a plain pull waits revertDelay. The motion is an accelerating creep.
@@ -128,54 +131,61 @@ export function GestureOverscroll() {
     };
 
     const onWheel = (e: WheelEvent) => {
-      if (fired.current) return;
       const t = now();
-      const gap = t - lastWheel.current;
+      // Freshness: this event is "fresh" only if the wheel was idle before it.
+      // Track it for every event (even ones we ignore) so inertia keeps the
+      // wheel "not idle" until a real pause opens up.
+      const fresh = idle.current;
+      idle.current = false;
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+      idleTimer.current = setTimeout(() => {
+        idle.current = true;
+      }, NEW_GESTURE_MS);
+      lastWheel.current = t; // feeds the revert quiet-detection in tick
+
+      if (fired.current) return;
+
       const arm = params.current.armPx;
       const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
-      if (!atBottom) restedAtBottom.current = false; // left the bottom — must land again
 
-      if (e.deltaY > 0) {
-        if (!atBottom) {
-          lastWheel.current = t;
-          return; // scrolling through the article (stop 1 is the content end)
-        }
-        // Stop 1 → 2: only a fresh scroll after resting at the bottom starts pulling.
-        const canStart = pull.current > 0 || (restedAtBottom.current && gap >= NEW_GESTURE_MS);
-        restedAtBottom.current = true;
-        if (!canStart) {
-          lastWheel.current = t;
-          return;
-        }
-        e.preventDefault();
-        if (pull.current < arm) {
-          // Pulling toward the arm distance — clamps there (stop 2).
+      let engaged = false;
+      if (e.deltaY > 0 && atBottom) {
+        if (pull.current >= arm) {
+          // Armed (green). Stop 2 → 3: a fresh scroll confirms and fires.
+          e.preventDefault();
+          if (fresh) fired.current = true;
+          pull.current = arm; // otherwise hold, clamped at the arm distance
+          engaged = true;
+        } else if (pull.current > 0) {
+          // Mid-pull: keep pulling toward the arm distance (clamps there).
+          e.preventDefault();
           pull.current = Math.min(arm, pull.current + e.deltaY * resist(pull.current, arm));
-        } else {
-          // Armed (green). Stop 2 → 3: a fresh scroll after resting confirms.
-          const canConfirm = restedInArmed.current && gap >= NEW_GESTURE_MS;
-          restedInArmed.current = true;
-          if (canConfirm) fired.current = true;
-          pull.current = arm; // stay clamped at the arm distance
+          engaged = true;
+        } else if (fresh) {
+          // Stop 1 → 2: rested at the bottom, a fresh scroll starts the pull.
+          e.preventDefault();
+          pull.current = Math.min(arm, e.deltaY * resist(0, arm));
+          engaged = true;
         }
-      } else if (e.deltaY < 0) {
-        if (pull.current <= 0) {
-          lastWheel.current = t;
-          return; // bleed pull first, then hand back to native scroll
-        }
+        // else: at rest, not fresh — absorbed. This is the stop at the bottom.
+      } else if (e.deltaY < 0 && pull.current > 0) {
+        // Scroll up bleeds the pull off before native scroll resumes.
         e.preventDefault();
         pull.current = Math.max(0, pull.current + e.deltaY);
-        if (pull.current < arm) restedInArmed.current = false;
+        engaged = true;
       }
-      lastWheel.current = t;
-      quietSince.current = 0;
-      revertVel.current = 0;
-      ensureLoop();
+
+      if (engaged) {
+        quietSince.current = 0;
+        revertVel.current = 0;
+        ensureLoop();
+      }
     };
 
     scroller.addEventListener('wheel', onWheel, { passive: false });
     return () => {
       scroller.removeEventListener('wheel', onWheel);
+      if (idleTimer.current) clearTimeout(idleTimer.current);
       stopLoop();
     };
   }, []);
