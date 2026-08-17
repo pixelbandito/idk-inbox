@@ -179,6 +179,12 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
   flex: 1;
   display: grid;
   overflow: hidden;
+  /* The card's inset, shared with .pull__reveal so the reveal window and the
+     card's resting edge can't drift apart. Both rigs keep their affordance
+     hidden behind the card, so there's no resting band to leave room for. */
+  --card-gap-inline: 1rem;
+  --card-gap-block-end: 1rem;
+  position: relative;
 }
 /* Backdrop and panel share one grid cell so the panel sits in front of the
    colour/text, which stays visible in the band the panel doesn't cover. */
@@ -200,6 +206,22 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
 .pull__bg[data-state='armed']     { background: #123d29; color: #74e2a4; }
 .pull__bg[data-state='activated'] { background: #12683b; color: #d4ffe6; }
 .pull__bg[data-state='reverting'] { background: #43201f; color: #f0a0a0; }
+
+/* The commit travel, as colour. The reveal (idle → pulling → armed) already reads
+   as a distance-based transition because the state changes as you go; the travel
+   from armed to fired had no such reading — it was two identical-looking stops with
+   a jump between them. `--commit` is that missing dimension: 0 at the armed stop,
+   1 on arrival, so the armed green heats continuously into the activated green and
+   you can see how much further there is to go.
+
+   The transition above is deliberately NOT inherited here: this colour is driven by
+   scroll position, so easing it would lag the finger. It's set to 0ms while a commit
+   is in progress and restored by the state flip when it fires. */
+.pull__bg[data-state='armed'][style*='--commit'] {
+  background: color-mix(in oklab, #123d29, #12683b calc(var(--commit, 0) * 100%));
+  color: color-mix(in oklab, #74e2a4, #d4ffe6 calc(var(--commit, 0) * 100%));
+  transition: none;
+}
 .pull__label {
   font-size: 1.15rem;
   font-weight: 600;
@@ -218,9 +240,53 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
   border-radius: 4px;
 }
 
+/* Overscroll rig: instead of sitting in a permanently-visible band, the
+   affordance is occluded by the card and revealed only by the card's own
+   displacement. The window is pinned to the card's resting bottom edge and grows
+   upward as the card lifts, so at rest there is nothing to see. */
+.pull__reveal {
+  position: absolute;
+  left: var(--card-gap-inline);
+  right: var(--card-gap-inline);
+  bottom: var(--card-gap-block-end);
+  overflow: hidden;
+  border-radius: 0 0 16px 16px;
+}
+/* The window has to move exactly like the card, or the affordance detaches from
+   the edge it's peeking out of. Frame-driven rigs (overscroll) leave this off;
+   rigs whose card eases home on release (drag) opt in, matching the card's own
+   transition, and drop it mid-gesture so the pull stays 1:1. */
+.pull__reveal[data-eased] {
+  transition: height 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* While lifted, the card docks onto the affordance: square bottom corners so the
+   seam is a straight line (rounded corners left black notches where the card's
+   curve and the window's square top didn't tessellate), and a crisp 1px edge
+   instead of the resting 32px shadow, which fell across the revealed colour and
+   read as a black gap. The reveal keeps the bottom rounding, so the silhouette is
+   still one rounded card. */
+.pull__panel[data-lifted] {
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
+}
+/* Fills its window, so the colour covers everything the card uncovers — pinning
+   it to its natural height instead left page background showing above it once the
+   reveal grew taller than the label block. The content still stays PUT as the
+   window grows, because `.pull__bg` bottom-aligns it and the window's bottom edge
+   is fixed: it peeks out from under the card rather than sliding down with it. */
+.pull__bg--peek {
+  position: absolute;
+  inset: 0;
+  padding: 1.25rem 1.5rem;
+}
+
 .pull__panel {
   place-self: stretch;
-  margin: 1rem 1rem 5rem;
+  margin: 1rem var(--card-gap-inline) var(--card-gap-block-end);
+  /* Above the reveal window, so the card is what occludes the affordance. */
+  position: relative;
+  z-index: 1;
   padding: 1.5rem;
   border-radius: 16px;
   background: #1b1b23;
@@ -231,7 +297,10 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
 }
 .pull__panel[data-dragging] { cursor: grabbing; }
 /* 1:1 drag when active; spring back / fling with a transition when released. */
-.pull__panel { transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1); }
+.pull__panel {
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 120ms ease, box-shadow 120ms ease;
+}
 .pull__panel[data-dragging] { transition: none; }
 .pull__panel h2 { margin: 0 0 0.5rem; }
 .pull__panel p { margin: 0 0 0.6rem; color: #c3c7d4; line-height: 1.5; }
@@ -244,14 +313,79 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
 .pull__panel--scroll {
   overflow-y: auto;
   cursor: default;
-  transition: none; /* driven every frame while overscrolling */
-  overscroll-behavior: contain;
+  /* The lift is driven every frame, so it must not ease — but the dock (corners
+     + edge) should, or it snaps the moment the card twitches. */
+  transition: border-radius 120ms ease, box-shadow 120ms ease;
+  /* `none`, not `contain`: the rig owns the wheel, and the elastic bounce was
+     another animation to wait out before "at the bottom" became true. */
+  overscroll-behavior: none;
 }
 /* Drag rig: same scrollable article, but the drag (not the wheel) scrolls and
    then pulls, so keep the release transition and grab cursor from the base. */
 .pull__panel--dragscroll {
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* Native-scroll rig ------------------------------------------------------------
+   The scroller is only a window: transparent, unmoved, no overscroll-behavior
+   override. The card's surface is an inner sheet, and the affordance sits behind
+   filling the whole card box, so whatever the sheet stops covering is affordance
+   and no gap can show through. Scrolling a transparent footer into view is the
+   entire reveal — which leaves the browser's own momentum and rubber-band intact
+   and means the card's box never leaves the cursor. */
+.pull--native .pull__behind {
+  position: absolute;
+  inset: 1rem var(--card-gap-inline) var(--card-gap-block-end);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.pull__panel--nativescroll {
+  overflow-y: auto;
+  cursor: default;
+  background: none;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+  transition: none;
+  /* pan-y keeps a finger on the browser's own scrolling; the mouse-drag path is
+     pointer-events only, so the two never fight over the same input. */
+  touch-action: pan-y;
+  /* `proximity`, not `mandatory`: a little gravity toward the one snap point
+     below, without trapping you there or interfering while you read. */
+  scroll-snap-type: y proximity;
+}
+/* Dragging must not turn into a text selection halfway down a paragraph. */
+.pull__panel--nativescroll[data-dragging] {
+  cursor: grabbing;
+  user-select: none;
+}
+.pull__sheet {
+  min-height: 100%;
+  /* The gravity well is the card-bottom position — sheet's end edge flush with
+     the window's end edge, which is scrollTop = max - peek, i.e. article fully
+     read and the affordance still hidden. Deliberately NOT the revealed CTA
+     position: revealing should take intent, and letting go should give it back. */
+  scroll-snap-align: end;
+  padding: 1.5rem;
+  border: 1px solid #34343f;
+  border-radius: 16px;
+  background: #1b1b23;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  transition: border-radius 120ms ease, box-shadow 120ms ease;
+}
+/* Same dock as the other rigs: once the panel is showing, square the sheet's
+   bottom corners and swap the wide shadow for a crisp seam. */
+.pull__sheet[data-docked] {
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
+}
+.tuner__readout {
+  align-self: center;
+  color: #7f8496;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Live-tuning slider bar */

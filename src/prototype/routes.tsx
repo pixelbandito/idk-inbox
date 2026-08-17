@@ -6,6 +6,7 @@ import { NavPadded } from './nav/NavPadded';
 import { NavEmbla } from './nav/NavEmbla';
 import { GestureDrag } from './gesture/GestureDrag';
 import { GestureOverscroll } from './gesture/GestureOverscroll';
+import { GestureNative } from './gesture/GestureNative';
 
 // Every prototype and its hash URL, in one table. The router renders the match;
 // the hub index lists them. Adding a prototype means adding one row here.
@@ -67,5 +68,13 @@ export const ROUTES: Route[] = [
     blurb: "Overscroll + distance + dwell timer + buffer. Port of the app's close gesture.",
     group: 'Pull-to-trigger gestures',
     element: <GestureOverscroll />,
+  },
+  {
+    path: '/gesture/native',
+    title: 'Native-scroll reveal',
+    blurb:
+      'Nothing is lifted by JS: a transparent footer — only added once you reach the end — scrolls the affordance into view. Momentum, rubber-band and snap gravity stay native, the card never leaves the cursor, and mouse-drag works as a second path into the same states.',
+    group: 'Pull-to-trigger gestures',
+    element: <GestureNative />,
   },
 ];

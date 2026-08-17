@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { PullBackdrop } from './PullBackdrop';
 import { Tuner } from './Tuner';
-import { resist, type PullState } from './pullShared';
+import { createGestureGate, resist, type PullState } from './pullShared';
 
 // Rig 2 — OVERSCROLL, stepped so momentum can't run the whole thing in one go.
 // Reaching the archive takes THREE separate scrolls, each ending at a stop:
@@ -17,20 +17,21 @@ import { resist, type PullState } from './pullShared';
 
 const QUIET_MS = 140; // gap after which the wheel counts as "gone quiet"
 const VISUAL_CAP = 180; // px the panel lifts to reveal the backdrop
-// A fresh scroll (after this quiet gap) is what advances each step, so a fast
-// continuous flick can't chain them — it just stops at the next boundary.
-const NEW_GESTURE_MS = 150;
 // Idle ease-back: starts almost still and speeds up, growing its per-frame step
 // by this much each frame. Small = a real creep before it gets going.
 const REVERT_ACCEL = 0.12;
 const DRAIN_FACTOR = 0.08; // gentle decelerating ease for the post-confirm settle
 const DRAIN_MIN = 2;
+const SEAM_BLEED = 2; // reveal overlap tucked behind the card, kills the hairline
 const now = () => Date.now();
 
 export function GestureOverscroll() {
   const [armPx, setArmPx] = useState(100);
   const [revertDelayMs, setRevertDelayMs] = useState(700);
-  const [greenHoldMs, setGreenHoldMs] = useState(1300);
+  // The armed window has to cover READ → UNDERSTAND → ACT. 1300ms was far too
+  // short — it expired while the user was still reading the offer — and 5s too
+  // long; 3s matches the native rig.
+  const [greenHoldMs, setGreenHoldMs] = useState(3000);
   const [view, setView] = useState<{ phase: PullState; pull: number; progress: number }>({
     phase: 'idle',
     pull: 0,
@@ -38,6 +39,10 @@ export function GestureOverscroll() {
   });
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  // The whole rig area. The wheel listener lives HERE, not on the card: the card
+  // slides up out from under the cursor as it lifts, hit-testing follows the
+  // transform, and a listener on the card silently loses the gesture mid-pull.
+  const zoneRef = useRef<HTMLDivElement>(null);
   // Latest slider values, mirrored into a ref so the rAF loop reads them live.
   const params = useRef({ armPx, revertDelayMs, greenHoldMs });
   useEffect(() => {
@@ -45,23 +50,20 @@ export function GestureOverscroll() {
   }, [armPx, revertDelayMs, greenHoldMs]);
 
   // Gesture bookkeeping, all in refs so the rAF loop reads live values.
+  const gate = useRef(createGestureGate());
   const pull = useRef(0);
   const lastWheel = useRef(0);
   const quietSince = useRef(0);
-  // A wheel event is a "fresh" gesture only if the wheel was idle (no event for
-  // NEW_GESTURE_MS) just before it. Each stop advances only on a fresh scroll,
-  // so inertia or a continuous flick can't chain steps — and, unlike per-event
-  // gaps or an at-bottom flag, this doesn't drop a scroll when you land at the
-  // bottom (that landing event is evaluated before the scroll applies).
-  const idle = useRef(true);
-  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const revertVel = useRef(0); // accelerating velocity for the idle ease-back
   const fired = useRef(false);
   const raf = useRef(0);
 
   useEffect(() => {
     const scroller = scrollRef.current;
-    if (!scroller) return;
+    const zone = zoneRef.current;
+    if (!scroller || !zone) return;
+
+    const wheelGate = gate.current;
 
     const stopLoop = () => {
       if (raf.current) cancelAnimationFrame(raf.current);
@@ -132,24 +134,41 @@ export function GestureOverscroll() {
 
     const onWheel = (e: WheelEvent) => {
       const t = now();
-      // Freshness: this event is "fresh" only if the wheel was idle before it.
-      // Track it for every event (even ones we ignore) so inertia keeps the
-      // wheel "not idle" until a real pause opens up.
-      const fresh = idle.current;
-      idle.current = false;
-      if (idleTimer.current) clearTimeout(idleTimer.current);
-      idleTimer.current = setTimeout(() => {
-        idle.current = true;
-      }, NEW_GESTURE_MS);
+      // Each stop advances only on a NEW physical gesture, so inertia can't chain
+      // steps. The gate reads Chrome's `WheelEvent.momentum` where available, so a
+      // fling tail is recognised rather than waited out — which is what let a
+      // quick second flick get swallowed by the first one's momentum.
+      const fresh = wheelGate.isNewGesture(e);
       lastWheel.current = t; // feeds the revert quiet-detection in tick
 
       if (fired.current) return;
 
       const arm = params.current.armPx;
-      const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
+      // Lines → px, for wheels that report deltaMode 1 (Firefox).
+      const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      const maxScroll = scroller.scrollHeight - scroller.clientHeight;
+      const atBottom = scroller.scrollTop >= maxScroll - 1;
+
+      // We drive the article's scroll ourselves rather than letting the browser
+      // do it. Two reasons, both load-bearing:
+      //   - "at the bottom" becomes an exact, immediate fact. Left to the
+      //     browser, this handler runs BEFORE the scroll it triggers, and macOS
+      //     momentum/elastic keeps animating for hundreds of ms afterwards — so
+      //     atBottom read false until the scroll visibly "settled", and the pull
+      //     refused to start until then. That wait was not intentional.
+      //   - the surface stops depending on what the cursor happens to be over,
+      //     so a wheel on the revealed affordance behaves like one on the card.
+      if (delta > 0 && !atBottom) {
+        // Take as much as the article can absorb. The leftover is deliberately
+        // DROPPED rather than spilled into the pull: stopping dead at the bottom
+        // is the whole point of the staircase.
+        e.preventDefault();
+        scroller.scrollTop = Math.min(maxScroll, scroller.scrollTop + delta);
+        return;
+      }
 
       let engaged = false;
-      if (e.deltaY > 0 && atBottom) {
+      if (delta > 0 && atBottom) {
         if (pull.current >= arm) {
           // Armed (green). Stop 2 → 3: a fresh scroll confirms and fires.
           e.preventDefault();
@@ -159,20 +178,24 @@ export function GestureOverscroll() {
         } else if (pull.current > 0) {
           // Mid-pull: keep pulling toward the arm distance (clamps there).
           e.preventDefault();
-          pull.current = Math.min(arm, pull.current + e.deltaY * resist(pull.current, arm));
+          pull.current = Math.min(arm, pull.current + delta * resist(pull.current, arm));
           engaged = true;
         } else if (fresh) {
           // Stop 1 → 2: rested at the bottom, a fresh scroll starts the pull.
           e.preventDefault();
-          pull.current = Math.min(arm, e.deltaY * resist(0, arm));
+          pull.current = Math.min(arm, delta * resist(0, arm));
           engaged = true;
         }
         // else: at rest, not fresh — absorbed. This is the stop at the bottom.
-      } else if (e.deltaY < 0 && pull.current > 0) {
-        // Scroll up bleeds the pull off before native scroll resumes.
+      } else if (delta < 0) {
         e.preventDefault();
-        pull.current = Math.max(0, pull.current + e.deltaY);
-        engaged = true;
+        if (pull.current > 0) {
+          // Scroll up bleeds the pull off before the article resumes moving.
+          pull.current = Math.max(0, pull.current + delta);
+          engaged = true;
+        } else {
+          scroller.scrollTop = Math.max(0, scroller.scrollTop + delta);
+        }
       }
 
       if (engaged) {
@@ -182,15 +205,18 @@ export function GestureOverscroll() {
       }
     };
 
-    scroller.addEventListener('wheel', onWheel, { passive: false });
+    zone.addEventListener('wheel', onWheel, { passive: false });
     return () => {
-      scroller.removeEventListener('wheel', onWheel);
-      if (idleTimer.current) clearTimeout(idleTimer.current);
+      zone.removeEventListener('wheel', onWheel);
+      wheelGate.dispose();
       stopLoop();
     };
   }, []);
 
   const lift = Math.min(view.pull, VISUAL_CAP);
+  // A couple of px of overlap, hidden behind the docked card, so no subpixel
+  // hairline of page background can show through the seam.
+  const revealH = lift > 0 ? lift + SEAM_BLEED : 0;
   const armedLabel = view.phase === 'armed' ? 'Scroll again to archive' : undefined;
 
   return (
@@ -201,9 +227,19 @@ export function GestureOverscroll() {
         <span />
       </header>
 
-      <div className="pull">
-        <PullBackdrop state={view.phase} progress={view.progress} label={armedLabel} />
-        <div className="pull__panel pull__panel--scroll" ref={scrollRef} style={{ transform: `translateY(${-lift}px)` }}>
+      <div className="pull" ref={zoneRef}>
+        {/* The affordance lives BEHIND the card, bottom-aligned to the card's
+            resting edge, inside a window exactly as tall as the card has lifted.
+            So it shows nothing at rest and peeks out only as the card moves. */}
+        <div className="pull__reveal" style={{ height: revealH }}>
+          <PullBackdrop state={view.phase} progress={view.progress} label={armedLabel} variant="peek" />
+        </div>
+        <div
+          className="pull__panel pull__panel--scroll"
+          ref={scrollRef}
+          data-lifted={lift > 0 || undefined}
+          style={{ transform: `translateY(${-lift}px)` }}
+        >
           <h2>Weekly digest</h2>
           {Array.from({ length: 14 }, (_, i) => (
             <p key={i}>
@@ -218,7 +254,7 @@ export function GestureOverscroll() {
       <footer className="tuner-bar">
         <Tuner label="Distance" value={armPx} min={40} max={260} step={5} unit="px" onChange={setArmPx} />
         <Tuner label="Revert" value={revertDelayMs} min={200} max={2000} step={50} unit="ms" onChange={setRevertDelayMs} />
-        <Tuner label="Green hold" value={greenHoldMs} min={500} max={3000} step={50} unit="ms" onChange={setGreenHoldMs} />
+        <Tuner label="Green hold" value={greenHoldMs} min={1000} max={12000} step={250} unit="ms" onChange={setGreenHoldMs} />
       </footer>
     </div>
   );

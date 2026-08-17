@@ -14,6 +14,7 @@ import { clamp, type PullState } from './pullShared';
 
 const MAX_PULL = 340; // how far past the bottom the drag can pull
 const VISUAL_CAP = 180; // px the panel lifts to reveal the backdrop
+const SEAM_BLEED = 2; // reveal overlap tucked behind the card, kills the hairline
 
 export function GestureDrag() {
   const [threshold, setThreshold] = useState(120);
@@ -91,11 +92,21 @@ export function GestureDrag() {
       </header>
 
       <div className="pull">
-        <PullBackdrop state={phase} progress={progress} />
+        {/* Same reveal as the overscroll rig: the affordance sits behind the card
+            and only the card's own displacement uncovers it. `data-eased` matches
+            the card's release transition so the two travel home together. */}
+        <div
+          className="pull__reveal"
+          data-eased={!dragActive || undefined}
+          style={{ height: lift > 0 ? lift + SEAM_BLEED : 0 }}
+        >
+          <PullBackdrop state={phase} progress={progress} variant="peek" />
+        </div>
         <div
           className="pull__panel pull__panel--dragscroll"
           ref={scrollRef}
           data-dragging={dragActive || undefined}
+          data-lifted={lift > 0 || undefined}
           style={{ transform: `translateY(${-lift}px)` }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
