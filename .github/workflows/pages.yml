@@ -13,7 +13,11 @@ name: Deploy prototype to Pages
 
 on:
   push:
-    branches: [functional-triage]
+    # functional-triage is where the prototypes live today; main is listed so the
+    # deploy keeps working the moment that branch merges, rather than silently
+    # going stale. Both branches are also allowlisted on the github-pages
+    # environment — without that, the deploy job fails with no failing step.
+    branches: [functional-triage, main]
   workflow_dispatch:
 
 # Least privilege: read the repo, mint an OIDC token for the deploy, write Pages.
