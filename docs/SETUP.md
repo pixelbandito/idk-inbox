@@ -143,10 +143,10 @@ and the app starts needing `gmail.send`):
 - **PWA service worker serving stale code after a fix lands.** In
   DevTools → **Application → Service Workers**, click *Unregister*.
   Then **Application → Storage → Clear site data**. Hard reload.
-- **Mouse swipes don't fire on a row.** Make sure you're on the
-  `phase-0c-input-model` branch (or merged main) — Phase 0c added
-  `setPointerCapture` to the gesture detector and `touch-action: pan-y`
-  to rows.
+- **A two-finger trackpad swipe on a row doesn't commit.** Working as
+  designed: a wheel stream has no "fingers lifted" event, so a scroll
+  *reveals* the row's action buttons instead of firing on release. Click
+  the revealed button. See [USING.md § Swipe a row](USING.md#swipe-a-row).
 - **The GIS library (`accounts.google.com/gsi/client`) fails to load.**
   A privacy extension or strict tracking-protection setting may be
   blocking `accounts.google.com`. Allow the host or disable the
@@ -183,15 +183,16 @@ the dev box:
    **Add to Home Screen / Install** — `npm run build && npm run preview`
    serves the real installable build with the service worker.
 
-## Architecture pointers
+## Where to go next
 
-- Design: `docs/plans/2026-05-16-inbox-zero-design.md`.
-- Phase plans (latest first):
-  - `docs/plans/2026-05-25-phase-0c-stubbed-input-model.md` —
-    current phase (stubbed input model).
-  - `docs/plans/2026-05-25-phase-0c-unified-input-model-design.md` —
-    Phase 0c design.
-  - `docs/plans/2026-05-23-phase-0b-layout-design.md` /
-    `…-layout-foundation.md` — Phase 0b layout primitive.
-  - `docs/plans/2026-05-16-phase-0a-scaffold-oauth-inbox.md` —
-    Phase 0a foundation.
+- **[USING.md](USING.md)** — using the app: panels, gestures, shortcuts,
+  and what the automation does to your mail.
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — how it's built, plain-language
+  summary per section with mechanism detail folded in below.
+- **[followups.md](followups.md)** — known limitations and deferred work.
+
+Design and phase plans in [`plans/`](plans/), newest first — the origin
+document is `2026-05-16-inbox-zero-design.md`, and note that its four-part
+architecture (PWA + Apps Script + Sheet + AI) describes an intent, not the
+code: only the PWA was built. See
+[ARCHITECTURE.md § Designed but not built](ARCHITECTURE.md#11-designed-but-not-built).
