@@ -255,16 +255,22 @@ const parkedAtEnd = async () => {
   check('a fling tail does not confirm', duringTail.phase === 'armed',
     `phase ${duringTail.phase} after momentum:true`);
 
-  // A real flick straight after the tail earns the commit ROOM — it no longer
-  // archives on its own. The gate stops deciding the archive; it only decides
-  // whether there is somewhere further to go. Note this event is dispatched, so
-  // it cannot scroll: the room opens and no travel happens, which is the point.
+  // No wheel event opens the commit room any more — nothing you can do with input
+  // earns it, which is what makes it impossible to flick through the offer. Only
+  // stopping does: the room appears after the input stream has been quiet for the
+  // pause. So a real flick straight after the tail must change nothing at all.
   await wheel(40, false); // a real flick, immediately — no gap at all
   await sleep(120);
   const flicked = await probe();
-  check('a real flick after a fling tail opens the commit room, and only that',
-    flicked.footerH > armed.footerH && flicked.phase === 'armed',
+  check('no flick can earn the commit room — only stopping does',
+    flicked.footerH === armed.footerH && flicked.phase === 'armed',
     `footer ${armed.footerH} → ${flicked.footerH}px, phase ${flicked.phase}`);
+
+  // Stop, serve the pause, and the room is there.
+  await sleep(700);
+  const offered = await probe();
+  check('stopping serves the pause and opens the room', offered.footerH > armed.footerH,
+    `footer ${armed.footerH} → ${offered.footerH}px`);
 
   // Travelling the room is the archive, and it takes real scrolls to do it.
   for (let i = 0; i < 12 && (await probe()).phase !== 'activated'; i++) {
@@ -530,6 +536,46 @@ const parkedAtEnd = async () => {
   const archived = await probe();
   check('scroll 3 archives — no fourth scroll, no step that only moves the meter',
     archived.phase === 'activated', `phase ${archived.phase}, label "${archived.label}"`);
+}
+
+// --- 14. The armed stop must exist in TIME, not only in distance -------------
+// Regression: a fast double-flick went from the article bottom to "Archived"
+// without the offer ever being readable. Two independent causes, one check each.
+{
+  await reset({ hold: 8000 });
+  await setRange('Gap', 300);
+  await setRange('Pause', 600);
+
+  let a = await toEnd();
+  for (let i = 0; i < 40 && a.phase !== 'armed'; i++) {
+    await page.mouse.wheel(0, 30);
+    a = await settle();
+  }
+
+  // (a) INPUT, not scroll position, ends a gesture. Pinned at the maximum, scrollTop
+  // stops changing and scroll events stop with it — but the platform keeps sending
+  // momentum. Keyed on scroll events the settle clock ran out mid-fling and opened
+  // the room under a live gesture. Dispatched events can't scroll, which is exactly
+  // the pinned condition, so they reproduce it precisely.
+  let openedEarly = false;
+  for (let i = 0; i < 12; i++) {
+    await wheel(40, true);
+    await sleep(60); // > SETTLE_MS/2, so a scroll-keyed clock would expire mid-stream
+    if ((await probe()).footerH > 100) { openedEarly = true; break; }
+  }
+  check('continuing momentum keeps the commit room shut', !openedEarly,
+    `footer ${(await probe()).footerH}px after 12 momentum events over ~0.7s`);
+
+  // (b) The dwell itself: even once input stops, the offer gets a beat to be read.
+  await sleep(250); // past SETTLE_MS, nowhere near the 600ms pause
+  const early = await probe();
+  check('the room is still shut part-way through the pause', early.footerH === 100,
+    `footer ${early.footerH}px at ~250ms of a 600ms pause`);
+
+  await sleep(700);
+  const ready = await probe();
+  check('and opens once the pause is served', ready.footerH === 190 && ready.phase === 'armed',
+    `footer ${ready.footerH}px, phase ${ready.phase}`);
 }
 
 console.log(await page.evaluate(() => `\nplatform: WheelEvent.momentum present = ${'momentum' in WheelEvent.prototype}`));

@@ -99,6 +99,12 @@ export function GestureNative() {
   // panel appeared) and read as a lockout. What makes committing deliberate is now
   // structural: a third move, and real distance to travel once you make it.
   const [commitPx, setCommitPx] = useState(90);
+  // Quiet time after your LAST input before the armed stop will offer anywhere
+  // further to go. The beat that makes the offer readable: without it a fast fling
+  // arms and is through the commit travel inside one motion, and "scroll to archive"
+  // is a frame you never saw. Distance alone can't buy this — momentum has distance
+  // to spare; only stopping costs a fling anything.
+  const [dwellMs, setDwellMs] = useState(300);
   // 0 = no footer · 1 = peek room · 2 = peek + commit room.
   const [stageOn, setStageOn] = useState(0);
   const [revealed, setRevealed] = useState(0);
@@ -114,10 +120,10 @@ export function GestureNative() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const spacerRef = useRef<HTMLDivElement>(null);
 
-  const params = useRef({ peekPx, holdMs, returnMs, openGapMs, commitPx });
+  const params = useRef({ peekPx, holdMs, returnMs, openGapMs, commitPx, dwellMs });
   useEffect(() => {
-    params.current = { peekPx, holdMs, returnMs, openGapMs, commitPx };
-  }, [peekPx, holdMs, returnMs, openGapMs, commitPx]);
+    params.current = { peekPx, holdMs, returnMs, openGapMs, commitPx, dwellMs };
+  }, [peekPx, holdMs, returnMs, openGapMs, commitPx, dwellMs]);
 
   const [dragActive, setDragActive] = useState(false);
   const stage = useRef(0); // mirrors stageOn for the event handlers
@@ -140,7 +146,7 @@ export function GestureNative() {
   const retreating = useRef(false);
 
   /** Room below the sheet at each stage. Stage 2 keeps stage 1's room and adds to it. */
-  const roomFor = (s: number, p = params.current) =>
+  const roomFor = (s: number, p: { peekPx: number; commitPx: number } = params.current) =>
     s <= 0 ? 0 : s === 1 ? p.peekPx : p.peekPx + p.commitPx;
 
   const setStage = (next: number) => {
@@ -163,9 +169,8 @@ export function GestureNative() {
   // them. This is the only other writer of that style.
   useEffect(() => {
     if (spacerRef.current) {
-      spacerRef.current.style.height = `${roomFor(stageOn, { peekPx, holdMs, returnMs, openGapMs, commitPx })}px`;
+      spacerRef.current.style.height = `${roomFor(stageOn, { peekPx, commitPx })}px`;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stageOn, peekPx, commitPx]);
 
   const goTo = (next: PullState) => {
@@ -279,6 +284,16 @@ export function GestureNative() {
      * and the archive on arrival. Which is the difference between a transition and
      * two stops that look the same.
      */
+    // The clock runs from the LAST INPUT, not from when the panel armed. Measuring
+    // from arming was worthless: a fling arms early and then keeps going, so by the
+    // time your hand is off the trackpad the pause has already elapsed and the room
+    // opens instantly into the leftover momentum — which is the bug it was meant to
+    // prevent. What has to be true is that you have stopped, and then a beat passed.
+    const restartSettle = () => {
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+      settleTimer.current = setTimeout(openCommitRoom, Math.max(SETTLE_MS, params.current.dwellMs));
+    };
+
     const openCommitRoom = () => {
       if (fired.current || retreating.current) return;
       if (stage.current !== 1 || !armed.current) return;
@@ -341,11 +356,11 @@ export function GestureNative() {
         }
       }
 
-      // Every scroll event restarts the settle clock, momentum included. When it
-      // finally runs out, the gesture is genuinely over — which is when the commit
-      // room may safely appear (see `openCommitRoom`).
-      if (settleTimer.current) clearTimeout(settleTimer.current);
-      settleTimer.current = setTimeout(openCommitRoom, SETTLE_MS);
+      // Scrolling feeds the settle clock too, but it is NOT the authority — see the
+      // note in onWheel. Once pinned at the maximum, scroll events stop while input
+      // is still arriving, and this alone would call the fling over while it is very
+      // much alive.
+      restartSettle();
 
       // Scrolled back up, so give the room back one stage at a time. Each stage is
       // surrendered when the travel that EARNED it is undone — not when the travel it
@@ -377,6 +392,16 @@ export function GestureNative() {
       // `WheelEvent.momentum` is missing — see the gate readout in the footer.
       const s = wheelGate.observe(e);
       const readyToOpen = !s.momentum && s.gapMs >= params.current.openGapMs;
+
+      // INPUT is what the settle clock listens to, and this line is the whole
+      // reason. Keyed on scroll events alone it was wrong in exactly the case that
+      // matters: once pinned at the maximum, scrollTop stops changing and scroll
+      // events stop with it — while the platform is still delivering momentum. The
+      // clock would run out mid-fling, the commit room would open underneath a live
+      // gesture, and the leftover momentum would travel it and archive. A fast
+      // double-flick went from the bottom of the article to "Archived" without ever
+      // showing the offer. Every wheel event, momentum included, resets it here.
+      restartSettle();
 
       // Grabbing the panel back mid-withdrawal cancels the retreat rather than
       // fighting it. A fling tail isn't a grab, so it doesn't count.
@@ -617,6 +642,7 @@ export function GestureNative() {
         <Tuner label="Peek" value={peekPx} min={40} max={260} step={5} unit="px" onChange={setPeekPx} />
         <Tuner label="Gap" value={openGapMs} min={0} max={300} step={10} unit="ms" onChange={setOpenGapMs} />
         <Tuner label="Commit" value={commitPx} min={20} max={260} step={5} unit="px" onChange={setCommitPx} />
+        <Tuner label="Pause" value={dwellMs} min={0} max={1200} step={25} unit="ms" onChange={setDwellMs} />
         <Tuner label="Hold" value={holdMs} min={1000} max={12000} step={250} unit="ms" onChange={setHoldMs} />
         <Tuner label="Return" value={returnMs} min={200} max={2000} step={50} unit="ms" onChange={setReturnMs} />
         <span className="tuner__readout" title="Which stage of room has been appended, and how far each of the two travels has been run.">
