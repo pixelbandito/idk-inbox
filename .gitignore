@@ -15,6 +15,34 @@ dist
 dist-ssr
 *.local
 
+# Secrets. The repo is public, so a mistake here is permanent — these patterns are
+# deliberately broader than what the project actually uses today.
+#
+# Every .env variant is ignored, including ones that don't exist yet (.env.production
+# and friends); .env.example is the single tracked exception and must stay free of
+# real values. Note `*.local` above already covers .env.local, but the rule below is
+# what makes that true by intent rather than by coincidence.
+.env
+.env.*
+!.env.example
+
+# Keys, certs and credential files. The dev TLS certs live outside the repo and are
+# located via DEV_TLS_CERT / DEV_TLS_KEY, so nothing here should ever match — which
+# is exactly when a safety net is worth having.
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa*
+credentials*.json
+secrets*.json
+service-account*.json
+.npmrc
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -23,7 +23,14 @@ export default defineConfig(({ mode }) => {
   const https = tlsFromEnv(env);
   const serverConfig = { https, host: https !== undefined };
 
+  // GitHub Pages serves a project site from a subpath
+  // (https://<user>.github.io/idk-inbox/), so that build needs a matching base or
+  // every asset URL — and the service worker's scope — resolves to a 404. Set by
+  // the Pages workflow only: local dev, preview and the test run stay at '/'.
+  const base = process.env.PAGES_BASE ?? '/';
+
   return {
+    base,
     plugins: [
       react(),
       VitePWA({
