@@ -39,6 +39,11 @@ you have. **Chromium 151+ is required** for `WheelEvent.momentum`.
 - **CDP round-trips can exceed the freshness gap**, so a loop of `mouse.wheel`
   calls is *not* a continuous gesture. Drive gesture semantics with dispatched
   momentum-flagged events instead.
+- **Derive the article's own end; never read it from `maxScroll`.** Rooms are
+  appended below the content, so `maxScroll` grows as the staircase advances. A loop
+  that chases it walks down the whole staircase instead of stopping at the first
+  stop, and a "park at the end" that targets it lands you fully revealed.
+  `maxScroll - footerH` is the article's end whatever state you inherited.
 - **`reset()` does not reload.** It re-navigates to the same hash URL, which is a
   same-document navigation, so the component is never remounted. A scenario that
   ends mid-animation leaks its state into the next one — and the symptom is
