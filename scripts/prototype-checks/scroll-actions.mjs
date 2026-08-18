@@ -374,6 +374,48 @@ await load();
     `snooze --commit ${snooze?.commit} (a travel here would have fired snooze)`);
 }
 
+// --- 13. No bare band opens up between the sheet and the actions ------------
+// The strip is a window sized to the travel, and during the COMMIT that exceeds the
+// reveal — so actions fixed at `revealPx` leave a transparent gap on the inboard
+// side, exactly `commitPx` wide. On screen it reads as the tile having overshot and
+// stuck. The actions must fill the strip at every point of the travel.
+{
+  await load();
+  const c = await rowInView();
+  await page.mouse.move(c.x, c.y);
+  await settle(ROW);
+
+  const band = () => page.evaluate(() => {
+    const strip = document.querySelectorAll('.sides__row > .sa__strip')[1];
+    const actions = strip.querySelector('.sa__actions');
+    const sr = strip.getBoundingClientRect();
+    const ar = actions.getBoundingClientRect();
+    return {
+      strip: Math.round(sr.width),
+      actions: Math.round(ar.width),
+      // Bare strip on the inboard (left) side of a trailing strip.
+      gap: Math.round(ar.left - sr.left),
+    };
+  });
+
+  await page.mouse.wheel(300, 0);          // travel the reveal
+  await settle(ROW);
+  const revealed = await band();
+  check('no bare band once the actions are revealed', revealed.gap <= 1,
+    `strip ${revealed.strip}px, actions ${revealed.actions}px, band ${revealed.gap}px`);
+
+  // Part-way into the commit is where it used to open up.
+  await sleep(300);
+  await page.mouse.wheel(30, 0);
+  await sleep(400);
+  const midCommit = await band();
+  check('nor part-way through the commit travel', midCommit.gap <= 1,
+    `strip ${midCommit.strip}px, actions ${midCommit.actions}px, band ${midCommit.gap}px`);
+  check('and the edgemost action is what grew',
+    midCommit.actions > revealed.actions,
+    `actions ${revealed.actions} → ${midCommit.actions}px (the extra goes to the one about to fire)`);
+}
+
 await browser.close();
 const failed = results.filter((r) => !r).length;
 console.log(`\n${results.length - failed}/${results.length} checks passed`);

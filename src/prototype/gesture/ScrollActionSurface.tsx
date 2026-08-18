@@ -56,6 +56,8 @@ function Strip({
   // already fully revealed, so without this the last travel looks like nothing.
   const commitProgress = config.commitPx > 0 ? Math.min(1, side.commit / config.commitPx) : 0;
   const lastIndex = config.actions.length - 1;
+  /** Each action's share of the reveal. The edgemost may exceed it; none may be under. */
+  const base = config.revealPx / Math.max(1, config.actions.length);
 
   /**
    * How lit each action is, 0–1.
@@ -76,9 +78,19 @@ function Strip({
       style={{ [horiz ? 'width' : 'height']: `${shown}px` } as React.CSSProperties}
       aria-hidden={shown <= 0}
     >
+      {/* The actions must always fill the strip. The strip is a window sized to how
+          far the side has been travelled, and during the COMMIT that exceeds the
+          reveal — so a row fixed at `revealPx` leaves a bare, transparent band on the
+          inboard side, between the sheet and the buttons. It reads as the tile having
+          overshot and stuck, and the band is exactly `commitPx` wide.
+
+          Below the reveal distance the row stays at `revealPx` and is clipped, which
+          is what uncovers the actions from the outer edge inward. Past it the row
+          grows, and the extra goes to the edgemost action (see its flex below) — so
+          the thing that is about to fire visibly swells as you commit to it. */}
       <div
         className="sa__actions"
-        style={{ [horiz ? 'width' : 'height']: `${config.revealPx}px` } as React.CSSProperties}
+        style={{ [horiz ? 'width' : 'height']: `${Math.max(config.revealPx, shown)}px` } as React.CSSProperties}
       >
         {config.actions.map((a, i) => (
           // A real button, so the actions are focusable and Enter works. Mouse
@@ -94,7 +106,14 @@ function Strip({
             data-fired={side.firedActionId === a.id || undefined}
             tabIndex={shown > 0 ? 0 : -1}
             onClick={() => onPick(edge, a)}
-            style={{ '--commit': litness(a, i) } as React.CSSProperties}
+            style={
+              {
+                '--commit': litness(a, i),
+                // Everything holds its share of the reveal; only the edgemost grows,
+                // so the commit travel is absorbed by the action it is committing to.
+                flex: i === lastIndex ? `1 1 ${base}px` : `0 0 ${base}px`,
+              } as React.CSSProperties
+            }
           >
             <span className="sa__action-label">{a.label}</span>
           </button>

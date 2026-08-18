@@ -472,7 +472,8 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
 .sa--x > .sa__strip > .sa__actions { height: 100%; }
 
 .sa__action {
-  flex: 1 1 0;
+  /* flex is set inline per action: the edgemost grows to absorb the commit travel. */
+  flex: 0 0 auto;
   display: grid;
   place-items: center;
   padding: 0.75rem;
