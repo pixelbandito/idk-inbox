@@ -1,0 +1,378 @@
+import { useEffect, useRef, useState } from 'react';
+
+// The scroll-to-act mechanic, generalised off the bottom edge of a single card and
+// onto any edge of any scroller.
+//
+// The whole thing reduces to one idea: A STOP IS A SCROLL BOUNDARY, and a step is a
+// PAD you travel through. Nothing refuses input, nothing measures gestures. You
+// cannot flick past a stop because there is nowhere to flick to — layout, not
+// policy — and momentum dies against the boundary exactly as the platform intends.
+//
+//   rest at the edge          → the pad for the next step is prepared, invisibly
+//   travel it                 → the actions on that side are revealed
+//   rest again                → a second pad is prepared below the first
+//   travel that               → the edgemost action on that side fires
+//
+// Preparing a pad in advance rather than on the scroll that uses it is what makes
+// each step read as motion: the next scroll is travel from its first pixel, with
+// nothing spent asking for room. Preparing it only once INPUT has gone quiet is
+// what keeps it safe — the pad cannot appear underneath a gesture that is still
+// running, so a fling has nowhere to spend its tail.
+//
+// The four sides are one implementation. `axis` picks scrollTop/scrollLeft and the
+// matching size properties; `edge` picks which end the pad is attached to. The only
+// asymmetry is real rather than incidental: growing a pad at the START shifts the
+// content after it, so the scroll position is compensated in the same frame. At the
+// END nothing below moves, so no compensation is needed.
+
+export type Axis = 'x' | 'y';
+/** Which end of the axis the actions live at. y/start = top, x/end = right, etc. */
+export type Edge = 'start' | 'end';
+
+export type SidePhase = 'idle' | 'revealing' | 'ready' | 'committing' | 'fired' | 'returning';
+
+export interface ScrollAction {
+  id: string;
+  label: string;
+  /** Free-form tone key; the surface maps it to colours. */
+  tone?: string;
+}
+
+export interface SideConfig {
+  /** Ordered content-ward → edge-ward. The LAST one is edgemost, and is what a
+   *  completed commit travel fires. */
+  actions: ScrollAction[];
+  /** Travel that reveals every action on this side. */
+  revealPx: number;
+  /** Further travel, past the reveal, that fires the edgemost action. */
+  commitPx: number;
+  onCommit?: (action: ScrollAction) => void;
+}
+
+export interface SideState {
+  /** 0 = no pad · 1 = reveal pad prepared · 2 = commit pad prepared too. */
+  stage: number;
+  /** px of the reveal travelled, 0…revealPx. */
+  reveal: number;
+  /** px of the commit travelled, 0…commitPx. Only ever > 0 at stage 2. */
+  commit: number;
+  phase: SidePhase;
+}
+
+export interface ScrollActionsConfig {
+  axis: Axis;
+  start?: SideConfig;
+  end?: SideConfig;
+  /** Quiet time after the last input before the next pad is prepared. */
+  settleMs?: number;
+  /** How long a revealed side waits for you before withdrawing itself. */
+  holdMs?: number;
+  /** How long that withdrawal takes to play. */
+  returnMs?: number;
+}
+
+const IDLE_SIDE: SideState = { stage: 0, reveal: 0, commit: 0, phase: 'idle' };
+const FIRED_HOLD_MS = 900;
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+const easeInOutCubic = (p: number) =>
+  p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+
+interface Metrics {
+  pos: number;
+  max: number;
+}
+
+/**
+ * Drives one scroller. Give it the scroller and the two pad elements; it sizes the
+ * pads, watches the scroll, and reports how far each side has been travelled.
+ *
+ * The pads are sized IMPERATIVELY rather than through the render, so a pad exists
+ * on the same frame it is earned. Waiting for React meant a gesture arriving at a
+ * boundary was already clamped against the old maximum and could not reach into
+ * what it had just unlocked.
+ */
+export function useScrollActions(
+  scrollerRef: React.RefObject<HTMLElement | null>,
+  startPadRef: React.RefObject<HTMLElement | null>,
+  endPadRef: React.RefObject<HTMLElement | null>,
+  config: ScrollActionsConfig,
+) {
+  const [startState, setStartState] = useState<SideState>(IDLE_SIDE);
+  const [endState, setEndState] = useState<SideState>(IDLE_SIDE);
+
+  const cfg = useRef(config);
+  useEffect(() => {
+    cfg.current = config;
+  });
+
+  const stages = useRef({ start: 0, end: 0 });
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const firedSide = useRef<Edge | null>(null);
+  const returning = useRef(false);
+  const returnRaf = useRef(0);
+  const lastPhase = useRef({ start: 'idle' as SidePhase, end: 'idle' as SidePhase });
+  const lastPos = useRef(0);
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const horiz = cfg.current.axis === 'x';
+
+    const read = (): Metrics =>
+      horiz
+        ? { pos: el.scrollLeft, max: el.scrollWidth - el.clientWidth }
+        : { pos: el.scrollTop, max: el.scrollHeight - el.clientHeight };
+
+    /**
+     * Move the scroller ourselves — and record it as OUR movement, not yours.
+     *
+     * Without that last part the direction guard reads a compensation as a gesture,
+     * and the two sides destroy each other: preparing the start pad shifts the
+     * position forward to hold the content still, that reads as "moving away from
+     * the start", the start pad is surrendered, which shifts the position back, which
+     * reads as "moving away from the end"… and both pads flicker in and out forever.
+     */
+    const write = (pos: number) => {
+      if (horiz) el.scrollLeft = pos;
+      else el.scrollTop = pos;
+      lastPos.current = pos;
+    };
+
+    const sideCfg = (edge: Edge) => (edge === 'start' ? cfg.current.start : cfg.current.end);
+    const padEl = (edge: Edge) => (edge === 'start' ? startPadRef.current : endPadRef.current);
+
+    const padFor = (edge: Edge, stage: number) => {
+      const c = sideCfg(edge);
+      if (!c || stage <= 0) return 0;
+      return stage === 1 ? c.revealPx : c.revealPx + c.commitPx;
+    };
+
+    /**
+     * Apply a stage change to the DOM. Growing the START pad pushes everything after
+     * it along, so the scroll position is moved by the same amount in the same frame
+     * — otherwise preparing a pad would visibly shove the content sideways, which is
+     * the one thing this mechanic must never do.
+     */
+    const setStage = (edge: Edge, next: number) => {
+      const el2 = padEl(edge);
+      if (!el2) return;
+      const before = padFor(edge, stages.current[edge]);
+      const after = padFor(edge, next);
+      if (before === after) {
+        stages.current[edge] = next;
+        return;
+      }
+      stages.current[edge] = next;
+      el2.style[horiz ? 'width' : 'height'] = `${after}px`;
+      if (edge === 'start') write(read().pos + (after - before));
+    };
+
+    const measure = () => {
+      const { pos, max } = read();
+      const startPad = padFor('start', stages.current.start);
+      const endPad = padFor('end', stages.current.end);
+      return {
+        pos,
+        max,
+        startShown: clamp(startPad - pos, 0, startPad),
+        endShown: clamp(endPad - (max - pos), 0, endPad),
+        startPad,
+        endPad,
+      };
+    };
+
+    const phaseFor = (edge: Edge, shown: number): SidePhase => {
+      const c = sideCfg(edge);
+      if (!c) return 'idle';
+      if (firedSide.current === edge) return 'fired';
+      if (shown <= 0) return 'idle';
+      if (shown < c.revealPx - 1) return 'revealing';
+      if (shown < c.revealPx + 1) return 'ready';
+      return 'committing';
+    };
+
+    const publish = () => {
+      const m = measure();
+      const mk = (edge: Edge, shown: number): SideState => {
+        const c = sideCfg(edge);
+        return {
+          stage: stages.current[edge],
+          reveal: c ? Math.min(shown, c.revealPx) : 0,
+          commit: c ? Math.max(0, shown - c.revealPx) : 0,
+          phase: phaseFor(edge, shown),
+        };
+      };
+      setStartState(mk('start', m.startShown));
+      setEndState(mk('end', m.endShown));
+      return m;
+    };
+
+    const clearHold = () => {
+      if (holdTimer.current) clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    };
+
+    const stopReturn = () => {
+      if (returnRaf.current) cancelAnimationFrame(returnRaf.current);
+      returnRaf.current = 0;
+      returning.current = false;
+    };
+
+    /** Animate back to the content edge of whichever side is showing. */
+    const withdraw = (edge: Edge) => {
+      clearHold();
+      const m = measure();
+      const from = m.pos;
+      const to = edge === 'start' ? m.startPad : m.max - m.endPad;
+      if (Math.abs(from - to) < 0.5) {
+        firedSide.current = null;
+        publish();
+        return;
+      }
+      const dur = Math.max(120, cfg.current.returnMs ?? 800);
+      const t0 = performance.now();
+      returning.current = true;
+      const step = (t: number) => {
+        const p = Math.min(1, (t - t0) / dur);
+        write(from + (to - from) * easeInOutCubic(p));
+        publish();
+        if (p < 1) {
+          returnRaf.current = requestAnimationFrame(step);
+          return;
+        }
+        stopReturn();
+        firedSide.current = null;
+        setStage(edge, 0);
+        publish();
+      };
+      returnRaf.current = requestAnimationFrame(step);
+    };
+
+    const restartHold = (edge: Edge) => {
+      clearHold();
+      if (firedSide.current || returning.current) return;
+      holdTimer.current = setTimeout(() => withdraw(edge), cfg.current.holdMs ?? 3000);
+    };
+
+    const fire = (edge: Edge) => {
+      const c = sideCfg(edge);
+      if (!c || !c.actions.length) return;
+      firedSide.current = edge;
+      clearHold();
+      publish();
+      // The edgemost action is the one a completed travel commits to — the last in
+      // the array, sitting hard against the container edge.
+      c.onCommit?.(c.actions[c.actions.length - 1]);
+      setTimeout(() => withdraw(edge), FIRED_HOLD_MS);
+    };
+
+    /**
+     * Prepare the pad for the next step on whichever side we have come to rest
+     * against. Fired by the settle clock, which is fed by INPUT — see onWheel.
+     */
+    const prepare = () => {
+      if (firedSide.current || returning.current) return;
+
+      // Pads only ever GROW here. There is deliberately no give-back:
+      //
+      //   - It isn't needed. A pad that has been prepared but not travelled is
+      //     invisible and costs nothing but scroll range, and resting at that edge is
+      //     the very condition that would re-prepare it anyway. Surrendering it is a
+      //     round trip to the same state.
+      //   - It was actively harmful. Shrinking the START pad has to shift the
+      //     position to hold the content still, and that write CANCELS Chrome's
+      //     in-flight scroll animation — so surrendering the near pad while you
+      //     travelled the far one truncated the gesture. A 192px travel arrived as 96.
+      //
+      // Pads return to zero exactly once: in `withdraw`, which runs at rest and ends
+      // parked on the content edge, where settle prepares stage 1 again.
+      const m = measure();
+      const advance = (edge: Edge, atContentEdge: boolean, fullyRevealed: boolean) => {
+        const c = sideCfg(edge);
+        if (!c) return;
+        if (stages.current[edge] === 0 && atContentEdge) setStage(edge, 1);
+        else if (stages.current[edge] === 1 && fullyRevealed) setStage(edge, 2);
+      };
+      advance('start', m.pos <= m.startPad + 1 && m.startShown <= 0, m.startShown >= (sideCfg('start')?.revealPx ?? 0) - 1);
+      advance('end', m.pos >= m.max - m.endPad - 1 && m.endShown <= 0, m.endShown >= (sideCfg('end')?.revealPx ?? 0) - 1);
+      publish();
+    };
+
+    const restartSettle = () => {
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+      settleTimer.current = setTimeout(prepare, cfg.current.settleMs ?? 30);
+    };
+
+    const onScroll = () => {
+      const m = publish();
+
+      // The commit is a POSITION, never an event: arriving at the far end of the
+      // commit pad is the action. Nothing can stall it, because there is nothing to
+      // refuse — only distance you have or have not run.
+      for (const edge of ['start', 'end'] as Edge[]) {
+        const c = sideCfg(edge);
+        if (!c || stages.current[edge] !== 2 || firedSide.current || returning.current) continue;
+        const shown = edge === 'start' ? m.startShown : m.endShown;
+        if (shown >= c.revealPx + c.commitPx - 1) {
+          fire(edge);
+          return;
+        }
+      }
+
+      lastPos.current = m.pos;
+
+      // NOTE: pads are never resized here. Every stage change — growing or
+      // surrendering — happens in `prepare`, once input has gone quiet. Doing it
+      // mid-scroll meant the start pad could be surrendered while you were still
+      // travelling the end, and the position compensation that keeps content still
+      // CANCELS Chrome's in-flight scroll animation. A 192px travel arrived as 96.
+      // One rule covers it: the layout under a live gesture never changes.
+
+      // The reading clock restarts when the MESSAGE changes, not on scroll activity:
+      // what it has to cover is reading the words currently on screen.
+      for (const edge of ['start', 'end'] as Edge[]) {
+        const shown = edge === 'start' ? m.startShown : m.endShown;
+        const phase = phaseFor(edge, shown);
+        if (phase !== lastPhase.current[edge]) {
+          lastPhase.current[edge] = phase;
+          if (phase === 'idle') clearHold();
+          else if (phase !== 'fired') restartHold(edge);
+        }
+      }
+
+      restartSettle();
+    };
+
+    // INPUT is what the settle clock listens to. Keyed on scrolling it would be
+    // wrong in the only case that matters: pinned at a boundary, the position stops
+    // changing and scroll events stop with it, while the platform is still
+    // delivering momentum. The clock would expire mid-fling and prepare a pad under
+    // a live gesture, which is precisely how a fling walks through an offer.
+    const onWheel = () => {
+      restartSettle();
+      if (returning.current && !firedSide.current) stopReturn();
+    };
+
+    el.addEventListener('scroll', onScroll, { passive: true });
+    el.addEventListener('wheel', onWheel, { passive: true });
+    el.addEventListener('touchmove', onWheel, { passive: true });
+    publish();
+    // A surface at rest is already AT a boundary, so its first pad is earned without
+    // anyone touching it. Without this the very first gesture on a fresh surface has
+    // nowhere to go and is spent preparing instead of travelling — the dead first
+    // scroll all over again, just relocated to mount.
+    restartSettle();
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('touchmove', onWheel);
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+      clearHold();
+      stopReturn();
+    };
+    // Config is read through a ref, so the listeners are installed exactly once.
+  }, [scrollerRef, startPadRef, endPadRef]);
+
+  return { start: startState, end: endState };
+}

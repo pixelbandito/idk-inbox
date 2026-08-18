@@ -14,6 +14,7 @@ npm i --no-save playwright-core   # or install it anywhere and adjust the import
 node scripts/prototype-checks/native-scroll.mjs 520   # arg = viewport height
 node scripts/prototype-checks/overscroll.mjs 520
 node scripts/prototype-checks/drag.mjs
+node scripts/prototype-checks/scroll-actions.mjs
 ```
 
 Each prints PASS/FAIL per check and exits non-zero on any failure.
@@ -44,6 +45,14 @@ you have. **Chromium 151+ is required** for `WheelEvent.momentum`.
   that chases it walks down the whole staircase instead of stopping at the first
   stop, and a "park at the end" that targets it lands you fully revealed.
   `maxScroll - footerH` is the article's end whatever state you inherited.
+- **Nesting breaks descendant CSS selectors.** These surfaces nest — horizontal rows
+  inside a vertical card — so `.sa--y .sa__pad` reaches into the rows and sizes their
+  pads on the wrong axis. Every axis-scoped rule must be child-scoped (`>`). The
+  symptom is confusing: the rows are three times too wide and no amount of x-axis CSS
+  wins, because both rules legitimately match.
+- **`overscroll-behavior: contain` must be per-axis.** On both axes it stops the wheel
+  chaining to the parent, so a vertical scroll over a horizontal row scrolls nothing
+  at all. Contain only the axis the surface actually owns.
 - **`reset()` does not reload.** It re-navigates to the same hash URL, which is a
   same-document navigation, so the component is never remounted. A scenario that
   ends mid-animation leaks its state into the next one — and the symptom is

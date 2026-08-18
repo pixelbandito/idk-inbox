@@ -7,6 +7,7 @@ import { NavEmbla } from './nav/NavEmbla';
 import { GestureDrag } from './gesture/GestureDrag';
 import { GestureOverscroll } from './gesture/GestureOverscroll';
 import { GestureNative } from './gesture/GestureNative';
+import { GestureSides } from './gesture/GestureSides';
 
 // Every prototype and its hash URL, in one table. The router renders the match;
 // the hub index lists them. Adding a prototype means adding one row here.
@@ -76,5 +77,13 @@ export const ROUTES: Route[] = [
       'Nothing is lifted by JS: a transparent footer — only added once you reach the end — scrolls the affordance into view. Momentum, rubber-band and snap gravity stay native, the card never leaves the cursor, and mouse-drag works as a second path into the same states.',
     group: 'Pull-to-trigger gestures',
     element: <GestureNative />,
+  },
+  {
+    path: '/gesture/sides',
+    title: 'Scroll-to-act, any edge',
+    blurb:
+      'The same stop-then-travel staircase generalised onto all four edges, with more than one action per side. First travel reveals every action on that side; a second fires the edgemost one. Horizontal rows are nested inside a vertical card, as they would be in a thread list.',
+    group: 'Pull-to-trigger gestures',
+    element: <GestureSides />,
   },
 ];
