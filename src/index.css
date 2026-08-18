@@ -10,14 +10,56 @@
     color-scheme: var(--colorScheme);
     container-type: normal;
     container-name: theme;
+    /* Reading column: content stays comfortable on wide panels instead of
+       stretching edge to edge. */
+    --readingMaxWidth: 42rem;
   }
 
   body {
     background-color: var(--backgroundColor);
     color: var(--foregroundColor);
+    /* Don't let mobile Safari bump our type on rotate. */
+    -webkit-text-size-adjust: 100%;
   }
 
+  /* Controls inherit the app font by default rather than the UA's. */
+  button, input, select, textarea { font: inherit; }
+  /* Comfortable, drag-free tapping across the app's touch surfaces. */
+  button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+
+  /* Reusable action button. --primary is the one call-to-action per view; --ghost
+     is a quieter, bordered secondary. Both meet the 44px touch-target minimum. */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    padding: 0.5rem 1rem;
+    border: var(--borderSize) solid transparent;
+    border-radius: 10px;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn--primary {
+    background: var(--tone-warn);
+    color: #fff;
+  }
+  .btn--ghost {
+    background: transparent;
+    border-color: color-mix(in srgb, var(--foregroundColor) 25%, transparent);
+    color: var(--foregroundColor);
+  }
+  .btn:active { transform: translateY(1px); }
+
   /* ----- Layout primitive ----- */
+
+  /* Positioning context for the edge slivers, which overlay the scroller. */
+  .workspace {
+    position: relative;
+    height: 100dvh;
+    overflow: hidden;
+  }
 
   .panels {
     display: flex;
@@ -26,7 +68,7 @@
     scroll-snap-type: inline mandatory;
     scroll-behavior: smooth;
     scroll-snap-stop: always;
-    height: 100dvh;
+    height: 100%;
   }
 
   .panel {
@@ -35,36 +77,103 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
-    border-right: var(--borderSize) solid #eee;
+    /* Never let inner content stretch a panel past its own width and feed the
+       horizontal panels scroller (the flex min-width:auto trap). */
+    min-width: 0;
+    max-width: var(--w, 100dvw);
+    border-inline-end: var(--borderSize) solid #eee;
   }
 
   .panel__header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.75rem 1rem;
-    border-bottom: var(--borderSize) solid #eee;
+    /* Clear the notch on a standalone phone; falls back to the base padding. */
+    padding: max(0.75rem, env(safe-area-inset-top)) 1rem 0.75rem;
+    border-bottom: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 12%, transparent);
     background: var(--backgroundColor);
     touch-action: pan-y pinch-zoom;
     user-select: none;
+  }
+  /* Active-panel affordance: an accent underline on its header; inactive panels
+     recede slightly. Subtle — most useful when several panels are visible. */
+  .panel[data-active] .panel__header {
+    box-shadow: inset 0 -2px 0 var(--tone-info);
+  }
+  .panel:not([data-active]) { opacity: 0.72; }
+  @media (max-width: 767px) {
+    .panel:not([data-active]) { opacity: 1; } /* one panel at a time on phones */
+  }
+
+  /* Opening a panel slides it in; closing it collapses its width so the
+     neighbour glides into place rather than the column snapping shut. */
+  .panel--enter { animation: panelEnter 260ms ease both; }
+  .panel--exit {
+    animation: panelExit 260ms ease forwards;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  @keyframes panelEnter {
+    from { opacity: 0; transform: translateX(1.5rem); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes panelExit {
+    from { opacity: 1; }
+    to   { opacity: 0; flex-basis: 0; max-width: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .panel--enter, .panel--exit { animation-duration: 1ms; }
   }
 
   .panel__title {
     margin: 0;
     font-size: 1rem;
     font-weight: 600;
+    /* Shrinkable + wrapping so a long label/subject can't push the header wide. */
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .panel__actions {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.25rem;
+    flex: 0 0 auto;
+  }
+  /* Comfortable, thumb-sized tap targets for the header controls (↻, ×, view
+     toggle) — the bare UA button is too small to hit reliably on a phone. */
+  .panel__actions > button {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    padding: 0 0.6rem;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--foregroundColor);
+    font: inherit;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .panel__actions > button:disabled { opacity: 0.4; cursor: default; }
+  @media (hover: hover) {
+    .panel__actions > button:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--foregroundColor) 10%, transparent);
+    }
+  }
+  .panel__actions > button:active:not(:disabled) {
+    background: color-mix(in srgb, var(--foregroundColor) 16%, transparent);
   }
 
   .panel__body {
     flex: 1;
-    overflow-y: auto;
+    /* Vertical scroll only; clip any horizontal overflow so a wide child can't
+       widen the panel or leak into the panels scroller (breaking swipe-left). */
+    overflow: hidden auto;
     overscroll-behavior-y: contain;
+    /* Keep the last row clear of the home indicator on a standalone phone. */
+    padding-bottom: env(safe-area-inset-bottom);
     min-height: 0;
+    min-width: 0;
   }
 
   @media (min-width: 768px) {
@@ -74,47 +183,396 @@
 
   /* ----- Inbox list rows (carried from 0a) ----- */
 
-  .inbox-list { list-style: none; padding: 0; margin: 0; }
+  .inbox-list { list-style: none; padding: 0; margin: 0; min-width: 0; }
   .email {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    padding: 0.75rem 0.75rem;
+    position: relative;
+    max-width: 100%;
+    overflow: hidden;                 /* clip the reveal + sliding tile to the row */
     border-bottom: var(--borderSize) solid #eee;
     /* Reserve horizontal motion for the row's gesture handlers — without this
        a horizontal mouse drag is eaten by the panel container's scroll-snap. */
     touch-action: pan-y pinch-zoom;
     user-select: none;
+    /* Long unbroken tokens (URLs, IDs) must wrap, not blow out the row. */
+    overflow-wrap: anywhere;
   }
-  .email--unread { font-weight: 600; background: #f6f9ff; }
-  .email--selected { background: #eef6ff; }
-  .email__from { font-size: 0.85rem; color: #555; }
-  .email__snippet { font-size: 0.85rem; color: #888; }
+  .email__reveal {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    padding-inline: 1rem;
+    color: #fff;
+    opacity: 0;
+    /* Neutral until an action arms, then eases to that action's colour. */
+    background: var(--tone-neutral);
+    transition: background-color 140ms ease;
+    /* Icon sits at the edge you pull FROM: end-drag reveals at inline-start. */
+  }
+  /* Visible from the first pixel of a horizontal pull — the moving tile needs a
+     framing box behind it, not empty space. */
+  .email[data-pull] .email__reveal { opacity: 1; }
+  .email[data-armed-tone="safe"]   .email__reveal { background: var(--tone-safe); }
+  .email[data-armed-tone="danger"] .email__reveal { background: var(--tone-danger); }
+  .email[data-armed-tone="info"]   .email__reveal { background: var(--tone-info); }
+  .email[data-armed-tone="warn"]   .email__reveal { background: var(--tone-warn); }
+  .email[data-pull="end"]   .email__reveal { justify-content: flex-start; }
+  .email[data-pull="start"] .email__reveal { justify-content: flex-end; }
+
+  /* All four icons render once; the row's data-armed-icon (set imperatively
+     by useRowSwipe) picks which one shows — pure CSS, zero re-renders. */
+  .email__reveal-icon { display: none; }
+  .email[data-armed-icon="archive"] .email__reveal-icon[data-swipe-icon="archive"] { display: flex; }
+  .email[data-armed-icon="trash"]   .email__reveal-icon[data-swipe-icon="trash"]   { display: flex; }
+  .email[data-armed-icon="clock"]   .email__reveal-icon[data-swipe-icon="clock"]   { display: flex; }
+  .email[data-armed-icon="tag"]     .email__reveal-icon[data-swipe-icon="tag"]     { display: flex; }
+  /* When snapped open the clickable action button carries the icon instead. */
+  .email[data-revealed] .email__reveal-icon { display: none; }
+
+  /* Trackpad-revealed, click-to-commit action button(s) pinned to the
+     pull-from edge. Scrolling far reveals more than one (light + heavy). */
+  .email__actions {
+    position: absolute;
+    inset-block: 0;
+    z-index: 2;
+    display: flex;
+  }
+  .email__actions[data-side="start"] { inset-inline-start: 0; flex-direction: row-reverse; }
+  .email__actions[data-side="end"]   { inset-inline-end: 0; }
+  .email__action {
+    width: 4.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    color: #fff;
+    cursor: pointer;
+  }
+  .email__action[data-tone="safe"]   { background: var(--tone-safe); }
+  .email__action[data-tone="danger"] { background: var(--tone-danger); }
+  .email__action[data-tone="info"]   { background: var(--tone-info); }
+  .email__action[data-tone="warn"]   { background: var(--tone-warn); }
+
+  .email__tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.75rem;
+    min-width: 0;                       /* let the ellipsised snippet clip, not stretch */
+    transform: translateX(var(--drag-x, 0));
+    /* Horizontal motion belongs to the row-swipe handler, not the panels pager. */
+    touch-action: pan-y pinch-zoom;
+    /* Read rows: dimmed text on a slightly-lifted background — a tint, not a
+       colour reversal. All theme-derived, so it follows light/dark. */
+    background: color-mix(in srgb, var(--foregroundColor) 7%, var(--backgroundColor));
+    color: color-mix(in srgb, var(--foregroundColor) 72%, var(--backgroundColor));
+  }
+  .email__from, .email__subject, .email__snippet { min-width: 0; max-width: 100%; }
+
+  /* "⋯" button + its inline action strip (button fallback for row swipes). */
+  .email__menu-wrap { position: absolute; top: 0; right: 0; z-index: 3; }
+  .email__more {
+    min-width: 2rem;
+    height: 2rem;
+    margin: 0.35rem;
+    border: 0;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--foregroundColor) 8%, var(--backgroundColor));
+    color: var(--foregroundColor);
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.55;
+  }
+  .email__more:hover, .email__more[aria-expanded="true"] { opacity: 1; }
+  /* The actions overlay the row's right edge, within its height (no clip). */
+  .email__menu {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0 0.4rem;
+    background: var(--backgroundColor);
+    box-shadow: -0.6rem 0 0.6rem var(--backgroundColor);
+  }
+  .email__menu-item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--foregroundColor);
+    cursor: pointer;
+  }
+  .email__menu-item:active { background: color-mix(in srgb, var(--foregroundColor) 12%, transparent); }
+  /* Colour-coded label / snoozed chips on a thread tile. */
+  .email__pills { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.2rem; }
+  .email__pill {
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1;
+    padding: 0.2rem 0.45rem;
+    border-radius: 999px;
+    color: #fff;
+    background: hsl(var(--pill-hue, 210) 45% 42%);
+    white-space: nowrap;
+  }
+  .email__pill[data-snoozed] { background: var(--tone-info); }
+  /* While dragging, the tile reads as a card lifting off the reveal track. */
+  .email[data-pull] .email__tile { box-shadow: 0 0 0.6rem rgba(0, 0, 0, 0.25); }
+  .email--releasing .email__tile { transition: transform 180ms ease; }
+  /* Unread rows: full-contrast text on the base background, bolder. */
+  .email--unread { font-weight: 600; }
+  .email--unread .email__tile {
+    background: var(--backgroundColor);
+    color: var(--foregroundColor);
+  }
+  .email--selected .email__tile {
+    background: color-mix(in srgb, var(--tone-info) 24%, var(--backgroundColor));
+  }
+
+  /* On commit the row holds a beat (showing the action colour) then collapses
+     vertically, so it reads as being filed away rather than blinking out. */
+  .email--filing {
+    overflow: hidden;
+    animation: emailFileAway 320ms ease forwards;
+  }
+  @keyframes emailFileAway {
+    0%,  40% { max-height: var(--row-h, 6rem); opacity: 1; }
+    100%     { max-height: 0; opacity: 0; }
+  }
+  .email__from { font-size: 0.85rem; color: color-mix(in srgb, var(--foregroundColor) 55%, var(--backgroundColor)); }
+  .email__subject { font-weight: inherit; }
+  /* Snippet stays a one-line preview; the thread view shows the full body. */
+  .email__snippet {
+    font-size: 0.85rem;
+    color: color-mix(in srgb, var(--foregroundColor) 45%, var(--backgroundColor));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ----- Thread view ----- */
+
+  .thread { list-style: none; padding: 0; margin: 0; }
+  .thread__message {
+    padding: 1rem;
+    max-width: var(--readingMaxWidth);
+    border-bottom: var(--borderSize) solid #eee;
+  }
+  .thread__meta {
+    font-size: 0.85rem;
+    color: #555;
+    overflow-wrap: anywhere;
+  }
+  .thread__body {
+    margin-top: 0.5rem;
+    font-family: inherit;
+    /* Wrap on newlines AND break long unbroken tokens so URLs don't overflow. */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  /* Pull-to-refresh affordance, pinned to the top of a thread list. */
+  .list__refresh-hint {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 0.5rem 1rem;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--backgroundColor);
+    background: color-mix(in srgb, var(--foregroundColor) 70%, transparent);
+    backdrop-filter: blur(2px);
+    transition: background-color 120ms ease;
+  }
+  .list__refresh-hint[data-armed] {
+    background: var(--tone-info);
+    color: #fff;
+    font-weight: 600;
+  }
+
+  /* Pull-to-close: the thread lifts by --close-pull (set imperatively by
+     useOverscrollClose), revealing a colour + affordance drawer beneath. Two
+     gates read from data-close-phase: armed (far enough) then ready (also long
+     enough) — colour and text together say "letting go now closes". */
+  /* Non-scrolling stage: the scroller fills it, the reveal pins to its bottom
+     (= the panel's visual bottom), so the drawer always lines up. */
+  .thread-close-stage { flex: 1; position: relative; min-height: 0; overflow: hidden; }
+  .thread-close-stage .thread-scroll { position: absolute; inset: 0; flex: none; }
+  .thread-close-stage .thread {
+    transform: translateY(calc(-1 * var(--close-pull, 0px)));
+    transition: transform var(--close-spring, 0ms) ease-out;
+  }
+  .thread-close-reveal {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--close-pull, 0px);
+    z-index: 2;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    /* Neutral, contrasty dark grey while merely pulling. */
+    background: color-mix(in srgb, var(--foregroundColor) 14%, var(--backgroundColor));
+    transition: height var(--close-spring, 0ms) ease-out, background-color 160ms ease;
+  }
+  /* Armed → a distinct dark colour; ready → stronger still. */
+  .thread-close-stage[data-close-phase="armed"] .thread-close-reveal {
+    background: color-mix(in srgb, var(--tone-info) 32%, var(--backgroundColor));
+  }
+  .thread-close-stage[data-close-phase="ready"] .thread-close-reveal {
+    background: color-mix(in srgb, var(--tone-info) 60%, var(--backgroundColor));
+  }
+  .thread-close-reveal__label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--foregroundColor);
+    white-space: nowrap;
+    opacity: 0.85;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .thread-close-stage .thread, .thread-close-reveal { transition-duration: 1ms; }
+  }
+
+  /* Sanitised HTML mail (rendered in a shadow root inside .email-html__body). */
+  .email-html { margin-top: 0.5rem; }
+  .email-html__body { overflow-x: auto; }
+  .email-html__show-images {
+    margin-bottom: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.85rem;
+    color: inherit;
+    background: color-mix(in srgb, var(--foregroundColor) 8%, transparent);
+    border: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 20%, transparent);
+    border-radius: 8px;
+    cursor: pointer;
+  }
 
   .error { color: #c0392b; padding: 0 1rem; }
 
-  /* ----- Stash column (Task 13) ----- */
+  /* ----- Edge slivers (persistent off-screen-content hints) ----- */
 
   .stash-column {
-    flex: 0 0 44px;
+    position: absolute;
+    inset-block: 0;
+    z-index: 5;
+    width: 1.75rem;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: #f3f3f3;
-    border-right: var(--borderSize) solid #ddd;
-    font-size: 0.85rem;
-    color: #555;
+    gap: 0.25rem;
+    border: 0;
+    /* Solid, high-contrast rail: foreground fill, background-coloured marks, so
+       the chevron + count are always legible over any panel behind. */
+    background: color-mix(in srgb, var(--foregroundColor) 88%, transparent);
+    color: var(--backgroundColor);
+    backdrop-filter: blur(3px);
+    font-size: 0.75rem;
     cursor: pointer;
+    transition: transform 220ms ease;
   }
-  .stash-column__count {
-    font-weight: 600;
+  /* Hidden off-screen on hover devices until revealed by an edge-linger. */
+  .stash-column[data-side="left"]  { inset-inline-start: 0; transform: translateX(-100%); }
+  .stash-column[data-side="right"] { inset-inline-end: 0;  transform: translateX(100%); }
+  .stash-column[data-revealed]      { transform: translateX(0); }
+  /* Touch has no hover to trigger the reveal, so keep the slivers in view. */
+  @media (hover: none) {
+    .stash-column { transform: none; }
   }
+  .stash-column__chevron { font-size: 1.35rem; line-height: 1; }
+  .stash-column__count { font-weight: 700; }
 
   /* ----- Overlay surfaces (pickers, palette, toast) ----- */
 
-  .snooze-picker,
-  .label-picker,
+  /* Dim backdrop; the dialog card sits at the bottom on phones, centred on
+     wider screens. Clicking the backdrop cancels (handled in the component). */
+  .picker-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 0.75rem;
+    background: rgba(20, 20, 25, 0.55);
+  }
+  @media (min-width: 640px) {
+    .picker-backdrop { justify-content: center; align-items: center; }
+  }
+
+  .picker {
+    width: 100%;
+    max-width: 26rem;
+    margin-inline: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--backgroundColor);
+    color: var(--foregroundColor);
+    border: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 12%, transparent);
+    border-radius: 14px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  }
+  .picker__title { margin: 0; font-size: 1.05rem; font-weight: 600; }
+  .picker__options { display: flex; flex-direction: column; gap: 0.35rem; }
+  .picker__option {
+    padding: 0.7rem 0.9rem;
+    font-size: 1rem;
+    text-align: start;
+    color: inherit;
+    background: color-mix(in srgb, var(--foregroundColor) 6%, transparent);
+    border: 0;
+    border-radius: 9px;
+    cursor: pointer;
+  }
+  .picker__option:hover { background: color-mix(in srgb, var(--foregroundColor) 12%, transparent); }
+  .picker__field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-size: 0.8rem;
+    opacity: 0.85;
+  }
+  .picker__field > input {
+    padding: 0.55rem 0.7rem;
+    font-size: 1rem;
+    color: inherit;
+    background: color-mix(in srgb, var(--foregroundColor) 5%, transparent);
+    border: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 20%, transparent);
+    border-radius: 8px;
+  }
+  .picker__hint { margin: 0; font-size: 0.8rem; color: var(--tone-danger); }
+  .picker__actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.25rem; }
+  .picker__cancel, .picker__primary {
+    padding: 0.55rem 1rem;
+    font-size: 0.95rem;
+    border-radius: 9px;
+    cursor: pointer;
+    border: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 18%, transparent);
+    background: transparent;
+    color: inherit;
+  }
+  .picker__primary {
+    border-color: transparent;
+    background: var(--tone-info);
+    color: #fff;
+    font-weight: 600;
+  }
+  .picker__primary:disabled { opacity: 0.45; cursor: default; }
+
   .command-palette {
     position: fixed;
     inset: 0;
@@ -122,77 +580,10 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    align-items: stretch;
-    justify-content: flex-start;
     padding: 1.5rem;
     background: rgba(20, 20, 25, 0.55);
   }
-
-  .snooze-picker > *,
-  .label-picker > *,
-  .command-palette > * {
-    background: var(--backgroundColor);
-    color: var(--foregroundColor);
-  }
-
-  .snooze-picker > h2,
-  .label-picker > h2 {
-    margin: 0;
-    padding: 1rem;
-    font-size: 1.05rem;
-    border-radius: 8px 8px 0 0;
-  }
-
-  .snooze-picker > button,
-  .label-picker > button {
-    padding: 0.75rem 1rem;
-    font-size: 1rem;
-    border: 0;
-    border-top: var(--borderSize) solid #eee;
-    text-align: left;
-    cursor: pointer;
-    color: var(--foregroundColor);
-  }
-  .snooze-picker > button:first-of-type,
-  .label-picker > button:first-of-type {
-    border-top: 0;
-  }
-  .snooze-picker > button:last-child,
-  .label-picker > button:last-child {
-    border-radius: 0 0 8px 8px;
-    opacity: 0.75;
-  }
-
-  .label-picker > ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-  .label-picker > ul > li > button {
-    width: 100%;
-    padding: 0.75rem 1rem;
-    border: 0;
-    border-top: var(--borderSize) solid #eee;
-    text-align: left;
-    background: inherit;
-    color: inherit;
-    cursor: pointer;
-  }
-  .label-picker > label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    padding: 0.75rem 1rem;
-    border-top: var(--borderSize) solid #eee;
-    font-size: 0.85rem;
-    color: #555;
-  }
-  .label-picker > label > input {
-    padding: 0.5rem 0.75rem;
-    font-size: 1rem;
-    border: var(--borderSize) solid #ddd;
-    border-radius: 4px;
-  }
+  .command-palette > * { background: var(--backgroundColor); color: var(--foregroundColor); }
 
   .command-palette > input {
     padding: 0.85rem 1rem;
@@ -245,5 +636,386 @@
     color: #fff;
     font-weight: 600;
     cursor: pointer;
+  }
+
+  /* Sits above the undo toast: errors must not hide behind successes. */
+  .feedback-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 4rem;
+    transform: translateX(-50%);
+    z-index: 1150;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.6rem 1rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    max-width: calc(100dvw - 2rem);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  }
+  .feedback-toast--error { background: #7c1d12; color: #fbeeec; }
+  .feedback-toast--info  { background: #16324f; color: #eaf2fb; }
+  .feedback-toast > button {
+    padding: 0.2rem 0.5rem;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .suggestion-card {
+    margin: 0.75rem;
+    padding: 0.75rem 1rem;
+    border: var(--borderSize) solid color-mix(in srgb, var(--tone-info) 40%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--tone-info) 10%, var(--backgroundColor));
+    font-size: 0.9rem;
+  }
+  .suggestion-card > p { margin: 0 0 0.5rem; }
+  /* The honest inbox-now consequence, set apart from the behavioural evidence. */
+  .suggestion-card__preview {
+    font-size: 0.85rem;
+    color: color-mix(in srgb, var(--foregroundColor) 70%, var(--backgroundColor));
+  }
+  .suggestion-card > button {
+    margin-right: 0.5rem;
+    min-height: 2.5rem;
+    padding: 0.4rem 0.9rem;
+    border: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 22%, transparent);
+    border-radius: 6px;
+    background: var(--backgroundColor);
+    color: var(--foregroundColor);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  /* ----- Settings panel ----- */
+
+  .settings { padding: 0.5rem 0; }
+
+  .settings-section { border-bottom: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 10%, transparent); }
+  .settings-section__header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+    padding: 0.9rem 1rem;
+    border: 0;
+    background: transparent;
+    color: var(--foregroundColor);
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-align: start;
+    cursor: pointer;
+  }
+  .settings-section__twist {
+    flex: 0 0 1rem;
+    font-size: 0.75rem;
+    color: color-mix(in srgb, var(--foregroundColor) 55%, var(--backgroundColor));
+  }
+  .settings-section__body { padding: 0 1rem 1rem; }
+
+  /* Automation hub */
+  .automation__intro {
+    margin: 0 0 0.75rem;
+    font-size: 0.9rem;
+    color: color-mix(in srgb, var(--foregroundColor) 70%, var(--backgroundColor));
+  }
+  .processor {
+    padding: 0.85rem;
+    margin-bottom: 0.75rem;
+    border: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 14%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--foregroundColor) 4%, transparent);
+  }
+  /* A disabled processor recedes so "off" reads at a glance. */
+  .processor:not([data-enabled]) { opacity: 0.6; }
+  .processor__head { display: flex; align-items: flex-start; gap: 0.75rem; justify-content: space-between; }
+  .processor__name {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0 0 0.2rem;
+    font-size: 0.95rem;
+  }
+  .processor__kind {
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--foregroundColor) 55%, var(--backgroundColor));
+  }
+  .processor__summary { margin: 0; font-size: 0.9rem; }
+  .processor__detail {
+    margin: 0.5rem 0 0;
+    font-size: 0.82rem;
+    color: color-mix(in srgb, var(--foregroundColor) 62%, var(--backgroundColor));
+  }
+
+  .rule-list { list-style: none; margin: 0.6rem 0 0; padding: 0; }
+  .rule-list__empty {
+    margin: 0.6rem 0 0;
+    font-size: 0.82rem;
+    color: color-mix(in srgb, var(--foregroundColor) 55%, var(--backgroundColor));
+  }
+  .rule-list__item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-top: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 10%, transparent);
+  }
+  .rule-list__sender { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 0.88rem; }
+  .rule-list__since {
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    color: color-mix(in srgb, var(--foregroundColor) 50%, var(--backgroundColor));
+  }
+  .rule-list__remove {
+    flex: 0 0 auto;
+    min-height: 2.25rem;
+    padding: 0 0.7rem;
+    border: var(--borderSize) solid color-mix(in srgb, var(--tone-danger) 55%, transparent);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--tone-danger);
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  /* A paused rule recedes so "off" reads at a glance. */
+  .rule-list__item[data-disabled] .rule-list__sender { opacity: 0.5; }
+
+  /* CTA from the hub into the dedicated actions panel. */
+  .processor__actions-link {
+    margin-top: 0.6rem;
+    padding: 0.5rem 0;
+    border: 0;
+    background: transparent;
+    color: var(--tone-info);
+    font: inherit;
+    font-size: 0.88rem;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  /* Bulk controls at the top of the actions panel. */
+  .actions-bulk { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+  .actions-bulk .btn { flex: 1; font-size: 0.85rem; }
+  .actions-bulk__danger { color: var(--tone-danger); border-color: color-mix(in srgb, var(--tone-danger) 45%, transparent); }
+
+  /* On/off switch */
+  .toggle {
+    flex: 0 0 auto;
+    width: 2.6rem;
+    height: 1.5rem;
+    padding: 2px;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--foregroundColor) 25%, transparent);
+    cursor: pointer;
+    transition: background 140ms ease;
+  }
+  .toggle[data-on] { background: var(--tone-safe); }
+  .toggle__knob {
+    display: block;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 140ms ease;
+  }
+  .toggle[data-on] .toggle__knob { transform: translateX(1.1rem); }
+
+  /* What I've noticed (behaviour trends) */
+  .trends__intro, .trends__empty {
+    margin: 0 0 0.6rem;
+    font-size: 0.85rem;
+    color: color-mix(in srgb, var(--foregroundColor) 65%, var(--backgroundColor));
+  }
+  .trends { list-style: none; margin: 0; padding: 0; }
+  .trends__row {
+    padding: 0.55rem 0;
+    border-top: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 10%, transparent);
+  }
+  .trends__row:first-child { border-top: 0; }
+  /* A likely fatigue candidate (high volume, mostly archived unopened). */
+  .trends__row[data-fatigued] { border-inline-start: 3px solid var(--tone-info); padding-inline-start: 0.5rem; }
+  .trends__id { display: flex; align-items: baseline; gap: 0.4rem; min-width: 0; }
+  .trends__kind {
+    flex: 0 0 auto;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.1rem 0.35rem;
+    border-radius: 5px;
+    color: var(--backgroundColor);
+    background: color-mix(in srgb, var(--foregroundColor) 45%, var(--backgroundColor));
+  }
+  .trends__kind[data-kind="list"] { background: var(--tone-warn); color: #fff; }
+  .trends__label { min-width: 0; overflow-wrap: anywhere; font-size: 0.9rem; }
+  .trends__metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.9rem;
+    margin-top: 0.25rem;
+    font-size: 0.8rem;
+    color: color-mix(in srgb, var(--foregroundColor) 60%, var(--backgroundColor));
+  }
+
+  /* Under the hood (external sources) */
+  .sources__intro, .sources__note {
+    margin: 0 0 0.75rem;
+    font-size: 0.85rem;
+    color: color-mix(in srgb, var(--foregroundColor) 68%, var(--backgroundColor));
+  }
+  .sources__note { margin-top: 0.75rem; font-style: italic; }
+  .sources__list { list-style: none; margin: 0; padding: 0; }
+  .sources__item {
+    padding: 0.75rem 0;
+    border-top: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 10%, transparent);
+  }
+  .sources__item:first-child { border-top: 0; }
+  .sources__head { display: flex; align-items: baseline; gap: 0.4rem; }
+  .sources__kind {
+    flex: 0 0 auto;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.1rem 0.35rem;
+    border-radius: 5px;
+    color: #fff;
+    background: var(--tone-warn);
+  }
+  .sources__name { font-size: 0.92rem; font-weight: 600; }
+  .sources__desc {
+    margin: 0.35rem 0;
+    font-size: 0.85rem;
+    color: color-mix(in srgb, var(--foregroundColor) 62%, var(--backgroundColor));
+  }
+  .sources__link {
+    display: inline-block;
+    min-height: 2.5rem;
+    line-height: 2.5rem;
+    color: var(--tone-warn);
+    font-size: 0.85rem;
+    text-decoration: none;
+  }
+  .sources__link:hover { text-decoration: underline; }
+
+  /* Shortcuts reference */
+  .shortcuts__group-title {
+    margin: 0.75rem 0 0.4rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--foregroundColor) 60%, var(--backgroundColor));
+  }
+  .shortcuts__gesture-group {
+    margin-bottom: 0.5rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--foregroundColor) 5%, transparent);
+  }
+  .shortcuts__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.35rem 0;
+    font-size: 0.88rem;
+  }
+  .shortcuts__keys {
+    flex: 0 0 auto;
+    color: color-mix(in srgb, var(--foregroundColor) 65%, var(--backgroundColor));
+    font-size: 0.82rem;
+  }
+  kbd.shortcuts__keys {
+    padding: 0.1rem 0.4rem;
+    border: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 22%, transparent);
+    border-radius: 5px;
+    font-family: ui-monospace, monospace;
+  }
+  .shortcuts__action { flex: 1; text-align: end; }
+  .shortcuts__note {
+    margin: 0.75rem 0 0;
+    font-size: 0.78rem;
+    font-style: italic;
+    color: color-mix(in srgb, var(--foregroundColor) 55%, var(--backgroundColor));
+  }
+
+  /* ----- Snoozed agenda (by-day calendar view) ----- */
+
+  .agenda { padding-bottom: 1rem; }
+  .agenda__heading {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    margin: 0;
+    padding: 0.4rem 1rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: color-mix(in srgb, var(--foregroundColor) 65%, var(--backgroundColor));
+    background: color-mix(in srgb, var(--foregroundColor) 6%, var(--backgroundColor));
+    border-bottom: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 10%, transparent);
+  }
+  .agenda__more {
+    display: block;
+    width: 100%;
+    padding: 0.6rem 1rem;
+    border: 0;
+    background: transparent;
+    color: var(--tone-info);
+    font-size: 0.85rem;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  /* ----- Label hierarchy (collapsible tree) ----- */
+
+  .label-tree, .label-tree__children { list-style: none; padding: 0; margin: 0; }
+
+  .label-tree__row {
+    display: flex;
+    align-items: center;
+    /* Each level indents by its depth; the twist keeps a fixed gutter so names
+       line up regardless of whether a row can expand. */
+    padding-inline-start: calc(var(--depth, 0) * 1rem);
+    border-bottom: var(--borderSize) solid color-mix(in srgb, var(--foregroundColor) 10%, transparent);
+  }
+
+  .label-tree__twist {
+    flex: 0 0 1.75rem;
+    padding: 0.75rem 0;
+    border: 0;
+    background: transparent;
+    color: color-mix(in srgb, var(--foregroundColor) 55%, var(--backgroundColor));
+    font-size: 0.8rem;
+    text-align: center;
+    cursor: pointer;
+  }
+  .label-tree__twist[data-empty] { cursor: default; }
+
+  .label-tree__name {
+    flex: 1;
+    padding: 0.75rem 1rem 0.75rem 0;
+    border: 0;
+    background: transparent;
+    color: var(--foregroundColor);
+    font-size: 1rem;
+    text-align: start;
+    cursor: pointer;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  /* A synthetic parent is an organiser, not a list you can open — read it dimmer. */
+  .label-tree__name--parent {
+    color: color-mix(in srgb, var(--foregroundColor) 70%, var(--backgroundColor));
+    font-weight: 600;
   }
 }

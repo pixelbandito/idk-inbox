@@ -20,8 +20,8 @@
   ```
   Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
   ```
-- **Working directory:** `/Users/pixelbandito/Code/email/.worktrees/phase-0c-input-model`. Paths below are relative to it.
-- **Node 22.13+ required.** Prepend `export PATH="/Users/pixelbandito/.nvm/versions/node/v22.13.0/bin:$PATH" && ` to every npm/node command (shell state doesn't persist between calls).
+- **Working directory:** `~/Code/email/.worktrees/phase-0c-input-model`. Paths below are relative to it.
+- **Node 22.13+ required.** Prepend `export PATH="~/.nvm/versions/node/v22.13.0/bin:$PATH" && ` to every npm/node command (shell state doesn't persist between calls).
 - **Baseline:** 60 tests across 15 files, build + lint clean.
 - **Stub vs. real:** every action with side effects outside React state is a STUB in this plan — it logs to `console.info('[stub:<action-id>]', args)` and returns a synthetic `ActionResult`. Layout actions that only mutate React state ARE real (they're the navigation feedback during testing). The exact list is in Milestone B and C.
 

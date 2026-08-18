@@ -9,7 +9,7 @@ export type Mode =
   | 'picker-label'
   | 'cmd-k';
 
-export type PanelKindForCtx = 'settings' | 'threadlist' | 'thread';
+export type PanelKindForCtx = 'settings' | 'threadlist' | 'thread' | 'labels' | 'automations';
 
 export type ThreadRef = string; // Gmail threadId
 
@@ -30,13 +30,25 @@ export interface ActionInverse {
 }
 
 export type ActionResult =
-  | { ok: true;  description: string; inverse?: ActionInverse }
-  | { ok: false; error:       string };
+  | {
+      ok: true;
+      description: string;
+      inverse?: ActionInverse;
+      /** Show the description as a toast even without an undo entry. */
+      announce?: boolean;
+      /** Set false when a write turned out to be a no-op (skips list refresh). */
+      mutated?: boolean;
+      /** Threads the write actually changed — the basis for triage recording. */
+      affectedTargets?: ThreadRef[];
+    }
+  | { ok: false; error: string };
 
 export interface DispatchRequest {
   action:  ActionId;
   args:    Record<string, unknown>;
   context: ReadonlyContext;
+  /** Suppress the automatic feedback toast — the caller will announce itself. */
+  silent?: boolean;
 }
 
 export type ActionCategory = 'thread-write' | 'layout' | 'app' | 'selection';

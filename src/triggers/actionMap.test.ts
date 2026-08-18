@@ -4,7 +4,6 @@ import {
   deleteThreadAction,
   spamThreadAction,
   snoozeThreadAction,
-  addLabelThreadAction,
   enterSelectionAction,
   openPanelAction,
   closePanelAction,
@@ -19,9 +18,7 @@ import {
   click,
   pressLong,
   swipeInlineEnd,
-  swipeInlineEndEdge,
   swipeInlineStart,
-  swipeInlineStartEdge,
   overscrollBlockEnd,
   keypressJ,
   keypressE,
@@ -41,20 +38,16 @@ describe('ACTION_MAP — row surface', () => {
   it('click → open-panel', () => {
     expect(row.get(click)).toBe(openPanelAction);
   });
-  it('swipeInlineEnd → archive-thread', () => {
-    expect(row.get(swipeInlineEnd)).toBe(archiveThreadAction);
-  });
-  it('swipeInlineEndEdge → delete-thread', () => {
-    expect(row.get(swipeInlineEndEdge)).toBe(deleteThreadAction);
-  });
-  it('swipeInlineStart → snooze-thread', () => {
-    expect(row.get(swipeInlineStart)).toBe(snoozeThreadAction);
-  });
-  it('swipeInlineStartEdge → add-label-thread', () => {
-    expect(row.get(swipeInlineStartEdge)).toBe(addLabelThreadAction);
-  });
   it('pressLong → enter-selection', () => {
     expect(row.get(pressLong)).toBe(enterSelectionAction);
+  });
+  // Row swipes are handled by src/input/swipeIntents.ts, not the action map.
+  it('has no swipe triggers (row swipes live in swipeIntents)', () => {
+    expect(row.get(swipeInlineEnd)).toBeUndefined();
+    expect(row.get(swipeInlineStart)).toBeUndefined();
+  });
+  it('wires exactly click and pressLong', () => {
+    expect(row.size).toBe(2);
   });
 });
 

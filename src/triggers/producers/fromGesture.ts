@@ -35,13 +35,16 @@ const VALID_SURFACES: ReadonlySet<string> = new Set<Surface>([
   'row', 'panel-header', 'panel-body', 'document', 'overlay',
 ]);
 
-interface ResolvedSurface {
+export interface ResolvedSurface {
   surface:    Surface;
   surfaceEl:  Element;
 }
 
-/** Walk up from a raw event target to find the closest [data-surface] ancestor. */
-function resolveSurface(target: Element | null): ResolvedSurface {
+/**
+ * Walk up from a raw event target to find the closest [data-surface] ancestor.
+ * Exported for useRowSwipe, which builds the same AbstractEvents for taps.
+ */
+export function resolveSurface(target: Element | null): ResolvedSurface {
   if (target) {
     const found = target.closest('[data-surface]') as HTMLElement | null;
     if (found) {

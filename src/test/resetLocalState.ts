@@ -1,0 +1,18 @@
+// Clears every persistent and in-memory app store between tests, so state
+// from one test can't leak into the next. Call in beforeEach.
+
+import { resetResolvedSuggestions } from '../lib/heuristics/resolvedSuggestions';
+import { resetAutoArchiveRules } from '../lib/rules/autoArchive';
+import { resetThreadSummaryCache } from '../state/threadSummaryCache';
+import { resetAppLabelResolver } from '../lib/gmail/appLabelResolver';
+import { resetProcessorSettings } from '../lib/automation/settings';
+import { resetBehaviourLog } from '../lib/signals/behaviourLog';
+
+export function resetLocalState(): void {
+  resetResolvedSuggestions();
+  resetAutoArchiveRules();
+  resetThreadSummaryCache();
+  resetAppLabelResolver();
+  resetProcessorSettings();
+  resetBehaviourLog();
+}

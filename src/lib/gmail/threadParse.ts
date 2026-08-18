@@ -52,3 +52,9 @@ export function extractPlainText(payload: MessagePart | undefined): string {
 
   return '';
 }
+
+/** The raw (unsanitised) HTML body of a message, or null for text-only mail. */
+export function extractHtml(payload: MessagePart | undefined): string | null {
+  const html = findPart(payload, (p) => p.mimeType === 'text/html' && !!p.body?.data);
+  return html ? base64UrlDecode(html.body!.data!) : null;
+}

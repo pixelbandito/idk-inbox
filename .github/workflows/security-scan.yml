@@ -1,0 +1,15 @@
+name: Security scan
+
+# Runs the same scan as the local pre-push hook (scripts/security-scan.sh),
+# so a secret or stray identifier is caught in CI even if the hook was skipped.
+on:
+  push:
+  pull_request:
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan tracked files for secrets and stray identifiers
+        run: bash scripts/security-scan.sh

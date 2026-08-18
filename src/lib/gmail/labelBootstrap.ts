@@ -1,40 +1,23 @@
 export const APP_LABEL = 'idk-inbox';
 export const SNOOZED_LABEL = 'idk-inbox/Snoozed';
 
-const BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
-
-interface GmailLabel {
-  id: string;
-  name: string;
-}
-
-interface ListLabelsResponse {
-  labels?: GmailLabel[];
-}
+import { gmailJson } from './http';
+import type { GmailLabel } from './types';
 
 export interface BootstrapResult {
   created: string[];
 }
 
 async function listLabels(token: string): Promise<GmailLabel[]> {
-  const res = await fetch(`${BASE}/labels`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`Gmail labels list failed: ${res.status}`);
-  const json = (await res.json()) as ListLabelsResponse;
+  const json = await gmailJson<{ labels?: GmailLabel[] }>(token, '/labels', 'labels list');
   return json.labels ?? [];
 }
 
 async function createLabel(token: string, name: string): Promise<void> {
-  const res = await fetch(`${BASE}/labels`, {
+  await gmailJson<GmailLabel>(token, '/labels', 'label create', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ name }),
+    body: { name },
   });
-  if (!res.ok) throw new Error(`Gmail label create failed: ${res.status}`);
 }
 
 export async function ensureAppLabels(token: string): Promise<BootstrapResult> {

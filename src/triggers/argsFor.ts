@@ -59,13 +59,16 @@ export function argsFor(
     return { panelIndex: ctx.focusedPanelIndex };
   }
 
-  // Thread-targeted actions: prefer selection, fall back to event-derived row.
+  // Thread-targeted actions: the selection is the target ONLY when the
+  // gesture didn't single out a row outside it — swiping an unselected row
+  // must act on that row alone, never fan out to the whole selection.
   if (action.modelName === threadModel) {
-    if (ctx.selection.length > 0) {
+    const rowTarget = targetFromRow(eventTarget(event));
+    const rowIsOutsideSelection = rowTarget !== null && !ctx.selection.includes(rowTarget);
+    if (ctx.selection.length > 0 && !rowIsOutsideSelection) {
       return { targets: targetsFromSelection(ctx) };
     }
-    const t = targetFromRow(eventTarget(event));
-    return { targets: t ? [t] : [] };
+    return { targets: rowTarget ? [rowTarget] : [] };
   }
 
   // Layout / app / selection-mode actions take no args from the event.

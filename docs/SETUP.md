@@ -143,24 +143,56 @@ and the app starts needing `gmail.send`):
 - **PWA service worker serving stale code after a fix lands.** In
   DevTools → **Application → Service Workers**, click *Unregister*.
   Then **Application → Storage → Clear site data**. Hard reload.
-- **Mouse swipes don't fire on a row.** Make sure you're on the
-  `phase-0c-input-model` branch (or merged main) — Phase 0c added
-  `setPointerCapture` to the gesture detector and `touch-action: pan-y`
-  to rows.
+- **A two-finger trackpad swipe on a row doesn't commit.** Working as
+  designed: a wheel stream has no "fingers lifted" event, so a scroll
+  *reveals* the row's action buttons instead of firing on release. Click
+  the revealed button. See [USING.md § Swipe a row](USING.md#swipe-a-row).
 - **The GIS library (`accounts.google.com/gsi/client`) fails to load.**
   A privacy extension or strict tracking-protection setting may be
   blocking `accounts.google.com`. Allow the host or disable the
   extension for `localhost:5173`.
 
-## Architecture pointers
+## LAN HTTPS + installing the PWA on a phone
 
-- Design: `docs/plans/2026-05-16-inbox-zero-design.md`.
-- Phase plans (latest first):
-  - `docs/plans/2026-05-25-phase-0c-stubbed-input-model.md` —
-    current phase (stubbed input model).
-  - `docs/plans/2026-05-25-phase-0c-unified-input-model-design.md` —
-    Phase 0c design.
-  - `docs/plans/2026-05-23-phase-0b-layout-design.md` /
-    `…-layout-foundation.md` — Phase 0b layout primitive.
-  - `docs/plans/2026-05-16-phase-0a-scaffold-oauth-inbox.md` —
-    Phase 0a foundation.
+PWA install requires a secure origin, and Google sign-in requires the origin
+to be registered on the OAuth client. To run the app on your phone against
+the dev box:
+
+1. **Pick a hostname, not an IP.** Google OAuth rejects LAN IP origins
+   (`https://192.168.x.x`), so give the dev box a name your devices can
+   resolve — a local-DNS/router entry like `inbox.home.arpa`, or any domain
+   you control pointed at the LAN IP.
+2. **Issue a cert from your CA** for that hostname, and make sure the CA's
+   root is trusted on each device (iOS: install the profile, then enable it
+   under Settings → General → About → Certificate Trust Settings).
+3. **Point the dev server at the cert** in `.env.local`:
+
+   ```sh
+   DEV_TLS_CERT=/path/to/inbox.home.arpa.pem
+   DEV_TLS_KEY=/path/to/inbox.home.arpa-key.pem
+   ```
+
+   With both set, `npm run dev` / `npm run preview` serve HTTPS and bind to
+   the LAN (`host: true`). Without them, everything stays on plain-http
+   localhost. Binding to the LAN exposes the dev server (and HMR socket) to
+   everyone on the network — only do this on networks you trust.
+4. **Register the origin** — add `https://inbox.home.arpa:5173` (dev) and/or
+   `https://inbox.home.arpa:4173` (preview) to the OAuth client's
+   **Authorized JavaScript origins**.
+5. On the phone, open the URL, sign in, and use the browser's
+   **Add to Home Screen / Install** — `npm run build && npm run preview`
+   serves the real installable build with the service worker.
+
+## Where to go next
+
+- **[USING.md](USING.md)** — using the app: panels, gestures, shortcuts,
+  and what the automation does to your mail.
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — how it's built, plain-language
+  summary per section with mechanism detail folded in below.
+- **[followups.md](followups.md)** — known limitations and deferred work.
+
+Design and phase plans in [`plans/`](plans/), newest first — the origin
+document is `2026-05-16-inbox-zero-design.md`, and note that its four-part
+architecture (PWA + Apps Script + Sheet + AI) describes an intent, not the
+code: only the PWA was built. See
+[ARCHITECTURE.md § Designed but not built](ARCHITECTURE.md#11-designed-but-not-built).

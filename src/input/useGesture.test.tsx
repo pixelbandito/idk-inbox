@@ -102,4 +102,126 @@ describe('useGesture', () => {
     expect(onSwipe).not.toHaveBeenCalled();
     expect(onClick).toHaveBeenCalledTimes(1);
   });
+
+  it('fires onDrag with running deltas during a drag', () => {
+    const onDrag = vi.fn();
+    const { getByTestId } = render(<Target onDrag={onDrag} />);
+    const el = getByTestId('target');
+    fireEvent.pointerDown(el, { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(el, { pointerId: 1, clientX: 130, clientY: 105 });
+    fireEvent.pointerMove(el, { pointerId: 1, clientX: 160, clientY: 90 });
+    expect(onDrag).toHaveBeenCalledTimes(2);
+    expect(onDrag).toHaveBeenNthCalledWith(1, 30, 5);
+    expect(onDrag).toHaveBeenNthCalledWith(2, 60, -10);
+  });
+
+  it('does not fire onDrag for a tap with no movement', () => {
+    const onDrag = vi.fn();
+    const { getByTestId } = render(<Target onDrag={onDrag} />);
+    const el = getByTestId('target');
+    fireEvent.pointerDown(el, { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerUp(el,   { pointerId: 1, clientX: 100, clientY: 100 });
+    expect(onDrag).not.toHaveBeenCalled();
+  });
+
+  it('fires onDragEnd with final deltas after a drag past the swipe threshold (onSwipe still fires)', () => {
+    const onDragEnd = vi.fn();
+    const onSwipe = vi.fn();
+    const { getByTestId } = render(<Target onDragEnd={onDragEnd} onSwipe={onSwipe} />);
+    const el = getByTestId('target');
+    fireEvent.pointerDown(el, { pointerId: 1, clientX: 50, clientY: 50 });
+    fireEvent.pointerMove(el, { pointerId: 1, clientX: 130, clientY: 55 });
+    fireEvent.pointerUp(el,   { pointerId: 1, clientX: 150, clientY: 55 });
+    expect(onDragEnd).toHaveBeenCalledTimes(1);
+    expect(onDragEnd).toHaveBeenCalledWith(100, 5, expect.any(Number));
+    expect(onSwipe).toHaveBeenCalledTimes(1); // existing consumers keep their swipe
+  });
+
+  it('fires onDragEnd for an ambiguous drag between clickMax and swipeMin', () => {
+    const onDragEnd = vi.fn();
+    const onClick = vi.fn();
+    const onSwipe = vi.fn();
+    const { getByTestId } = render(
+      <Target onDragEnd={onDragEnd} onClick={onClick} onSwipe={onSwipe} />,
+    );
+    const el = getByTestId('target');
+    fireEvent.pointerDown(el, { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(el, { pointerId: 1, clientX: 120, clientY: 100 });
+    fireEvent.pointerUp(el,   { pointerId: 1, clientX: 130, clientY: 100 }); // dx = 30
+    expect(onDragEnd).toHaveBeenCalledTimes(1);
+    expect(onDragEnd).toHaveBeenCalledWith(30, 0, expect.any(Number));
+    expect(onClick).not.toHaveBeenCalled();
+    expect(onSwipe).not.toHaveBeenCalled();
+  });
+
+  it('does not fire onDragEnd on a motionless tap (onClick fires instead)', () => {
+    const onDragEnd = vi.fn();
+    const onClick = vi.fn();
+    const { getByTestId } = render(<Target onDragEnd={onDragEnd} onClick={onClick} />);
+    const el = getByTestId('target');
+    fireEvent.pointerDown(el, { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerUp(el,   { pointerId: 1, clientX: 100, clientY: 100 });
+    expect(onDragEnd).not.toHaveBeenCalled();
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires onDragEnd when a dragged gesture is cancelled', () => {
+    const onDragEnd = vi.fn();
+    const { getByTestId } = render(<Target onDragEnd={onDragEnd} />);
+    const el = getByTestId('target');
+    fireEvent.pointerDown(el,   { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(el,   { pointerId: 1, clientX: 150, clientY: 100 });
+    fireEvent.pointerCancel(el, { pointerId: 1, clientX: 150, clientY: 100 });
+    expect(onDragEnd).toHaveBeenCalledTimes(1);
+    expect(onDragEnd).toHaveBeenCalledWith(50, 0, expect.any(Number));
+  });
+
+  it('ignores presses that start on an interactive control (button), so its native click survives', () => {
+    const onClick = vi.fn();
+    function WithButton(props: GestureCallbacks) {
+      const ref = useRef<HTMLDivElement>(null);
+      useGesture('row', ref, props);
+      return (
+        <div ref={ref} data-testid="target">
+          <button data-testid="btn">go</button>
+        </div>
+      );
+    }
+    const { getByTestId } = render(<WithButton onClick={onClick} />);
+    const btn = getByTestId('btn');
+    fireEvent.pointerDown(btn, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(btn,   { pointerId: 1, clientX: 10, clientY: 10 });
+    // The gesture must not treat the button press as a row click.
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  describe('guardActive (inactive-panel gating)', () => {
+    it('suppresses a swipe but still fires a tap when the guard is false', () => {
+      const onSwipe = vi.fn();
+      const onClick = vi.fn();
+      const { getByTestId } = render(
+        <Target onSwipe={onSwipe} onClick={onClick} guardActive={() => false} />,
+      );
+      const el = getByTestId('target');
+
+      // A full swipe does nothing (the panel would just activate)…
+      fireEvent.pointerDown(el, { pointerId: 1, clientX: 250, clientY: 50 });
+      fireEvent.pointerUp(el,   { pointerId: 1, clientX: 50, clientY: 50 });
+      expect(onSwipe).not.toHaveBeenCalled();
+
+      // …but a tap still opens (navigation is allowed).
+      fireEvent.pointerDown(el, { pointerId: 2, clientX: 50, clientY: 50 });
+      fireEvent.pointerUp(el,   { pointerId: 2, clientX: 51, clientY: 51 });
+      expect(onClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('allows the swipe when the guard is true', () => {
+      const onSwipe = vi.fn();
+      const { getByTestId } = render(<Target onSwipe={onSwipe} guardActive={() => true} />);
+      const el = getByTestId('target');
+      fireEvent.pointerDown(el, { pointerId: 1, clientX: 250, clientY: 50 });
+      fireEvent.pointerUp(el,   { pointerId: 1, clientX: 50, clientY: 50 });
+      expect(onSwipe).toHaveBeenCalledTimes(1);
+    });
+  });
 });

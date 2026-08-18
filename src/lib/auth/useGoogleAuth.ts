@@ -3,6 +3,11 @@ import { GOOGLE_CLIENT_ID, GMAIL_SCOPE } from '../config';
 import { TokenStore } from './tokenStore';
 import { loadGis } from './loadGis';
 import { loadPersistedToken, savePersistedToken } from './tokenPersistence';
+import { resetAppLabelResolver } from '../gmail/appLabelResolver';
+import { resetLabelDirectory } from '../gmail/labelDirectory';
+import { resetAccountProfile } from '../gmail/accountProfile';
+import { resetThreadSummaryCache } from '../../state/threadSummaryCache';
+import { clearAccountScopedStorage } from '../storageKeys';
 
 const tokenStore = new TokenStore();
 
@@ -44,11 +49,15 @@ export function useGoogleAuth() {
             setError(resp.error);
             return;
           }
-          const expiresIn = Number(resp.expires_in);
-          tokenStore.set(resp.access_token, expiresIn);
+          // Guard the TTL: a missing / non-numeric expires_in would make
+          // expiresAt NaN, which JSON stores as null and the loader then
+          // rejects — silently signing the user out on the next refresh.
+          const parsed = Number(resp.expires_in);
+          const ttlSeconds = Number.isFinite(parsed) && parsed > 0 ? parsed : 3600;
+          tokenStore.set(resp.access_token, ttlSeconds);
           savePersistedToken({
             accessToken: resp.access_token,
-            expiresAt: Date.now() + expiresIn * 1000,
+            expiresAt: Date.now() + ttlSeconds * 1000,
           });
           setError(null);
           setSignedIn(true);
@@ -62,6 +71,13 @@ export function useGoogleAuth() {
     tokenStore.clear();
     savePersistedToken(null);
     clientRef.current = null;
+    // Per-account state (label ids, cached mail, triage history, rules) must
+    // not leak into the next account.
+    resetAppLabelResolver();
+    resetLabelDirectory();
+    resetAccountProfile();
+    resetThreadSummaryCache();
+    clearAccountScopedStorage();
     setError(null);
     setSignedIn(false);
   }, []);

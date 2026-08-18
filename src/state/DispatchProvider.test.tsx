@@ -1,7 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { DispatchProvider } from './DispatchProvider';
-import { useDispatchContext, useDispatcher, useLayoutState, useUndoState } from './useDispatch';
+import {
+  useDispatchContext, useDispatcher, useLayoutState, useRefreshState, useUndoState,
+} from './useDispatch';
+import type { ThreadWriteClient } from '../lib/gmail/threadWriteClient';
+
+/** Client whose writes always succeed, without touching the network. */
+const alwaysSucceeds: ThreadWriteClient = {
+  modifyThreadLabels: async (_token, threadIds) => ({ succeeded: threadIds, failed: [] }),
+  deleteLabel: async () => {},
+};
+
+const alwaysFails: ThreadWriteClient = {
+  modifyThreadLabels: async (_token, threadIds) => ({ succeeded: [], failed: threadIds }),
+  deleteLabel: async () => {},
+};
 
 function Probe() {
   const ctx = useDispatchContext();
@@ -74,7 +88,7 @@ describe('dispatcher integration', () => {
 
   it('dispatching archive-thread pushes an entry to the undo stack', async () => {
     render(
-      <DispatchProvider signedIn>
+      <DispatchProvider signedIn getToken={() => 'tok'} threadWriteClient={alwaysSucceeds}>
         <ArchiveProbe />
       </DispatchProvider>,
     );
@@ -113,5 +127,89 @@ describe('dispatcher integration', () => {
       screen.getByTestId('fire').click();
     });
     expect(screen.getByTestId('undo-depth').textContent).toBe('0');
+  });
+});
+
+describe('behaviour recording', () => {
+  it('records opens and actions to the behaviour log, conditioned on opening first', async () => {
+    const { resetBehaviourLog, fingerprintStats, senderKey } = await import('../lib/signals/behaviourLog');
+    const { cacheThreadSummaries, resetThreadSummaryCache } = await import('./threadSummaryCache');
+    resetBehaviourLog();
+    resetThreadSummaryCache();
+    cacheThreadSummaries([
+      { id: 'm1', threadId: 't1', from: 'noisy@x.example', subject: 's', snippet: '', date: '', unread: true, labels: [] },
+      { id: 'm2', threadId: 't2', from: 'noisy@x.example', subject: 's', snippet: '', date: '', unread: true, labels: [] },
+    ]);
+
+    function Fire() {
+      const dispatch = useDispatcher();
+      const ctx = useDispatchContext();
+      return (
+        <button data-testid="fire" onClick={async () => {
+          await dispatch({ action: 'open-panel', args: { kind: 'thread', threadId: 't1' }, context: ctx });
+          await dispatch({ action: 'archive-thread', args: { targets: ['t1'] }, context: ctx });
+          await dispatch({ action: 'archive-thread', args: { targets: ['t2'] }, context: ctx });
+        }}>fire</button>
+      );
+    }
+    render(
+      <DispatchProvider
+        signedIn
+        getToken={() => 'tok'}
+        threadWriteClient={alwaysSucceeds}
+        initialPanels={[{ kind: 'settings' }, { kind: 'threadlist', label: 'INBOX' }]}
+      >
+        <Fire />
+      </DispatchProvider>,
+    );
+    await act(async () => { screen.getByTestId('fire').click(); });
+
+    const stats = fingerprintStats(senderKey('noisy@x.example'), 14);
+    expect(stats.opened).toBe(1);
+    expect(stats.archived).toBe(2);
+    expect(stats.archivedWithoutOpen).toBe(1); // t2 was archived without opening
+    resetBehaviourLog();
+    resetThreadSummaryCache();
+  });
+});
+
+describe('refresh after thread writes', () => {
+  function WriteAndWatch() {
+    const dispatch = useDispatcher();
+    const ctx = useDispatchContext();
+    const { threadsVersion } = useRefreshState();
+    return (
+      <>
+        <div data-testid="threads-version">{threadsVersion}</div>
+        <button
+          data-testid="fire"
+          onClick={async () => {
+            await dispatch({ action: 'archive-thread', args: { targets: ['t1'] }, context: ctx });
+          }}
+        >
+          fire
+        </button>
+      </>
+    );
+  }
+
+  it('bumps threadsVersion after a successful thread write', async () => {
+    render(
+      <DispatchProvider signedIn getToken={() => 'tok'} threadWriteClient={alwaysSucceeds}>
+        <WriteAndWatch />
+      </DispatchProvider>,
+    );
+    await act(async () => { screen.getByTestId('fire').click(); });
+    await waitFor(() => expect(screen.getByTestId('threads-version').textContent).toBe('1'));
+  });
+
+  it('does not bump threadsVersion when the write fails', async () => {
+    render(
+      <DispatchProvider signedIn getToken={() => 'tok'} threadWriteClient={alwaysFails}>
+        <WriteAndWatch />
+      </DispatchProvider>,
+    );
+    await act(async () => { screen.getByTestId('fire').click(); });
+    expect(screen.getByTestId('threads-version').textContent).toBe('0');
   });
 });

@@ -4,13 +4,18 @@ import { LayoutContainer, type PanelRenderProps } from './layout/LayoutContainer
 import { SettingsPanel } from './panels/SettingsPanel';
 import { ThreadlistPanel } from './panels/ThreadlistPanel';
 import { ThreadPanel } from './panels/ThreadPanel';
+import { LabelsPanel } from './panels/LabelsPanel';
+import { AutomationActionsPanel } from './panels/AutomationActionsPanel';
 import { SnoozePicker } from './pickers/SnoozePicker';
 import { LabelPicker } from './pickers/LabelPicker';
 import { CommandPalette } from './palette/CommandPalette';
 import { UndoToast } from './feedback/UndoToast';
+import { FeedbackToast } from './feedback/FeedbackToast';
 import { ensureAppLabels, SNOOZED_LABEL } from './lib/gmail/labelBootstrap';
+import { isProcessorEnabled } from './lib/automation/settings';
+import { displayNameOf } from './lib/gmail/labelDisplay';
 import { DispatchProvider } from './state/DispatchProvider';
-import { useDispatchContext, useDispatcher } from './state/useDispatch';
+import { useDispatchContext, useDispatcher, useFeedback } from './state/useDispatch';
 import { useKeyboardProducer } from './triggers/producers/fromKeyboard';
 import { useTriggerHandler } from './triggers/useTriggerHandler';
 import {
@@ -45,12 +50,8 @@ const INITIAL_PANELS: Panel[] = [
   { kind: 'settings' },
   { kind: 'threadlist', label: 'INBOX' },
   { kind: 'threadlist', label: SNOOZED_LABEL },
+  { kind: 'labels' },
 ];
-
-function displayName(label: string): string {
-  if (label === 'INBOX') return 'Inbox';
-  return label.replace(/^idk-inbox\//, '');
-}
 
 /**
  * Small adapter that pulls signedIn from the dispatch context and dispatches
@@ -75,6 +76,41 @@ function AppInner({ getToken }: { getToken: () => string | null }) {
   const onTrigger = useTriggerHandler(DOCUMENT_NEW_PIPELINE);
   useKeyboardProducer(onTrigger);
 
+  const ctx = useDispatchContext();
+  const dispatch = useDispatcher();
+  const { setFeedback } = useFeedback();
+  const bootstrapped = useRef(false);
+
+  // Post-sign-in bootstrap: make sure the app labels exist, then wake any
+  // snoozed threads that came due while the app was closed and apply the
+  // user's auto-archive rules. Both are thread-writes, so their successes
+  // refresh the lists automatically.
+  useEffect(() => {
+    if (!ctx.signedIn || bootstrapped.current) return;
+    const token = getToken();
+    if (!token) return;
+    bootstrapped.current = true;
+    void (async () => {
+      try {
+        await ensureAppLabels(token);
+      } catch (e) {
+        console.warn('label bootstrap failed:', e);
+      }
+      // Suppress each sweep's own announcement, then compose one summary — two
+      // back-to-back announcements would clobber the single feedback slot.
+      const woke = await dispatch({ action: 'wake-snoozed', args: {}, context: ctx, silent: true });
+      // The auto-archive rule engine only runs while the user leaves it on.
+      const archived = isProcessorEnabled('auto-archive')
+        ? await dispatch({ action: 'apply-auto-archive', args: {}, context: ctx, silent: true })
+        : null;
+      const parts = [
+        woke.ok && woke.mutated !== false ? woke.description : null,
+        archived?.ok && archived.mutated !== false ? archived.description : null,
+      ].filter(Boolean);
+      if (parts.length > 0) setFeedback({ kind: 'info', message: parts.join(' · ') });
+    })();
+  }, [ctx, dispatch, getToken, setFeedback]);
+
   function renderPanel(panel: Panel, index: number, props: PanelRenderProps) {
     if (panel.kind === 'settings') {
       return <SettingsPanelDispatching />;
@@ -83,10 +119,17 @@ function AppInner({ getToken }: { getToken: () => string | null }) {
       return (
         <ThreadlistPanel
           label={panel.label}
-          displayName={displayName(panel.label)}
+          displayName={displayNameOf(panel.label)}
           getToken={getToken}
+          onClose={panel.closable ? props.onClose : undefined}
         />
       );
+    }
+    if (panel.kind === 'labels') {
+      return <LabelsPanel getToken={getToken} />;
+    }
+    if (panel.kind === 'automations') {
+      return <AutomationActionsPanel onClose={props.onClose} />;
     }
     return (
       <ThreadPanel
@@ -102,26 +145,16 @@ function AppInner({ getToken }: { getToken: () => string | null }) {
     <>
       <LayoutContainer renderPanel={renderPanel} />
       <SnoozePicker />
-      <LabelPicker />
+      <LabelPicker getToken={getToken} />
       <CommandPalette />
       <UndoToast />
+      <FeedbackToast />
     </>
   );
 }
 
 export default function App() {
   const { signedIn, error, signIn, signOut, getToken } = useGoogleAuth();
-  const bootstrapped = useRef(false);
-
-  useEffect(() => {
-    if (!signedIn || bootstrapped.current) return;
-    const token = getToken();
-    if (!token) return;
-    bootstrapped.current = true;
-    ensureAppLabels(token).catch((e) => {
-      console.warn('label bootstrap failed:', e);
-    });
-  }, [signedIn, getToken]);
 
   return (
     <>
@@ -131,6 +164,7 @@ export default function App() {
         initialPanels={INITIAL_PANELS}
         externalSignIn={signIn}
         externalSignOut={signOut}
+        getToken={getToken}
       >
         <AppInner getToken={getToken} />
       </DispatchProvider>

@@ -1,53 +1,194 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { PanelHeader } from '../layout/PanelHeader';
-import { useDispatchContext } from '../state/useDispatch';
-import { useGestureProducer } from '../triggers/producers/fromGesture';
+import { useDispatchContext, useDispatcher, useRefreshState } from '../state/useDispatch';
+import { useRowSwipe } from '../input/useRowSwipe';
+import { useOverscroll } from '../input/useOverscroll';
 import { useTriggerHandler } from '../triggers/useTriggerHandler';
-import {
-  click,
-  pressLong,
-  swipeInlineEnd,
-  swipeInlineEndEdge,
-  swipeInlineStart,
-  swipeInlineStartEdge,
-} from '../triggers/triggers';
+import { click, pressLong } from '../triggers/triggers';
 import type { TriggerName } from '../triggers/types';
+import type { IconName } from '../input/swipeIntents';
+import type { ActionId } from '../input/types';
+import type { LabelPill } from '../lib/gmail/labelDirectory';
+import { Icon } from '../ui/icons';
 import { fetchByLabel } from '../lib/gmail/fetchByLabel';
+import { loadLabelDirectory, pillsFor } from '../lib/gmail/labelDirectory';
+import { SNOOZED_LABEL } from '../lib/gmail/labelBootstrap';
+import { groupByWakeDay } from '../lib/snooze/agenda';
+import { SnoozedAgenda } from './SnoozedAgenda';
+import { cacheThreadSummaries } from '../state/threadSummaryCache';
+import { recordSeen } from '../lib/signals/behaviourLog';
+import { SuggestionCard } from '../feedback/SuggestionCard';
 import type { EmailSummary } from '../lib/gmail/types';
 
-// All row interactions flow through the trigger pipeline:
-// click, the four inline swipes, and long-press.
-const ROW_NEW_PIPELINE: ReadonlySet<TriggerName> = new Set([
-  click,
-  swipeInlineEnd,
-  swipeInlineEndEdge,
-  swipeInlineStart,
-  swipeInlineStartEdge,
-  pressLong,
+// Taps still flow through the generic trigger pipeline; swipes are owned by
+// useRowSwipe (see src/input/swipeIntents.ts for the bindings).
+const ROW_TAP_PIPELINE: ReadonlySet<TriggerName> = new Set([click, pressLong]);
+
+// Swipe actions that take a thread out of the INBOX list — used for optimistic
+// removal so an archived/deleted/snoozed row disappears without waiting on the
+// eventually-consistent refetch. (Apply-label keeps the thread in the inbox.)
+const INBOX_REMOVING_ACTIONS: ReadonlySet<ActionId> = new Set([
+  'archive-thread', 'delete-thread', 'snooze-thread',
 ]);
+
+// All reveal icons render once; CSS shows the one matching the row's
+// data-armed-icon (set imperatively by useRowSwipe — no re-render per frame).
+const REVEAL_ICONS: readonly IconName[] = ['archive', 'trash', 'clock', 'tag'];
+
+// The "⋯" menu: a button fallback for the swipe actions, always available.
+const ROW_MENU_ACTIONS: readonly { action: ActionId; icon: IconName; label: string }[] = [
+  { action: 'archive-thread',   icon: 'archive', label: 'Archive' },
+  { action: 'snooze-thread',    icon: 'clock',   label: 'Snooze' },
+  { action: 'add-label-thread', icon: 'tag',     label: 'Label' },
+  { action: 'delete-thread',    icon: 'trash',   label: 'Delete' },
+];
 
 export interface ThreadlistPanelProps {
   label: string;
   displayName: string;
   getToken: () => string | null;
+  /** Present for on-demand lists (a tag opened from the Labels panel). */
+  onClose?: () => void;
 }
 
-function Row({ email, isSelected }: { email: EmailSummary; isSelected: boolean }) {
+interface RowProps {
+  email: EmailSummary;
+  isSelected: boolean;
+  pills: LabelPill[];
+  removesFromList: (action: ActionId) => boolean;
+  onCommitted: (threadId: string, action: ActionId) => void;
+}
+
+// Fly-off slide + vertical collapse duration; the row is dropped from the list
+// after this so the animation is seen before the row unmounts.
+const EXIT_MS = 340;
+
+function Row({ email, isSelected, pills, removesFromList, onCommitted }: RowProps) {
   const ref = useRef<HTMLLIElement>(null);
-  const onTrigger = useTriggerHandler(ROW_NEW_PIPELINE);
-  useGestureProducer('row', ref, onTrigger);
+  const onTrigger = useTriggerHandler(ROW_TAP_PIPELINE);
+  const dispatch = useDispatcher();
+  const ctx = useDispatchContext();
+  // A committed removing write flies the tile off then collapses the row; after
+  // the animation the panel drops it from the list.
+  const [filing, setFiling] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const committedActionRef = useRef<ActionId | null>(null);
+  const { reveal, commitReveal } = useRowSwipe(ref, {
+    onTrigger, dispatch, ctx, removesFromList,
+    onCommit: (action) => { committedActionRef.current = action; setFiling(true); },
+  });
+
+  useEffect(() => {
+    if (!filing) return;
+    const t = setTimeout(() => {
+      if (committedActionRef.current) onCommitted(email.threadId, committedActionRef.current);
+    }, EXIT_MS);
+    return () => clearTimeout(t);
+  }, [filing, email.threadId, onCommitted]);
+
+  // Close the "⋯" menu on any press outside it.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: Event) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    return () => document.removeEventListener('pointerdown', onDown, true);
+  }, [menuOpen]);
+
+  const runAction = (action: ActionId) => {
+    setMenuOpen(false);
+    void dispatch({ action, args: { targets: [email.threadId] }, context: ctx });
+  };
+
   const className = [
     'email',
     email.unread ? 'email--unread' : null,
     isSelected ? 'email--selected' : null,
+    filing ? 'email--releasing email--filing' : null,
   ]
     .filter(Boolean)
     .join(' ');
+
+  // For an end-pull the strip is on the inline-start edge (and vice versa);
+  // row-reverse there keeps the light action nearest the tile.
+  const side = reveal?.direction === 'end' ? 'start' : 'end';
+
   return (
     <li ref={ref} data-thread-id={email.threadId} data-surface="row" className={className}>
-      <span className="email__from">{email.from}</span>
-      <span className="email__subject">{email.subject}</span>
-      <span className="email__snippet">{email.snippet}</span>
+      <div className="email__reveal" aria-hidden="true">
+        {REVEAL_ICONS.map((name) => (
+          <span key={name} className="email__reveal-icon" data-swipe-icon={name}>
+            <Icon name={name} />
+          </span>
+        ))}
+      </div>
+      {/* Trackpad reveal: snapped-open action button(s), clickable to commit.
+          Real <button>s, so they bypass the row gesture and get native clicks. */}
+      {reveal && (
+        <div className="email__actions" data-side={side}>
+          {reveal.actions.map((a) => (
+            <button
+              key={a.action}
+              type="button"
+              className="email__action"
+              data-tone={a.tone}
+              aria-label={a.label}
+              onClick={() => commitReveal(a.action)}
+            >
+              <Icon name={a.icon} />
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="email__tile">
+        <span className="email__from">{email.from}</span>
+        <span className="email__subject">{email.subject}</span>
+        <span className="email__snippet">{email.snippet}</span>
+        {pills.length > 0 && (
+          <div className="email__pills">
+            {pills.map((p) => (
+              <span
+                key={p.key}
+                className="email__pill"
+                data-snoozed={p.snoozed ? 'true' : undefined}
+                style={p.hue !== undefined ? { '--pill-hue': p.hue } as CSSProperties : undefined}
+              >
+                {p.text}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      {/* Button fallback for the swipe actions — always reachable. */}
+      <div className="email__menu-wrap" ref={menuRef}>
+        <button
+          type="button"
+          className="email__more"
+          aria-label="Actions"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((v) => !v)}
+        >
+          ⋯
+        </button>
+        {menuOpen && (
+          <div className="email__menu" role="menu">
+            {ROW_MENU_ACTIONS.map((a) => (
+              <button
+                key={a.action}
+                type="button"
+                role="menuitem"
+                className="email__menu-item"
+                aria-label={a.label}
+                onClick={() => runAction(a.action)}
+              >
+                <Icon name={a.icon} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </li>
   );
 }
@@ -56,29 +197,82 @@ export function ThreadlistPanel({
   label,
   displayName,
   getToken,
+  onClose,
 }: ThreadlistPanelProps) {
   const [emails, setEmails] = useState<EmailSummary[]>([]);
   const [failed, setFailed] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Threads dropped optimistically on a committed write so the row vanishes at
+  // once; a fresh load is authoritative and clears this.
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
   const ctx = useDispatchContext();
   const selectionSet = new Set(ctx.selection);
+
+  // Which swipe actions take a thread out of THIS list. Only these fly the row
+  // away; e.g. archiving from a tag list keeps the thread in that tag.
+  const removesFromList = useCallback((action: ActionId) => {
+    if (label === 'INBOX') return INBOX_REMOVING_ACTIONS.has(action);
+    return action === 'delete-thread';
+  }, [label]);
+
+  const onCommitted = useCallback((threadId: string, action: ActionId) => {
+    if (removesFromList(action)) {
+      setRemoved((prev) => new Set(prev).add(threadId));
+    }
+  }, [removesFromList]);
+  const { threadsVersion, labelVersions } = useRefreshState();
+  // Any thread write (or a refresh-panel aimed at this label) invalidates the
+  // list; combining the two versions gives the effect one number to watch.
+  // hasOwn guards against a label literally named "toString" etc.
+  const labelVersion = Object.hasOwn(labelVersions, label) ? labelVersions[label] : 0;
+  const refreshTick = threadsVersion + labelVersion;
+
+  // Loads can overlap (write-triggered refetch + manual ↻); only the newest
+  // may set state, or a slow stale response would resurrect old rows.
+  const loadSeq = useRef(0);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [pullRefresh, setPullRefresh] = useState(0); // 0..1 pull-to-refresh progress
+  const [directory, setDirectory] = useState<Map<string, string>>(() => new Map());
+  // The Snoozed list defaults to a by-day agenda; a toggle drops to the flat list.
+  const isSnoozed = label === SNOOZED_LABEL;
+  const [asList, setAsList] = useState(false);
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    loadLabelDirectory(token).then(setDirectory).catch(() => {});
+  }, [getToken, refreshTick]);
 
   const load = useCallback(async () => {
     const token = getToken();
     if (!token) return;
+    const seq = ++loadSeq.current;
     setLoading(true);
     setError(null);
     setFailed(0);
     try {
       const result = await fetchByLabel(token, label);
+      if (seq !== loadSeq.current) return;
+      cacheThreadSummaries(result.emails);
+      // Inbox arrivals feed the behaviour log (and, through it, fatigue).
+      if (label === 'INBOX') recordSeen(result.emails);
       setEmails(result.emails);
+      // Keep suppressing an optimistically-removed thread only while the server
+      // still (staleley) returns it; once it's gone, stop tracking it. This
+      // holds an archived row hidden through an eventually-consistent refetch.
+      setRemoved((prev) => {
+        if (prev.size === 0) return prev;
+        const present = new Set(result.emails.map((e) => e.threadId));
+        return new Set([...prev].filter((id) => present.has(id)));
+      });
       setFailed(result.failed);
     } catch (e) {
+      if (seq !== loadSeq.current) return;
       console.error(e);
       setError(e instanceof Error ? e.message : 'Failed to load.');
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }, [getToken, label]);
 
@@ -88,7 +282,10 @@ export function ThreadlistPanel({
     queueMicrotask(() => {
       void load();
     });
-  }, [load]);
+  }, [load, refreshTick]);
+
+  // Pull down past the top of the list to refresh.
+  useOverscroll(bodyRef, { edge: 'top', minPx: 110, onFire: () => void load(), onProgress: setPullRefresh });
 
   const token = getToken();
   if (!token) {
@@ -107,29 +304,69 @@ export function ThreadlistPanel({
       <PanelHeader
         title={displayName}
         actions={
-          <button onClick={() => void load()} disabled={loading} aria-label="Refresh">
-            {loading ? '…' : '↻'}
-          </button>
+          <>
+            {isSnoozed && (
+              <button onClick={() => setAsList((v) => !v)}>
+                {asList ? 'Calendar' : 'List'}
+              </button>
+            )}
+            <button onClick={() => void load()} disabled={loading} aria-label="Refresh">
+              {loading ? '…' : '↻'}
+            </button>
+            {onClose && (
+              <button onClick={onClose} aria-label={`Close ${displayName}`}>×</button>
+            )}
+          </>
         }
       />
-      <div className="panel__body">
+      <div className="panel__body" ref={bodyRef}>
+        {(pullRefresh > 0 || loading) && (
+          <div
+            className="list__refresh-hint"
+            data-armed={pullRefresh >= 1 || loading ? 'true' : undefined}
+            style={{ opacity: loading ? 1 : Math.min(1, 0.4 + pullRefresh * 0.6) }}
+            aria-hidden="true"
+          >
+            {loading ? 'Refreshing…' : pullRefresh >= 1 ? 'Release to refresh ▴' : 'Pull to refresh ▴'}
+          </div>
+        )}
+        {label === 'INBOX' && <SuggestionCard emails={emails} getToken={getToken} />}
         {error && <p className="error">{error}</p>}
         {failed > 0 && (
           <p className="error">
             {failed} message{failed === 1 ? '' : 's'} failed to load — try again.
           </p>
         )}
-        {emails.length === 0 && !loading && !error ? (
-          <p style={{ padding: '1rem', color: '#888' }}>
-            {label === 'INBOX' ? 'Inbox zero 🎉' : 'No messages here.'}
-          </p>
-        ) : (
-          <ul className="inbox-list">
-            {emails.map((e) => (
-              <Row key={e.id} email={e} isSelected={selectionSet.has(e.threadId)} />
-            ))}
-          </ul>
-        )}
+        {(() => {
+          const shown = emails.filter((e) => !removed.has(e.threadId));
+          const renderRow = (e: EmailSummary) => (
+            <Row
+              key={e.id}
+              email={e}
+              isSelected={selectionSet.has(e.threadId)}
+              pills={pillsFor(e.labels, directory, label)}
+              removesFromList={removesFromList}
+              onCommitted={onCommitted}
+            />
+          );
+          if (shown.length === 0 && !loading && !error) {
+            return (
+              <p style={{ padding: '1rem', color: '#888' }}>
+                {label === 'INBOX' ? 'Inbox zero 🎉' : 'No messages here.'}
+              </p>
+            );
+          }
+          if (isSnoozed && !asList) {
+            return (
+              <SnoozedAgenda
+                days={groupByWakeDay(shown, directory)}
+                now={new Date()}
+                renderEmail={renderRow}
+              />
+            );
+          }
+          return <ul className="inbox-list">{shown.map(renderRow)}</ul>;
+        })()}
       </div>
     </>
   );

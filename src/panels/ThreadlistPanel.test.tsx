@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { ThreadlistPanel } from './ThreadlistPanel';
 import { DispatchProvider } from '../state/DispatchProvider';
+import { useDispatchContext, useDispatcher } from '../state/useDispatch';
 import { LayoutContainer } from '../layout/LayoutContainer';
+import { spyThreadWriteClient } from '../test/spyThreadWriteClient';
 import type { EmailSummary } from '../lib/gmail/types';
 import type { Panel } from '../layout/types';
 
@@ -12,8 +14,8 @@ vi.mock('../lib/gmail/fetchByLabel', () => ({
 import { fetchByLabel } from '../lib/gmail/fetchByLabel';
 
 const emails: EmailSummary[] = [
-  { id: 'm1', threadId: 't1', from: 'Alice', subject: 'Lunch?', snippet: 'hey', date: '', unread: true },
-  { id: 'm2', threadId: 't2', from: 'Bob', subject: 'Report', snippet: 'done', date: '', unread: false },
+  { id: 'm1', threadId: 't1', from: 'Alice', subject: 'Lunch?', snippet: 'hey', date: '', unread: true, labels: [] },
+  { id: 'm2', threadId: 't2', from: 'Bob', subject: 'Report', snippet: 'done', date: '', unread: false, labels: [] },
 ];
 
 const initialPanels: Panel[] = [
@@ -23,6 +25,79 @@ const initialPanels: Panel[] = [
 
 describe('ThreadlistPanel', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('refetches after a successful thread write elsewhere in the app', async () => {
+    (fetchByLabel as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ emails, failed: 0 });
+
+    function ArchiveButton() {
+      const dispatch = useDispatcher();
+      const ctx = useDispatchContext();
+      return (
+        <button
+          data-testid="archive"
+          onClick={() => {
+            void dispatch({ action: 'archive-thread', args: { targets: ['t1'] }, context: ctx });
+          }}
+        >
+          archive
+        </button>
+      );
+    }
+
+    render(
+      <DispatchProvider
+        signedIn
+        initialPanels={initialPanels}
+        getToken={() => 'tok'}
+        threadWriteClient={{
+          modifyThreadLabels: async (_t, threadIds) => ({ succeeded: threadIds, failed: [] }),
+          deleteLabel: async () => {},
+        }}
+      >
+        <ThreadlistPanel label="INBOX" displayName="Inbox" getToken={() => 'tok'} />
+        <ArchiveButton />
+      </DispatchProvider>,
+    );
+
+    await waitFor(() => expect(fetchByLabel).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId('archive'));
+    await waitFor(() => expect(fetchByLabel).toHaveBeenCalledTimes(2));
+  });
+
+  it('archives a row from the ⋯ actions menu', async () => {
+    (fetchByLabel as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ emails, failed: 0 });
+    const { client, modifyThreadLabels } = spyThreadWriteClient();
+    render(
+      <DispatchProvider signedIn initialPanels={initialPanels} getToken={() => 'tok'} threadWriteClient={client}>
+        <ThreadlistPanel label="INBOX" displayName="Inbox" getToken={() => 'tok'} />
+      </DispatchProvider>,
+    );
+    await waitFor(() => screen.getByText('Lunch?'));
+    const row = screen.getByText('Lunch?').closest('li')!;
+
+    fireEvent.click(within(row).getByRole('button', { name: /actions/i }));
+    fireEvent.click(within(row).getByRole('menuitem', { name: /archive/i }));
+    await waitFor(() =>
+      expect(modifyThreadLabels).toHaveBeenCalledWith('tok', ['t1'], { add: [], remove: ['INBOX'] }));
+  });
+
+  it('shows a close button only when onClose is provided (on-demand lists)', () => {
+    const { rerender } = render(
+      <DispatchProvider signedIn initialPanels={initialPanels}>
+        <ThreadlistPanel label="idk-inbox/Todo" displayName="Todo" getToken={() => 'tok'} />
+      </DispatchProvider>,
+    );
+    expect(screen.queryByRole('button', { name: /close/i })).toBeNull();
+
+    const onClose = vi.fn();
+    rerender(
+      <DispatchProvider signedIn initialPanels={initialPanels}>
+        <ThreadlistPanel label="idk-inbox/Todo" displayName="Todo" getToken={() => 'tok'} onClose={onClose} />
+      </DispatchProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /close todo/i }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 
   it('shows a sign-in prompt when no token is available', () => {
     render(

@@ -20,7 +20,7 @@
   ```
   Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
   ```
-- **Working directory:** the worktree root `/Users/pixelbandito/Code/email/.worktrees/phase-0-foundation`. All paths below are relative to it.
+- **Working directory:** the worktree root `~/Code/email/.worktrees/phase-0-foundation`. All paths below are relative to it.
 - All commands run from the worktree root unless stated.
 
 ---

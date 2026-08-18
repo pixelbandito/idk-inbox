@@ -20,8 +20,8 @@
   ```
   Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
   ```
-- **Working directory:** the worktree root `/Users/pixelbandito/Code/email/.worktrees/phase-0b-layout`. All paths below are relative to it.
-- **Node 22.13+ required.** Run each npm/node command with the path prefix: `export PATH="/Users/pixelbandito/.nvm/versions/node/v22.13.0/bin:$PATH" && <cmd>` (shell state does not persist between calls).
+- **Working directory:** the worktree root `~/Code/email/.worktrees/phase-0b-layout`. All paths below are relative to it.
+- **Node 22.13+ required.** Run each npm/node command with the path prefix: `export PATH="~/.nvm/versions/node/v22.13.0/bin:$PATH" && <cmd>` (shell state does not persist between calls).
 - **Baseline at start:** 19 tests passing across 6 files, `npm run build` and `npm run lint` clean.
 
 ## Milestone overview

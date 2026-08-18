@@ -57,6 +57,38 @@ describe('createLayoutActions', () => {
       expect(env.getFocus()).toBe(2);
     });
 
+    it('opens a threadlist panel for a label and focuses it', async () => {
+      const initial: Panel[] = [
+        { kind: 'settings' },
+        { kind: 'threadlist', label: 'INBOX' },
+        { kind: 'labels' },
+      ];
+      const env = makeSetters(initial, 2);
+      const actions = createLayoutActions(env.setters);
+      const result = await actions.openPanel({ kind: 'threadlist', label: 'idk-inbox/Receipts' }, ctx);
+      expect(result.ok).toBe(true);
+      expect(env.getPanels()).toEqual([
+        { kind: 'settings' },
+        { kind: 'threadlist', label: 'INBOX' },
+        { kind: 'threadlist', label: 'idk-inbox/Receipts', closable: true },
+        { kind: 'labels' },
+      ]);
+      expect(env.getFocus()).toBe(2);
+    });
+
+    it('focuses an already-open threadlist instead of duplicating it', async () => {
+      const initial: Panel[] = [
+        { kind: 'settings' },
+        { kind: 'threadlist', label: 'INBOX' },
+        { kind: 'labels' },
+      ];
+      const env = makeSetters(initial, 2);
+      const actions = createLayoutActions(env.setters);
+      await actions.openPanel({ kind: 'threadlist', label: 'INBOX' }, ctx);
+      expect(env.getPanels()).toEqual(initial);
+      expect(env.getFocus()).toBe(1);
+    });
+
     it('falls back to INBOX when no focusedLabel is in context', async () => {
       const initial: Panel[] = [{ kind: 'threadlist', label: 'INBOX' }];
       const env = makeSetters(initial, 0);

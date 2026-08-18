@@ -47,6 +47,41 @@ const noopLayoutState: LayoutState = {
 
 export const LayoutStateContext = createContext<LayoutState>(noopLayoutState);
 
+/**
+ * Monotonic versions panels watch to know when to refetch. `threadsVersion`
+ * bumps after any successful thread write (including undo/redo); per-label
+ * versions bump on explicit refresh-panel requests.
+ */
+export interface RefreshState {
+  threadsVersion: number;
+  labelVersions: Record<string, number>;
+}
+
+export const RefreshStateContext = createContext<RefreshState>({
+  threadsVersion: 0,
+  labelVersions: {},
+});
+
+/**
+ * One-slot user feedback: write failures and undo-less outcomes (e.g. the
+ * snooze wake sweep) land here so no action result dies silently. Newer
+ * feedback replaces older — this is a toast, not a log.
+ */
+export interface Feedback {
+  kind: 'error' | 'info';
+  message: string;
+}
+
+export interface FeedbackState {
+  feedback: Feedback | null;
+  setFeedback: (f: Feedback | null) => void;
+}
+
+export const FeedbackStateContext = createContext<FeedbackState>({
+  feedback: null,
+  setFeedback: () => {},
+});
+
 export interface PendingRequest {
   action: ActionId;
   args:   Record<string, unknown>;

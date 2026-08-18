@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { ThreadPanel } from './ThreadPanel';
 import { DispatchProvider } from '../state/DispatchProvider';
+import { spyThreadWriteClient } from '../test/spyThreadWriteClient';
 import type { Panel } from '../layout/types';
 
 vi.mock('../lib/gmail/fetchThread', () => ({
@@ -49,6 +50,23 @@ describe('ThreadPanel', () => {
     await waitFor(() => screen.getByText('hi there'));
     fireEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('archives from the header button and closes the panel', async () => {
+    (fetchThread as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(view);
+    const close = vi.fn();
+    const { client, modifyThreadLabels } = spyThreadWriteClient();
+    render(
+      <DispatchProvider signedIn initialPanels={initialPanels} getToken={() => 'tok'} threadWriteClient={client}>
+        <ThreadPanel threadId="t1" panelIndex={2} getToken={() => 'tok'} onClose={close} />
+      </DispatchProvider>,
+    );
+    await waitFor(() => screen.getByText('hi there'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
+    await waitFor(() =>
+      expect(modifyThreadLabels).toHaveBeenCalledWith('tok', ['t1'], { add: [], remove: ['INBOX'] }));
+    await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
   });
 
   it('shows an error message when fetch fails', async () => {

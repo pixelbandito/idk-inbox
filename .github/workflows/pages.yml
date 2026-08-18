@@ -1,0 +1,70 @@
+# Publishes the built site to GitHub Pages, primarily for the interaction
+# prototypes at /prototype.html.
+#
+# The deployed app CANNOT SIGN IN, by design. VITE_GOOGLE_CLIENT_ID is deliberately
+# not provided to this build, so `src/lib/config.ts` warns and Google sign-in fails.
+# That is the intended state: this is a local-first app, and publishing a working
+# OAuth client would mean allowlisting the github.io origin and letting strangers
+# spend the project's quota. Anyone who wants a working copy clones the repo and
+# brings their own client ID — see .env.example.
+#
+# The prototypes need none of this: they are static and authless, so they work fully.
+name: Deploy prototype to Pages
+
+on:
+  push:
+    # functional-triage is where the prototypes live today; main is listed so the
+    # deploy keeps working the moment that branch merges, rather than silently
+    # going stale. Both branches are also allowlisted on the github-pages
+    # environment — without that, the deploy job fails with no failing step.
+    branches: [functional-triage, main]
+  workflow_dispatch:
+
+# Least privilege: read the repo, mint an OIDC token for the deploy, write Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race; let an in-flight one finish rather than cancelling it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13'
+          cache: npm
+      - run: npm ci
+      # Guard the whole point of this workflow: if a client ID ever reaches this
+      # build (via a repo variable or secret someone adds later), fail loudly rather
+      # than quietly shipping a signed-in-capable site.
+      - name: Refuse to build with a Google client ID present
+        run: |
+          if [ -n "${VITE_GOOGLE_CLIENT_ID:-}" ]; then
+            echo "VITE_GOOGLE_CLIENT_ID is set for the Pages build; that is not intended." >&2
+            exit 1
+          fi
+      - run: npm run lint
+      - name: Build
+        env:
+          PAGES_BASE: /idk-inbox/
+        run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

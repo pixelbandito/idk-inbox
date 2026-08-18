@@ -29,6 +29,15 @@ export interface GestureCallbacks {
   onClick?:     (e: ClickEvent) => void;
   onSwipe?:     (e: SwipeEvent) => void;
   onLongPress?: (e: PressEvent) => void;
+  /** Running deltas from the pointerdown point, fired on every pointermove of a captured drag. */
+  onDrag?:      (dx: number, dy: number) => void;
+  /**
+   * Fired on release (or cancel) of any gesture that actually moved — even in
+   * the ambiguous zone between clickMaxPx and swipeMinPx where neither onClick
+   * nor onSwipe fires. Consumers that paint during onDrag use this to settle
+   * (commit or spring back) on every release.
+   */
+  onDragEnd?:   (dx: number, dy: number, dt: number) => void;
   /** Swipe threshold in pixels (default 60). */
   swipeMinPx?:  number;
   /** Click vs swipe boundary; below this any motion is still a click (default 20). */
@@ -37,6 +46,13 @@ export interface GestureCallbacks {
   longPressMs?: number;
   /** Long-press cancels if pointer moves more than this many px (default 10). */
   longPressTolerancePx?: number;
+  /**
+   * Consulted at pointer-down. When it returns false the gesture is treated as
+   * navigation-only: a plain tap still fires onClick, but drag/swipe/long-press
+   * are suppressed — so a swipe on an inactive panel activates it rather than
+   * acting on its contents.
+   */
+  guardActive?: () => boolean;
 }
 
 export function useGesture(
@@ -64,6 +80,12 @@ export function useGesture(
     // mutually exclusive interpretations of the same gesture, so a held tap
     // shouldn't also count as a tap.
     let longPressFired = false;
+    // True once the current pointer sequence produced any pointermove (i.e.
+    // onDrag fired). Gates onDragEnd so motionless taps stay pure clicks.
+    let dragged = false;
+    // True when the gesture began on a not-yet-active panel: navigation only,
+    // so drag/swipe/long-press are suppressed (a tap still opens).
+    let suppressed = false;
 
     const clearLongPress = () => {
       if (longPressTimer !== null) {
@@ -74,18 +96,25 @@ export function useGesture(
 
     const onDown = (ev: PointerEvent) => {
       if (pointerId !== null) return;
+      // Presses on interactive controls (header ×/↻ buttons, a revealed swipe
+      // action) must behave natively — capturing the pointer here would redirect
+      // their pointerup and swallow the click.
+      const t = ev.target as Element | null;
+      if (t?.closest('button, a, input, select, textarea, label, [role="button"]')) return;
       pointerId = ev.pointerId;
       startX = ev.clientX;
       startY = ev.clientY;
       startT = Date.now();
       longPressFired = false;
+      dragged = false;
+      suppressed = optsRef.current.guardActive ? !optsRef.current.guardActive() : false;
       // Capture the pointer so subsequent move/up events fire on this element
       // even if the cursor leaves its bounds. Without this, horizontal mouse
       // drags are eaten by the panel container's scroll-snap.
       try { el.setPointerCapture(ev.pointerId); } catch { /* not supported in some test envs */ }
 
       const o = optsRef.current;
-      if (o.onLongPress) {
+      if (o.onLongPress && !suppressed) {
         const tolerance = o.longPressTolerancePx ?? 10;
         const ms = o.longPressMs ?? 500;
         longPressTimer = setTimeout(() => {
@@ -108,6 +137,10 @@ export function useGesture(
       if (dx > tol || dy > tol) {
         clearLongPress();
       }
+      // Inactive panel: swallow the drag so it can't paint or arm an action.
+      if (suppressed) return;
+      dragged = true;
+      optsRef.current.onDrag?.(ev.clientX - startX, ev.clientY - startY);
     };
 
     const onUp = (ev: PointerEvent) => {
@@ -124,6 +157,16 @@ export function useGesture(
 
       const target = ev.target as Element | null;
       pointerId = null;
+
+      // Inactive panel: a tap still opens (navigation), but no swipe/settle.
+      if (suppressed) {
+        if (absDx <= clickMax && absDy <= clickMax && !longPressFired) o.onClick?.({ target });
+        return;
+      }
+
+      // Any real drag gets a release signal, regardless of how the gesture is
+      // classified below — a 20–60px pull must still settle (spring back).
+      if (dragged) o.onDragEnd?.(dx, dy, dt);
 
       if (absDx >= swipeMin || absDy >= swipeMin) {
         const direction: SwipeEvent['direction'] =
@@ -150,6 +193,15 @@ export function useGesture(
         clearLongPress();
         pointerId = null;
         try { el.releasePointerCapture(ev.pointerId); } catch { /* not held */ }
+        // An aborted drag still needs to settle (spring back).
+        if (dragged) {
+          optsRef.current.onDragEnd?.(
+            ev.clientX - startX,
+            ev.clientY - startY,
+            Date.now() - startT,
+          );
+        }
+        dragged = false;
       }
     };
 
