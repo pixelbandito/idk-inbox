@@ -1,5 +1,13 @@
 import { useRef, type ReactNode } from 'react';
-import { useScrollActions, type ScrollActionsConfig, type SideConfig, type SideState, type Edge, type Axis } from './scrollActions';
+import {
+  useScrollActions,
+  type ScrollAction,
+  type ScrollActionsConfig,
+  type SideConfig,
+  type SideState,
+  type Edge,
+  type Axis,
+} from './scrollActions';
 
 // The visible half of the mechanic. Structure mirrors the native-scroll rig, for
 // the same three reasons that made it work there:
@@ -27,7 +35,19 @@ interface Props {
   children: ReactNode;
 }
 
-function Strip({ edge, axis, side, config }: { edge: Edge; axis: Axis; side: SideState; config?: SideConfig }) {
+function Strip({
+  edge,
+  axis,
+  side,
+  config,
+  onPick,
+}: {
+  edge: Edge;
+  axis: Axis;
+  side: SideState;
+  config?: SideConfig;
+  onPick: (edge: Edge, action: ScrollAction) => void;
+}) {
   if (!config) return null;
   const horiz = axis === 'x';
   const shown = side.reveal + side.commit;
@@ -48,15 +68,22 @@ function Strip({ edge, axis, side, config }: { edge: Edge; axis: Axis; side: Sid
         style={{ [horiz ? 'width' : 'height']: `${config.revealPx}px` } as React.CSSProperties}
       >
         {config.actions.map((a, i) => (
-          <div
+          // A real button, so the actions are focusable and Enter works. Mouse
+          // clicks do NOT arrive here — the scroller covers the strips — and are
+          // routed by the surface's own handler below.
+          <button
+            type="button"
             key={a.id}
             className="sa__action"
             data-tone={a.tone}
+            data-action-id={a.id}
             data-edgemost={i === lastIndex || undefined}
+            tabIndex={shown > 0 ? 0 : -1}
+            onClick={() => onPick(edge, a)}
             style={{ '--commit': i === lastIndex ? commitProgress : 0 } as React.CSSProperties}
           >
             <span className="sa__action-label">{a.label}</span>
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -71,10 +98,45 @@ export function ScrollActionSurface({ axis, start, end, settleMs, holdMs, return
   const config: ScrollActionsConfig = { axis, start, end, settleMs, holdMs, returnMs };
   const state = useScrollActions(scrollerRef, startPadRef, endPadRef, config);
 
+  /**
+   * Route a click to whichever action is underneath it.
+   *
+   * The strips sit BEHIND the scroller, and the scroller spans the whole surface —
+   * that is what keeps a wheel anywhere on the card scrolling the card, including
+   * over a revealed strip. The cost is that the buttons never receive the click
+   * themselves, so it is hit-tested instead. `elementsFromPoint` returns the whole
+   * stack under the cursor, occluded entries included, so the button is in there.
+   *
+   * A click inside the sheet's own box is content, not an action — the sheet is
+   * opaque and is what covers the strips at rest — so those are ignored outright
+   * rather than relying on the stacking order to mean the right thing.
+   */
+  const onSurfaceClick = (e: React.MouseEvent) => {
+    const sheet = scrollerRef.current?.querySelector('.sa__sheet');
+    if (!sheet) return;
+    const r = sheet.getBoundingClientRect();
+    const insideSheet =
+      e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    if (insideSheet) return;
+
+    const hit = document
+      .elementsFromPoint(e.clientX, e.clientY)
+      .find((el): el is HTMLElement => el instanceof HTMLElement && el.dataset.actionId !== undefined);
+    if (!hit) return;
+
+    const edge: Edge = hit.closest('.sa__strip--start') ? 'start' : 'end';
+    const cfg = edge === 'start' ? start : end;
+    const action = cfg?.actions.find((a) => a.id === hit.dataset.actionId);
+    if (action) state.activate(edge, action);
+  };
+
+  // The keyboard path is not missing, it is elsewhere: the actions are real buttons
+  // with their own onClick, so Tab and Enter reach them directly. This handler exists
+  // only because a MOUSE click cannot, the scroller being on top.
   return (
-    <div className={`sa sa--${axis}${className ? ` ${className}` : ''}`}>
-      <Strip edge="start" axis={axis} side={state.start} config={start} />
-      <Strip edge="end" axis={axis} side={state.end} config={end} />
+    <div className={`sa sa--${axis}${className ? ` ${className}` : ''}`} onClick={onSurfaceClick}>
+      <Strip edge="start" axis={axis} side={state.start} config={start} onPick={state.activate} />
+      <Strip edge="end" axis={axis} side={state.end} config={end} onPick={state.activate} />
       <div className="sa__scroller" ref={scrollerRef}>
         {/* Pads are sized imperatively by the hook — never from render, so a pad
             exists on the same frame it is earned. */}

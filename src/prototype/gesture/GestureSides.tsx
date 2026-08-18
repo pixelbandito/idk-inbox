@@ -44,6 +44,27 @@ const ROWS: Row[] = [
   },
 ];
 
+// Enough prose that reaching the bottom edge takes a real scroll rather than
+// happening on load. The vertical staircase is only honest if you have to travel to
+// it: arriving at the trailing stop mid-flick, with momentum still running, is the
+// case the whole design exists to handle, and a card short enough to be at its own
+// end from the start never exercises it.
+const BODY = [
+  'Scroll to the top or the bottom of this card and keep going — the same stop-then-travel staircase, on both vertical edges.',
+  'A stop here is not a rule being enforced. It is simply the end of the scrollable area: there is nowhere further to go, so momentum dies against the boundary exactly as the platform intends, and nothing has to refuse your input to make that happen.',
+  'Come to rest at that boundary and the room for the next step is appended below it — invisibly, moving nothing. That is what lets the next scroll be travel from its very first pixel, instead of being spent asking for somewhere to go.',
+  'The room is only ever prepared once input has gone quiet, and that is the whole safety property. A pad that appeared while a gesture was still running would be a pad that gesture could spend for you, which is how a hard flick used to walk straight through an offer without it ever being readable.',
+  'Note that the clock listens to input rather than to scrolling. Pinned against a boundary the position stops changing and scroll events stop with it, while the platform carries on delivering momentum — so a scroll-keyed clock expires in the middle of a fling that is very much alive.',
+];
+
+const BODY_TAIL = [
+  'Each row above is its own scroller on the x axis. Vertical scrolling passes straight through to the card, because a scroller only claims the axis it can actually move on.',
+  'The same code drives all four edges. An axis picks scrollTop or scrollLeft, an edge picks which end the pad attaches to, and everything after that is shared — including the part where arriving at the far end of the commit pad IS the action, rather than an event anyone had to interpret.',
+  'Because the commit is a position rather than an event, it cannot stall. There is nothing to refuse and nothing to debounce: either you have run the distance or you have not, and you can see which at every point along the way.',
+  'What it costs is a little scroll range. A pad that has been prepared but not travelled stays until the side withdraws itself, since reclaiming it early means moving the scroll position under a live gesture — which cancels the browser’s own animation and truncates the very travel it was meant to tidy up.',
+  'Keep going for the archive panel.',
+];
+
 export function GestureSides() {
   const [log, setLog] = useState<string[]>([]);
   const record = (where: string) => (a: ScrollAction) =>
@@ -81,10 +102,9 @@ export function GestureSides() {
           }}
         >
           <h2>Thread list</h2>
-          <p>
-            Scroll to the top or the bottom of this card and keep going — the same stop-then-travel
-            staircase, on both vertical edges.
-          </p>
+          {BODY.map((text, i) => (
+            <p key={`b${i}`}>{text}</p>
+          ))}
 
           {ROWS.map((row) => (
             <div className="sides__row-wrap" key={row.id}>
@@ -121,10 +141,9 @@ export function GestureSides() {
             </div>
           ))}
 
-          <p>
-            Each row is its own scroller on the x axis. Vertical scrolling passes straight through to
-            the card, because a scroller only claims the axis it can move on.
-          </p>
+          {BODY_TAIL.map((text, i) => (
+            <p key={`t${i}`}>{text}</p>
+          ))}
           <p className="sides__hint">↓ end of list · scroll again for the archive panel</p>
         </ScrollActionSurface>
 

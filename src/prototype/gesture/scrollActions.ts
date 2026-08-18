@@ -113,6 +113,8 @@ export function useScrollActions(
   const returnRaf = useRef(0);
   const lastPhase = useRef({ start: 'idle' as SidePhase, end: 'idle' as SidePhase });
   const lastPos = useRef(0);
+  /** Set by the effect; lets a tap run the same commit path as a completed travel. */
+  const activateRef = useRef<((edge: Edge, action?: ScrollAction) => void) | null>(null);
 
   useEffect(() => {
     const el = scrollerRef.current;
@@ -255,17 +257,26 @@ export function useScrollActions(
       holdTimer.current = setTimeout(() => withdraw(edge), cfg.current.holdMs ?? 3000);
     };
 
-    const fire = (edge: Edge) => {
+    /**
+     * Run an action and file the side away.
+     *
+     * `action` is omitted by the travel path, which always commits to the EDGEMOST
+     * one — the last in the array, hard against the container edge. A tap names its
+     * own action instead, which is the point of having more than one: travel is the
+     * fast, unambiguous default, and the others stay reachable without it.
+     */
+    const fire = (edge: Edge, action?: ScrollAction) => {
       const c = sideCfg(edge);
       if (!c || !c.actions.length) return;
+      if (firedSide.current || returning.current) return;
       firedSide.current = edge;
       clearHold();
       publish();
-      // The edgemost action is the one a completed travel commits to — the last in
-      // the array, sitting hard against the container edge.
-      c.onCommit?.(c.actions[c.actions.length - 1]);
+      c.onCommit?.(action ?? c.actions[c.actions.length - 1]);
       setTimeout(() => withdraw(edge), FIRED_HOLD_MS);
     };
+
+    activateRef.current = fire;
 
     /**
      * Prepare the pad for the next step on whichever side we have come to rest
@@ -374,5 +385,7 @@ export function useScrollActions(
     // Config is read through a ref, so the listeners are installed exactly once.
   }, [scrollerRef, startPadRef, endPadRef]);
 
-  return { start: startState, end: endState };
+  const activate = (edge: Edge, action: ScrollAction) => activateRef.current?.(edge, action);
+
+  return { start: startState, end: endState, activate };
 }

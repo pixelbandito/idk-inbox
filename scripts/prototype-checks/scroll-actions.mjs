@@ -55,6 +55,25 @@ const centre = (sel) => page.evaluate((sel) => {
   return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
 }, sel);
 
+/**
+ * Put a row on screen and return its centre. The card scrolls, so a row can sit
+ * outside the visible band entirely — and then every mouse.wheel aimed at "its
+ * centre" lands somewhere else and the section silently tests nothing.
+ *
+ * Scrolled with scrollTop directly rather than a wheel: a wheel would travel the
+ * card's own staircase on the way past, which is not what these sections are about.
+ */
+const rowInView = async (sel = ROW) => {
+  await page.evaluate((sel) => {
+    const sc = document.querySelector('.sides__card > .sa__scroller');
+    const row = document.querySelector(sel);
+    const target = row.offsetTop - sc.clientHeight / 2 + row.offsetHeight / 2;
+    sc.scrollTop = Math.max(0, target);
+  }, sel);
+  await sleep(400);
+  return centre(sel);
+};
+
 /** Wait for the surface to stop moving AND for its pads to stop changing. */
 const settle = async (sel) => {
   let prev = '';
@@ -87,6 +106,7 @@ const CARD = '.sides__card';
 // can be readied in advance rather than on the scroll that uses it.
 await load();
 {
+  await rowInView();
   const before = await page.evaluate(() =>
     Math.round(document.querySelector('.sides__row > .sa__scroller > .sa__sheet').getBoundingClientRect().left));
   const s = await settle(ROW);
@@ -101,7 +121,7 @@ await load();
 
 // --- 2. One travel reveals EVERY action on that side ------------------------
 {
-  const c = await centre(ROW);
+  const c = await rowInView();
   await page.mouse.move(c.x, c.y);
   await sleep(200);
   await page.mouse.wheel(220, 0);
@@ -130,7 +150,7 @@ await load();
 // --- 4. The opposite side of the same axis, with a single action ------------
 {
   await load();
-  const c = await centre(ROW);
+  const c = await rowInView();
   await page.mouse.move(c.x, c.y);
   await sleep(300);
   await settle(ROW);
@@ -152,7 +172,7 @@ await load();
 // a row happens to be under the cursor.
 {
   await load();
-  const c = await centre(ROW);
+  const c = await rowInView();
   await page.mouse.move(c.x, c.y);
   await sleep(300);
   const cardBefore = await probe(CARD);
@@ -172,7 +192,7 @@ await load();
 // that makes the offer unskippable, and it is layout doing it, not a refusal.
 {
   await load();
-  const c = await centre(ROW);
+  const c = await rowInView();
   await page.mouse.move(c.x, c.y);
   await settle(ROW);
   await page.mouse.wheel(900, 0); // far more than reveal + commit combined
@@ -202,6 +222,73 @@ await load();
   const fired = await probe(CARD);
   check('and travelling on fires it', fired.status.startsWith('Archive'),
     `status "${fired.status}"`);
+}
+
+// --- 8. Tapping a revealed action runs THAT action --------------------------
+// Travel is the fast path and always means the edgemost action. Tapping is how the
+// others stay reachable — which is what lets a side carry more than one without the
+// full-travel gesture becoming ambiguous.
+{
+  await load();
+  const c = await rowInView();
+  await page.mouse.move(c.x, c.y);
+  await settle(ROW);
+  await page.mouse.wheel(220, 0);       // reveal both trailing actions
+  await settle(ROW);
+
+  const box = await page.evaluate(() => {
+    const el = document.querySelector('.sides__row [data-action-id="delete"]');
+    const r = el.getBoundingClientRect();
+    return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+  });
+  await page.mouse.click(box.x, box.y);
+  await sleep(300);
+  const s = await probe(ROW);
+  check('tapping the inner action runs that one, not the edgemost',
+    s.status.startsWith('Delete'),
+    `status "${s.status}" (a completed travel here would have fired Snooze)`);
+}
+
+// --- 9. A tap on the content is not a tap on an action ----------------------
+// The sheet is opaque and is what covers the strips at rest, so a click inside its
+// box is content. Without that test the hit-test would happily find an action
+// sitting behind the message text.
+{
+  await load();
+  const c = await rowInView();
+  await page.mouse.move(c.x, c.y);
+  await settle(ROW);
+  await page.mouse.wheel(220, 0);
+  await settle(ROW);
+  const box = await page.evaluate(() => {
+    const r = document.querySelector('.sides__row > .sa__scroller > .sa__sheet').getBoundingClientRect();
+    return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+  });
+  await page.mouse.click(box.x, box.y);
+  await sleep(300);
+  check('clicking the message itself fires nothing',
+    (await probe(ROW)).status === 'nothing fired yet',
+    `status "${(await probe(ROW)).status}"`);
+}
+
+// --- 10. The actions are reachable from the keyboard ------------------------
+// They are real buttons; the surface's hit-test exists only because a MOUSE click
+// cannot reach them through the scroller. Enter must work without any of that.
+{
+  await load();
+  const c = await rowInView();
+  await page.mouse.move(c.x, c.y);
+  await settle(ROW);
+  await page.mouse.wheel(220, 0);
+  await settle(ROW);
+  await page.evaluate(() => document.querySelector('.sides__row [data-action-id="delete"]').focus());
+  const focused = await page.evaluate(() => document.activeElement?.dataset?.actionId ?? null);
+  await page.keyboard.press('Enter');
+  await sleep(300);
+  const s = await probe(ROW);
+  check('a revealed action is focusable and fires on Enter',
+    focused === 'delete' && s.status.startsWith('Delete'),
+    `focused "${focused}", status "${s.status}"`);
 }
 
 await browser.close();

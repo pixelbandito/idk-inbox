@@ -508,3 +508,8 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
   font-size: 0.85rem; color: #d8dcea; min-height: 3rem;
 }
 .sides__log-empty { color: #6b7080; }
+
+/* Actions are buttons so they are focusable and Enter works; mouse clicks are
+   hit-tested by the surface instead, because the scroller covers the strips. */
+.sa__action { border: 0; font: inherit; cursor: pointer; }
+.sa__action:focus-visible { outline: 2px solid #7aa2f7; outline-offset: -3px; }
