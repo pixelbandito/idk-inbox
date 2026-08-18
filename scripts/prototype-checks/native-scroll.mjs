@@ -52,13 +52,25 @@ const wheel = (deltaY, momentum) => page.evaluate(([deltaY, momentum]) => {
 /** A deliberate, unambiguously-new gesture: real scroll after a clear pause. */
 const deliberate = async (dy) => { await sleep(260); await page.mouse.wheel(0, dy); await sleep(160); };
 
+// The article's own end, captured BEFORE any room is prepared. Everything else has
+// to measure against this: `maxScroll` grows as rooms are appended, so a loop that
+// chases it walks straight down the whole staircase instead of stopping at stop 1.
+let articleEnd = 0;
+
 const reset = async (opts = {}) => {
   await page.goto('http://localhost:5173/prototype.html#/gesture/native');
   await page.waitForSelector('.pull__panel--nativescroll');
   await sleep(350);
   await setRange('Hold', opts.hold ?? 1000);
   await setRange('Return', opts.ret ?? 400);
+  await setRange('Settle', opts.settle ?? 120);
+  await setRange('Peek', opts.peek ?? 100);
+  await setRange('Commit', opts.commit ?? 60);
   const g = await probe();
+  // NOT `maxScroll` — `reset()` does not reload, so a room prepared by the previous
+  // section is still there and would be counted as part of the article. Subtracting
+  // the footer gives the article's own end whatever state we inherited.
+  articleEnd = g.maxScroll - g.footerH;
   await page.mouse.move(640, g.cardBottom - 60);
   return g;
 };
@@ -77,26 +89,58 @@ const settle = async () => {
   return probe();
 };
 
-/** Scroll to the end of the article with deliberate scrolls, stopping there. */
+/** Scroll to the end of the ARTICLE and stop there — not to `maxScroll`, which
+ *  grows underneath you as rooms are prepared. */
 const toEnd = async () => {
+  // `reset()` re-navigates to the same hash URL, which does NOT reload — so a
+  // section can inherit a revealed panel from the one before it and start PAST the
+  // article end. Wind back first, or this returns immediately and every later
+  // measurement is taken from the wrong place.
   for (let i = 0; i < 30; i++) {
     const s = await settle();
-    if (s.scrollTop >= s.maxScroll - 1) return s;
+    if (s.scrollTop <= articleEnd + 1) break;
+    await page.mouse.wheel(0, -120);
+    await sleep(120);
+  }
+  for (let i = 0; i < 30; i++) {
+    const s = await settle();
+    if (s.scrollTop >= articleEnd - 1) return s;
     await sleep(260);
-    await page.mouse.wheel(0, Math.min(240, s.maxScroll - s.scrollTop));
+    await page.mouse.wheel(0, Math.min(240, articleEnd - s.scrollTop));
   }
   return settle();
 };
 
-const toArmed = async () => {
+/** At the article end with the peek room prepared and nothing revealed — the state
+ *  a settled stop 1 leaves you in. */
+const atStop1 = async () => {
   await toEnd();
-  await deliberate(60); // footer on
-  for (let i = 0; i < 14; i++) {
-    if ((await probe()).phase === 'armed') break;
-    await page.mouse.wheel(0, 40);
-    await sleep(70);
+  for (let i = 0; i < 40; i++) {
+    const s = await probe();
+    if (s.footerH >= 100 && s.revealedPx <= 1) return s;
+    await sleep(120);
   }
   return probe();
+};
+
+const toArmed = async () => {
+  await atStop1();
+  for (let i = 0; i < 20; i++) {
+    if ((await settle()).phase === 'armed') break;
+    await page.mouse.wheel(0, 40);
+  }
+  return probe();
+};
+
+/** Armed AND settled, so the commit room below is prepared and waiting. */
+const toArmedPrepared = async () => {
+  const a = await toArmed();
+  for (let i = 0; i < 20; i++) {
+    const s = await probe();
+    if (s.footerH > 100) return s;
+    await sleep(80);
+  }
+  return a;
 };
 
 // --- 1. Rest state + the snap wiring ---------------------------------------
@@ -110,10 +154,10 @@ const toArmed = async () => {
 }
 
 const parkedAtEnd = async () => {
-  await toEnd();                       // arrives, and (passive ordering) opens
-  for (let i = 0; i < 40; i++) {       // let the hold timer withdraw it
+  await toEnd();
+  for (let i = 0; i < 50; i++) {       // hold withdraws the reveal, settle re-prepares
     const s = await probe();
-    if (s.footerH === 0 && s.revealedPx <= 1) return s;
+    if (s.revealedPx <= 1 && s.footerH >= 100) return s;
     await sleep(120);
   }
   return probe();
@@ -130,48 +174,51 @@ const parkedAtEnd = async () => {
 // cannot carry the flag. So this starts from a parked-at-the-end state, where no
 // scrolling is needed to exercise the decision.
 {
-  await reset({ hold: 1000, ret: 300 });
-  const parked = await parkedAtEnd();
-  check('parked at the article end with the room closed',
-    parked.footerH === 0 && parked.scrollTop >= parked.maxScroll - 1,
-    `at ${parked.scrollTop}/${parked.maxScroll}, footer ${parked.footerH}px`);
+  // Settle is raised above the harness's own scroll cadence so the approach itself
+  // never counts as "stopped" — otherwise the room is prepared before there is
+  // anything to assert. parkedAtEnd() is deliberately NOT used: it waits FOR the
+  // room, which is the state this section exists to rule out.
+  const rest = await reset({ hold: 1000, ret: 300, settle: 400 });
+  const parked = await toEnd();
+  check('reaching the end while still gesturing prepares nothing',
+    parked.footerH === 0, `footer ${parked.footerH}px at ${parked.scrollTop}/${rest.maxScroll}`);
 
-  for (let i = 0; i < 6; i++) { await wheel(120, true); await sleep(20); }
-  await sleep(150);
-  const tailed = await probe();
-  check('inertia at the end cannot open the room', tailed.footerH === 0,
-    `footer ${tailed.footerH}px after 6 momentum:true events`);
+  // While input keeps arriving the room must NOT be prepared. This is the whole
+  // safety property: you arrive at a stop with momentum still running, and room that
+  // exists too early is room the tail spends for you. Dispatched events can't scroll,
+  // which is exactly the pinned-at-the-boundary condition, so they reproduce it.
+  let openedDuring = false;
+  for (let i = 0; i < 8; i++) {
+    await wheel(120, true);
+    await sleep(120); // well inside the 400ms settle
+    if ((await probe()).footerH > 0) { openedDuring = true; break; }
+  }
+  check('inertia still arriving keeps the room unprepared', !openedDuring,
+    `footer ${(await probe()).footerH}px after 8 momentum events at 120ms spacing`);
 
-  // An unbroken finger stream must not open the room: that's what stops a fling
-  // from higher up the document opening it on arrival and then letting its own
-  // tail scroll the panel the whole way out.
-  //
-  // Method note: the real case (a stream already in flight when it reaches the
-  // end) can't be synthesised — dispatched events carry the momentum flag but
-  // perform no scrolling, and CDP's real scrolls carry no flag. So this drives the
-  // rule directly through the Gap slider: with a 300ms gap, events 100ms apart are
-  // one motion, and none of them may open the room.
-  await setRange('Gap', 300);
-  await sleep(400);
-  // Prime with a momentum event so the stream is already in flight — otherwise the
-  // first finger event trivially clears the gap. This also checks that the "first
-  // input after a tail" shortcut is refused for opening (confirming keeps it).
-  await wheel(60, true);
-  await sleep(100);
-  for (let i = 0; i < 5; i++) { await wheel(60, false); await sleep(100); }
-  await sleep(120);
-  const streamed = await probe();
-  check('an unbroken finger stream cannot open the room', streamed.footerH === 0,
-    `footer ${streamed.footerH}px after 5 events 100ms apart, gap 300ms`);
+  // A finger stream is refused for the same reason — it is input, and input means
+  // the gesture is not over. Nothing about the momentum FLAG is load-bearing here,
+  // which is why this rig no longer depends on it.
+  let openedByFinger = false;
+  for (let i = 0; i < 5; i++) {
+    await wheel(60, false);
+    await sleep(120);
+    if ((await probe()).footerH > 0) { openedByFinger = true; break; }
+  }
+  check('nor does an unbroken finger stream', !openedByFinger,
+    `footer ${(await probe()).footerH}px after 5 events 120ms apart, settle 400ms`);
 
-  // And a genuinely separate motion opens it at once.
-  await sleep(500);
-  await wheel(40, false);
-  await sleep(80);
-  const opened = await probe();
-  check('a separate motion opens it at once — no awkward wait',
-    opened.footerH > 0, `footer ${opened.footerH}px`);
-  await setRange('Gap', 50);
+  // Stop, and the room is prepared for you — without a further scroll, and without
+  // revealing anything. That is the change: the next scroll is pure travel.
+  await sleep(700);
+  const prepared = await probe();
+  check('stopping prepares the room, revealing nothing',
+    prepared.footerH === 100 && prepared.revealedPx <= 1,
+    `footer ${prepared.footerH}px, revealed ${prepared.revealedPx}px, phase ${prepared.phase}`);
+  check('and preparing it does not move the content',
+    prepared.scrollTop === parked.scrollTop,
+    `scrollTop ${parked.scrollTop} → ${prepared.scrollTop}`);
+  await setRange('Settle', 120);
 }
 
 // --- 3. Step 1 → 2, and the opening gesture continues into the room ---------
@@ -198,24 +245,26 @@ const parkedAtEnd = async () => {
 // --- 4. A partial reveal withdraws itself ----------------------------------
 {
   await reset({ hold: 1000, ret: 300 });
-  await parkedAtEnd();
-  await wheel(40, false);        // opens the room without scrolling
-  await sleep(80);
-  await page.mouse.wheel(0, 30); // reveal a sliver
-  await sleep(100);
-  const nibbled = await probe();
-  await sleep(1500);             // hold 1000 + return 300 + margin
+  await parkedAtEnd();           // room already prepared; nothing revealed
+  await page.mouse.wheel(0, 40); // reveal a sliver
+  await sleep(300);
+  const nibbled = await settle();
+  await sleep(1800);             // hold 1000 + return 300 + margin
   const back = await probe();
+  // The room stays PREPARED after the withdrawal — resting at the article end is
+  // exactly the condition that prepares it. What has to go back to zero is the
+  // reveal, not the room.
   check('a small reveal withdraws itself', nibbled.revealedPx > 2 && back.revealedPx <= 1,
-    `revealed ${nibbled.revealedPx}px → ${back.revealedPx}px, footer now ${back.footerH}px`);
+    `revealed ${nibbled.revealedPx}px → ${back.revealedPx}px (footer stays prepared at ${back.footerH}px)`);
 }
 
 // --- 5. Armed, and the withdrawal is eased --------------------------------
 {
   const rest = await reset();
   const armed = await toArmed();
-  check('scrolling the footer in arms it', armed.phase === 'armed' && armed.revealedPx >= armed.footerH - 2,
-    `revealed ${armed.revealedPx}/${armed.footerH}px, "${armed.label}"`);
+  check('scrolling the footer in arms it',
+    armed.phase === 'armed' && /reveal 100\/100px/.test(armed.readout),
+    `${armed.readout.split('|')[0].trim()}, "${armed.label}"`);
   check('card box never moved', armed.transform === 'none' && armed.cardBottom === rest.cardBottom,
     `transform ${armed.transform}, bottom ${armed.cardBottom}`);
 
@@ -235,8 +284,10 @@ const parkedAtEnd = async () => {
   const tops = trace.map(([, t]) => t);
   const distinct = [...new Set(tops)];
   const movedAt = trace.find(([, t]) => t < tops[0] - 1);
-  check('waiting on the offer withdraws it', after.revealedPx <= 1 && after.footerH === 0,
-    `revealed ${after.revealedPx}px, footer ${after.footerH}px, phase ${after.phase}`);
+  // Room stays prepared — resting at the article end is what prepares it. The
+  // REVEAL is what withdraws.
+  check('waiting on the offer withdraws it', after.revealedPx <= 1 && after.phase === 'idle',
+    `revealed ${after.revealedPx}px, phase ${after.phase} (footer stays prepared at ${after.footerH}px)`);
   check('the withdrawal is eased, not a jump', distinct.length >= 8,
     `${distinct.length} distinct positions, ${tops[0]} → ${tops[tops.length - 1]}px`);
   check('it waits out the hold before moving', movedAt && movedAt[0] > 700,
@@ -255,22 +306,18 @@ const parkedAtEnd = async () => {
   check('a fling tail does not confirm', duringTail.phase === 'armed',
     `phase ${duringTail.phase} after momentum:true`);
 
-  // No wheel event opens the commit room any more — nothing you can do with input
-  // earns it, which is what makes it impossible to flick through the offer. Only
-  // stopping does: the room appears after the input stream has been quiet for the
-  // pause. So a real flick straight after the tail must change nothing at all.
+  // A real flick straight after the tail earns the commit ROOM — a new gesture is
+  // exactly what the gate is for. What it does NOT do is archive: the room opens
+  // and the distance still has to be run.
+  // The room was prepared by settling, so a flick has nothing to earn — and must
+  // not archive either. Dispatched events can't scroll, so this asserts the
+  // decision, not the travel.
   await wheel(40, false); // a real flick, immediately — no gap at all
   await sleep(120);
   const flicked = await probe();
-  check('no flick can earn the commit room — only stopping does',
-    flicked.footerH === armed.footerH && flicked.phase === 'armed',
-    `footer ${armed.footerH} → ${flicked.footerH}px, phase ${flicked.phase}`);
-
-  // Stop, serve the pause, and the room is there.
-  await sleep(700);
-  const offered = await probe();
-  check('stopping serves the pause and opens the room', offered.footerH > armed.footerH,
-    `footer ${armed.footerH} → ${offered.footerH}px`);
+  check('a flick at the armed stop does not archive',
+    flicked.phase === 'armed' && /commit 0\//.test(flicked.readout),
+    `phase ${flicked.phase}, ${flicked.readout.split('|')[0].trim()}`);
 
   // Travelling the room is the archive, and it takes real scrolls to do it.
   for (let i = 0; i < 12 && (await probe()).phase !== 'activated'; i++) {
@@ -283,7 +330,7 @@ const parkedAtEnd = async () => {
 
   await sleep(1600);
   const filed = await probe();
-  check('files away and resets', filed.phase === 'idle' && filed.footerH === 0,
+  check('files away and resets', filed.phase === 'idle' && filed.revealedPx <= 1,
     `phase ${filed.phase}, footer ${filed.footerH}px`);
 }
 
@@ -329,8 +376,8 @@ const parkedAtEnd = async () => {
   await page.mouse.up();
   await sleep(1600);
   const filed = await probe();
-  check('and it settles home afterwards', filed.phase === 'idle' && filed.footerH === 0,
-    `phase ${filed.phase}, footer ${filed.footerH}px`);
+  check('and it settles home afterwards', filed.phase === 'idle' && filed.revealedPx <= 1,
+    `phase ${filed.phase}, revealed ${filed.revealedPx}px`);
 }
 
 // --- 8b. A drag that stops INSIDE the commit room commits on release ---------
@@ -376,10 +423,11 @@ const parkedAtEnd = async () => {
   // travel banked — the instant room appears it spends all of it, blows through the
   // peek stage and lands in the commit room, where releasing SHOULD archive. That
   // is a different test. Starting from the end makes a nibble an actual nibble.
-  await page.evaluate(() => {
+  await page.evaluate((end) => {
     const sc = document.querySelector('.pull__panel--nativescroll');
-    sc.scrollTop = sc.scrollHeight - sc.clientHeight;
-  });
+    sc.dataset.articleEnd = String(end);
+    sc.scrollTop = Number(sc.dataset.articleEnd);
+  }, articleEnd);
   await sleep(200);
   let y = rest.cardBottom - 40;
   await page.mouse.move(x, y);
@@ -426,7 +474,7 @@ const parkedAtEnd = async () => {
 // sleep, or the extra scroll it provokes opens the commit room behind your back.
 {
   await reset({ hold: 8000 });
-  await setRange('Gap', 300);
+  await setRange('Settle', 300);
   await setRange('Peek', 100);
   await setRange('Commit', 90);
 
@@ -440,14 +488,12 @@ const parkedAtEnd = async () => {
   // rather than relying on `settle()` happening to be slower than it.
   await sleep(400);
   a = await probe();
-  // Being armed is what earns the commit room — no further gesture, no request.
-  check('arming opens the commit room by itself', a.phase === 'armed' && a.footerH === 190,
-    `phase ${a.phase}, footer ${a.footerH}px`);
-  // ...but it must arrive EMPTY. The room appears only after the scroll settles, so
-  // the flick that pulled the panel out is over before there is anywhere to go —
-  // which is the one thing standing between "a transition" and "it archived itself".
-  check('the gesture that armed it cannot travel it', /commit 0\//.test(a.readout),
-    a.readout.split('|')[0].trim());
+  // Armed, settled, and the commit room prepared below — but UNTRAVELLED. The
+  // gesture that armed the panel ran out of room before the room existed, which is
+  // what stops a fling from carrying straight on through the offer.
+  check('arming then settling prepares the commit room, empty',
+    a.phase === 'armed' && a.footerH === 190 && /commit 0\//.test(a.readout),
+    `phase ${a.phase}, footer ${a.footerH}px, ${a.readout.split('|')[0].trim()}`);
 
   for (let i = 0; i < 6; i++) await wheel(40, true);
   await sleep(120);
@@ -488,25 +534,14 @@ const parkedAtEnd = async () => {
 // --- 12. Scrolling back up surrenders the commit room ------------------------
 {
   await reset({ hold: 8000 });
-  await setRange('Gap', 300);
-  let a = await toEnd();
-  for (let i = 0; i < 40 && a.phase !== 'armed'; i++) {
-    await page.mouse.wheel(0, 30);
-    a = await settle();
-  }
-  await sleep(900);
-  await page.mouse.wheel(0, 60); // commit room on (and carries ~60 into it)
-  await sleep(400);
-  const on = await probe();
+  const on = await toArmedPrepared(); // armed, settled, commit room waiting
   // Enough to undo the carry AND un-arm: the room is surrendered when the travel
   // that earned it is undone, not merely when the commit travel returns to zero.
-  await page.mouse.wheel(0, -60);
-  await sleep(150);
-  await page.mouse.wheel(0, -60);
-  await sleep(250);
+  await page.mouse.wheel(0, -40);
+  await sleep(300);
   const back = await settle();
   check('scrolling back up gives the commit room back',
-    on.footerH === 190 && back.footerH === 100,
+    on.footerH === 160 && back.footerH === 100,
     `footer ${on.footerH} → ${back.footerH}px, phase ${back.phase}`);
 }
 
@@ -520,9 +555,9 @@ const parkedAtEnd = async () => {
   await reset({ hold: 1000, ret: 300 });
   const parked = await parkedAtEnd(); // scroll 1 has happened: at the end, no room
   await setRange('Hold', 8000);
-  check('scroll 1 lands at the article end with nothing offered',
-    parked.footerH === 0 && parked.scrollTop >= parked.maxScroll - 1,
-    `at ${parked.scrollTop}/${parked.maxScroll}, footer ${parked.footerH}px`);
+  check('scroll 1 lands at the article end with nothing revealed',
+    parked.revealedPx <= 1 && parked.phase === 'idle',
+    `revealed ${parked.revealedPx}px, phase ${parked.phase} (room prepared at ${parked.footerH}px)`);
 
   await deliberate(120);
   await sleep(300);
@@ -538,44 +573,55 @@ const parkedAtEnd = async () => {
     archived.phase === 'activated', `phase ${archived.phase}, label "${archived.label}"`);
 }
 
-// --- 14. The armed stop must exist in TIME, not only in distance -------------
-// Regression: a fast double-flick went from the article bottom to "Archived"
-// without the offer ever being readable. Two independent causes, one check each.
+// --- 14. A fling cannot walk itself through the offer ------------------------
+// Regression: a fast double-flick once went from the article bottom to "Archived"
+// without the offer ever being readable. The cause was a settle timer — the one
+// mechanism that could open a room while a gesture was still live. It is gone, and
+// the gate cannot do that by construction, because inertia is refused outright.
+// This pins that property at the SECOND stop, where the consequence is irreversible.
 {
   await reset({ hold: 8000 });
-  await setRange('Gap', 300);
-  await setRange('Pause', 600);
-
-  let a = await toEnd();
-  for (let i = 0; i < 40 && a.phase !== 'armed'; i++) {
-    await page.mouse.wheel(0, 30);
-    a = await settle();
+  await toArmedPrepared();
+  // Scroll back off the stop so the commit room is surrendered, then re-arm with a
+  // long settle window — that is the state where "does inertia earn it?" is a real
+  // question rather than one already answered.
+  await page.mouse.wheel(0, -40);
+  await sleep(300);
+  await setRange('Settle', 3000);
+  for (let i = 0; i < 20; i++) {
+    if ((await settle()).phase === 'armed') break;
+    await page.mouse.wheel(0, 20);
   }
 
-  // (a) INPUT, not scroll position, ends a gesture. Pinned at the maximum, scrollTop
-  // stops changing and scroll events stop with it — but the platform keeps sending
-  // momentum. Keyed on scroll events the settle clock ran out mid-fling and opened
-  // the room under a live gesture. Dispatched events can't scroll, which is exactly
-  // the pinned condition, so they reproduce it precisely.
-  let openedEarly = false;
+  // Dispatched events carry the momentum flag but cannot scroll — which is exactly
+  // the pinned-at-the-maximum condition a real fling tail hits here, so they
+  // reproduce it faithfully. No quantity of inertia may earn the room.
+  let openedByInertia = false;
   for (let i = 0; i < 12; i++) {
     await wheel(40, true);
-    await sleep(60); // > SETTLE_MS/2, so a scroll-keyed clock would expire mid-stream
-    if ((await probe()).footerH > 100) { openedEarly = true; break; }
+    await sleep(60);
+    if ((await probe()).footerH > 100) { openedByInertia = true; break; }
   }
-  check('continuing momentum keeps the commit room shut', !openedEarly,
+  check('no amount of inertia opens the commit room', !openedByInertia,
     `footer ${(await probe()).footerH}px after 12 momentum events over ~0.7s`);
 
-  // (b) The dwell itself: even once input stops, the offer gets a beat to be read.
-  await sleep(250); // past SETTLE_MS, nowhere near the 600ms pause
-  const early = await probe();
-  check('the room is still shut part-way through the pause', early.footerH === 100,
-    `footer ${early.footerH}px at ~250ms of a 600ms pause`);
+  // An unbroken FINGER stream is refused too — that is what stops a single hard
+  // flick from arming and continuing straight through. Driven via the Gap slider,
+  // since a real continuous gesture can't be synthesised (see the README).
+  let openedByStream = false;
+  for (let i = 0; i < 5; i++) {
+    await wheel(60, false);
+    await sleep(100); // one motion at a 300ms gap
+    if ((await probe()).footerH > 100) { openedByStream = true; break; }
+  }
+  check('nor does an unbroken finger stream', !openedByStream,
+    `footer ${(await probe()).footerH}px after 5 events 100ms apart, gap 300ms`);
 
-  await sleep(700);
-  const ready = await probe();
-  check('and opens once the pause is served', ready.footerH === 190 && ready.phase === 'armed',
-    `footer ${ready.footerH}px, phase ${ready.phase}`);
+  // Stop, and the room is prepared without any further gesture at all.
+  await sleep(600);
+  const earned = await probe();
+  check('stopping prepares the commit room, no gesture needed', earned.footerH > 100,
+    `footer 100 → ${earned.footerH}px`);
 }
 
 console.log(await page.evaluate(() => `\nplatform: WheelEvent.momentum present = ${'momentum' in WheelEvent.prototype}`));

@@ -59,10 +59,13 @@ const ACTIVATED_MS = 900; // how long "Archived ✓" holds before filing away
 // just did. The timed withdrawal (`returnMs`) is slow on purpose — that one is
 // ambient, and shouldn't feel like the app grabbing the page off you.
 const SPRING_MS = 280;
-// Quiet time that means "the scroll is over, momentum and all". Long enough that a
-// fling's tail can't be mistaken for the end of the gesture, short enough that the
-// commit room is already waiting by the time you have read the offer.
-const SETTLE_MS = 140;
+
+// Set to `false` to lop off step 3 entirely: the rig then stops at armed and cannot
+// archive by any route (no commit room, no drag path to one, `confirm()`
+// unreachable). Kept because isolating 1 → 2 is what finally showed that its good
+// behaviour came from layout rather than from any of the machinery bolted onto 2 → 3.
+const COMMIT_STAGE_ENABLED = true;
+
 // Snapping is live only while the footer is ABSENT, where its one snap point is
 // the article's end — so it does exactly the job asked of it (gravity toward the
 // card-bottom position) and nothing else.
@@ -87,24 +90,22 @@ export function GestureNative() {
   // from some earlier scroll. (2s was too short, 5s too long.)
   const [holdMs, setHoldMs] = useState(3000);
   const [returnMs, setReturnMs] = useState(800);
-  // Opening the room needs only to tell "one motion" from "two". Tiny, because a
-  // large threshold is what made the step feel like a lockout — but not zero:
-  // without it, a fling's finger phase opens the room on arrival and its own tail
-  // then scrolls the panel the whole way out, which is not a decision you made.
-  const [openGapMs, setOpenGapMs] = useState(50);
-  // Step 2 → 3 uses the SAME gate as step 1 → 2, so there is only one number. The
-  // old separate 150ms was picked on the theory that an irreversible step should
-  // demand a clearly separate motion; it bought no deliberateness (the gap is
-  // measured from the last wheel event, fling tail included — not from when the
-  // panel appeared) and read as a lockout. What makes committing deliberate is now
-  // structural: a third move, and real distance to travel once you make it.
-  const [commitPx, setCommitPx] = useState(90);
-  // Quiet time after your LAST input before the armed stop will offer anywhere
-  // further to go. The beat that makes the offer readable: without it a fast fling
-  // arms and is through the commit travel inside one motion, and "scroll to archive"
-  // is a frame you never saw. Distance alone can't buy this — momentum has distance
-  // to spare; only stopping costs a fling anything.
-  const [dwellMs, setDwellMs] = useState(300);
+  // Quiet time after your last input before the next room is prepared. This is now
+  // the ONLY timing knob in the rig: too short and a fling's tail finds the room
+  // already open and spends it for you; too long and the stop feels like a lockout.
+  const [settleMs, setSettleMs] = useState(30);
+  // Deliberately SMALLER than `peekPx`, and that asymmetry is the whole point.
+  //
+  // You arrive at the two stops with completely different amounts of help. At the
+  // first you are mid-flick, so a momentum tail overshoots 100px without you doing
+  // anything. At the second you have stopped to read the offer, so all you have is
+  // one deliberate push with no tail behind it. Sizing both stops the same was the
+  // wavering: 90px sat right at the length of a single deliberate scroll, so whether
+  // it completed was a coin flip.
+  //
+  // The rule to tune against: this must be comfortably clearable by ONE unhurried
+  // scroll, because that is the only input this stop ever gets.
+  const [commitPx, setCommitPx] = useState(60);
   // 0 = no footer · 1 = peek room · 2 = peek + commit room.
   const [stageOn, setStageOn] = useState(0);
   const [revealed, setRevealed] = useState(0);
@@ -120,10 +121,10 @@ export function GestureNative() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const spacerRef = useRef<HTMLDivElement>(null);
 
-  const params = useRef({ peekPx, holdMs, returnMs, openGapMs, commitPx, dwellMs });
+  const params = useRef({ peekPx, holdMs, returnMs, settleMs, commitPx });
   useEffect(() => {
-    params.current = { peekPx, holdMs, returnMs, openGapMs, commitPx, dwellMs };
-  }, [peekPx, holdMs, returnMs, openGapMs, commitPx, dwellMs]);
+    params.current = { peekPx, holdMs, returnMs, settleMs, commitPx };
+  }, [peekPx, holdMs, returnMs, settleMs, commitPx]);
 
   const [dragActive, setDragActive] = useState(false);
   const stage = useRef(0); // mirrors stageOn for the event handlers
@@ -270,34 +271,33 @@ export function GestureNative() {
     };
 
     /**
-     * Give the armed panel somewhere further to go — automatically, as a consequence
-     * of BEING armed rather than of asking for it.
+     * Prepare the room for the NEXT step, as soon as the current one has come to
+     * rest at its stop. Both stops, one rule.
      *
-     * Timing is the whole design here. The room cannot appear the instant `armed`
-     * flips true: the panel is pulled out by the tail of your own flick, and that
-     * tail would run straight on through the new room and archive for you. So it
-     * waits for the scroll to settle — momentum included, since momentum keeps
-     * firing scroll events. By the time the room exists, your gesture is over.
+     * The point of preparing it in advance rather than on the scroll that uses it:
+     * the next gesture is then pure travel from its very first pixel. Nothing has to
+     * be spent asking for the room, so there is no dead scroll and no need to carry
+     * a delta across the append — the step just moves, the way the first one does.
      *
-     * That leaves the next scroll free to be pure travel: no gate to satisfy, no
-     * event to spend on the append, a continuous colour shift the whole way down,
-     * and the archive on arrival. Which is the difference between a transition and
-     * two stops that look the same.
+     * Safe because the clock is fed by INPUT (see onWheel). You arrive at a stop
+     * with momentum still running, so room that exists too early is room the tail
+     * spends for you — that is exactly the fling-through we had. Waiting for input
+     * to go quiet means the gesture is genuinely over before there is anywhere to go.
+     *
+     * The stop still stops: it is layout that halts the fling, not this timer.
      */
-    // The clock runs from the LAST INPUT, not from when the panel armed. Measuring
-    // from arming was worthless: a fling arms early and then keeps going, so by the
-    // time your hand is off the trackpad the pause has already elapsed and the room
-    // opens instantly into the leftover momentum — which is the bug it was meant to
-    // prevent. What has to be true is that you have stopped, and then a beat passed.
-    const restartSettle = () => {
-      if (settleTimer.current) clearTimeout(settleTimer.current);
-      settleTimer.current = setTimeout(openCommitRoom, Math.max(SETTLE_MS, params.current.dwellMs));
+    const openNextRoom = () => {
+      if (fired.current || retreating.current || dragging.current) return;
+      // Only ever at a boundary — the position the previous travel ends at.
+      const max = scroller.scrollHeight - scroller.clientHeight;
+      if (scroller.scrollTop < max - 1) return;
+      if (stage.current === 0) setStage(1);
+      else if (COMMIT_STAGE_ENABLED && stage.current === 1 && armed.current) setStage(2);
     };
 
-    const openCommitRoom = () => {
-      if (fired.current || retreating.current) return;
-      if (stage.current !== 1 || !armed.current) return;
-      setStage(2);
+    const restartSettle = () => {
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+      settleTimer.current = setTimeout(openNextRoom, params.current.settleMs);
     };
 
     const onScroll = () => {
@@ -333,7 +333,7 @@ export function GestureNative() {
       // THE COMMIT. Not an event — a position. Arriving at the end of the commit
       // room is the archive, which is why this step can no longer be "stalled" by
       // a gate: there is nothing to refuse, only distance you have or haven't run.
-      if (stage.current === 2 && !fired.current && !retreating.current && commit >= params.current.commitPx - 1) {
+      if (COMMIT_STAGE_ENABLED && stage.current === 2 && !fired.current && !retreating.current && commit >= params.current.commitPx - 1) {
         confirm();
         return;
       }
@@ -356,11 +356,6 @@ export function GestureNative() {
         }
       }
 
-      // Scrolling feeds the settle clock too, but it is NOT the authority — see the
-      // note in onWheel. Once pinned at the maximum, scroll events stop while input
-      // is still arriving, and this alone would call the fling over while it is very
-      // much alive.
-      restartSettle();
 
       // Scrolled back up, so give the room back one stage at a time. Each stage is
       // surrendered when the travel that EARNED it is undone — not when the travel it
@@ -378,6 +373,10 @@ export function GestureNative() {
 
       if (!exposed.current) clearHold();
 
+      // Feeds the clock too, but is NOT the authority — see onWheel for why scroll
+      // events alone are the wrong signal at a boundary.
+      restartSettle();
+
       if (armed.current && !raf) raf = requestAnimationFrame(sampleElastic);
       if (!armed.current && raf) { cancelAnimationFrame(raf); raf = 0; }
     };
@@ -390,90 +389,19 @@ export function GestureNative() {
       // emits any finger-flagged event as a fling settles at a boundary, it would
       // open the next room on the fling's behalf. It is also worth nothing where
       // `WheelEvent.momentum` is missing — see the gate readout in the footer.
+      // This handler no longer decides anything. Its whole job is to keep the settle
+      // clock alive, and it must be the wheel — not scroll — that does so: pinned at
+      // a boundary, scrollTop stops changing and scroll events stop with it while the
+      // platform is still delivering momentum. Keyed on scrolling, the clock expires
+      // mid-fling and the room opens under a live gesture, which is how a fast
+      // double-flick once ran straight through to "Archived".
       const s = wheelGate.observe(e);
-      const readyToOpen = !s.momentum && s.gapMs >= params.current.openGapMs;
-
-      // INPUT is what the settle clock listens to, and this line is the whole
-      // reason. Keyed on scroll events alone it was wrong in exactly the case that
-      // matters: once pinned at the maximum, scrollTop stops changing and scroll
-      // events stop with it — while the platform is still delivering momentum. The
-      // clock would run out mid-fling, the commit room would open underneath a live
-      // gesture, and the leftover momentum would travel it and archive. A fast
-      // double-flick went from the bottom of the article to "Archived" without ever
-      // showing the offer. Every wheel event, momentum included, resets it here.
       restartSettle();
+      setGateSeen({ gapMs: s.gapMs, tail: s.afterMomentum });
 
       // Grabbing the panel back mid-withdrawal cancels the retreat rather than
       // fighting it. A fling tail isn't a grab, so it doesn't count.
       if (retreating.current && !fired.current && !s.momentum) stopRetreat();
-
-      if (fired.current || e.deltaY <= 0) return;
-
-      // Instrumentation: exactly what the gate was handed on a downward scroll.
-      setGateSeen({ gapMs: s.gapMs, tail: s.afterMomentum });
-
-      // Step 1 → 2. Opening the room needs only two things: you are already pinned
-      // at the end, and this is your finger rather than the platform's inertia.
-      //
-      // It deliberately does NOT require a "new gesture". Requiring one made the
-      // stop feel like a lockout: a flick's tail consumed the gesture's one fresh
-      // event, so everything after it was ignored and you had to wait out the
-      // whole idle gap before a second scroll would do anything.
-      //
-      // Note the ordering, which is the opposite of the usual: this listener is
-      // PASSIVE, so the browser scrolls first and tells us afterwards — measured,
-      // an arriving event reports `scrollTop` already AT the end. So a fingers-down
-      // scroll that reaches the end opens the room in the same motion, exactly
-      // like the drag path.
-      //
-      // What still stops is a flick: inertia is refused outright, and the finger
-      // phase of a fling arrives as one unbroken stream, so it can't clear even
-      // the small gap — otherwise it would open the room on arrival and its own
-      // tail would scroll the panel the whole way out for you.
-      if (!readyToOpen) return;
-
-      // Both stops, one shape: pinned at the current end, so open the next room and
-      // let this same gesture travel into it. The archive itself is still decided in
-      // onScroll, by distance — never here.
-      const maxBefore = scroller.scrollHeight - scroller.clientHeight;
-      if (scroller.scrollTop < maxBefore - 1) return;
-
-      // Step 1 → 2. Note the ordering, which is the opposite of the usual: this
-      // listener is PASSIVE, so the browser scrolls first and tells us afterwards —
-      // measured, an arriving event reports `scrollTop` already AT the end. So a
-      // fingers-down scroll that reaches the end opens the room in the same motion,
-      // exactly like the drag path. What still stops is a flick: inertia is refused
-      // outright, and the finger phase of a fling arrives as one unbroken stream, so
-      // it can't clear even the small gap.
-      // Only the FIRST stop is earned by a gesture now. The commit room opens on
-      // its own once you are armed and the scroll has settled (see `openCommitRoom`)
-      // — asking for it with a separate scroll was the extra step: that scroll had
-      // to be spent before any travel could begin, so the last stretch was a jump
-      // between two identical-looking stops instead of a transition.
-      const next = stage.current === 0 ? 1 : 0;
-      if (next === 0) return; // nothing further to earn from here
-
-      const from = scroller.scrollTop;
-      setStage(next);
-
-      // Carry THIS gesture's own scroll into the room it just opened — at BOTH
-      // stops, identically.
-      //
-      // Without it the opening scroll was already clamped against the old maximum
-      // by the time we appended, so it produced nothing visible and the step read
-      // as dead: the message doesn't change and only the meter moves. A trackpad
-      // hid this at the first stop, because the flick's momentum tail arrives a
-      // frame later and travels the room for you — but a mouse wheel has no tail,
-      // so every stop cost a wasted notch.
-      //
-      // The distance is NOT bypassed by this: the carry is one event's delta.
-      // A flick's tail runs out the rest and archives in one motion; a small scroll
-      // leaves travel on the table, visibly short of firing. And it cannot chain
-      // stops, because `readyToOpen` refuses a continuous stream — earning the next
-      // room always takes a new gesture.
-      const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY; // lines → px (Firefox)
-      const max = scroller.scrollHeight - scroller.clientHeight;
-      scroller.scrollTop = Math.min(max, from + Math.max(0, delta));
     };
 
     // ---- Drag: a second, alternative path to the same state machine ---------
@@ -506,7 +434,8 @@ export function GestureNative() {
       // an explicit start, so unlike the wheel it doesn't need a separate gesture to
       // earn a stop — which is what keeps the drag path feeling 1:1 and continuous.
       // It still can't skip: stage 2 needs the panel already fully out.
-      if (desired > max && stage.current < 2 && (stage.current === 0 || armed.current)) {
+      const topStage = COMMIT_STAGE_ENABLED ? 2 : 1;
+      if (desired > max && stage.current < topStage && (stage.current === 0 || armed.current)) {
         setStage(stage.current + 1);
         // React commits the spacer after this event, so the room this drag can
         // use appears on the next move — a frame away at drag speed.
@@ -541,7 +470,7 @@ export function GestureNative() {
       if (!dragging.current) return;
       dragging.current = false;
       setDragActive(false);
-      if (dragEnteredCommit.current) {
+      if (COMMIT_STAGE_ENABLED && dragEnteredCommit.current) {
         confirm(); // its own settle-back follows
         return;
       }
@@ -589,7 +518,12 @@ export function GestureNative() {
   const label =
     phase === 'activated' || phase === 'reverting' ? undefined
     : enteredCommit ? (dragActive ? 'Release to archive' : 'Keep scrolling to archive')
-    : phase === 'armed' ? (dragActive ? 'Pull further to archive' : 'Scroll or drag again to archive')
+    // With the commit stage off, armed is the end of the road. Naming the
+    // affordance beats instructing a scroll that would do nothing — a promise the
+    // build can't keep would be the very thing under test.
+    : phase === 'armed' ? (COMMIT_STAGE_ENABLED
+        ? (dragActive ? 'Pull further to archive' : 'Scroll or drag again to archive')
+        : 'Archive')
     : phase === 'pulling' ? (dragActive ? 'Keep pulling…' : 'Keep going…')
     : undefined;
 
@@ -640,9 +574,8 @@ export function GestureNative() {
 
       <footer className="tuner-bar">
         <Tuner label="Peek" value={peekPx} min={40} max={260} step={5} unit="px" onChange={setPeekPx} />
-        <Tuner label="Gap" value={openGapMs} min={0} max={300} step={10} unit="ms" onChange={setOpenGapMs} />
-        <Tuner label="Commit" value={commitPx} min={20} max={260} step={5} unit="px" onChange={setCommitPx} />
-        <Tuner label="Pause" value={dwellMs} min={0} max={1200} step={25} unit="ms" onChange={setDwellMs} />
+        <Tuner label="Settle" value={settleMs} min={0} max={400} step={10} unit="ms" onChange={setSettleMs} />
+        <Tuner label="Commit" value={commitPx} min={10} max={260} step={5} unit="px" onChange={setCommitPx} />
         <Tuner label="Hold" value={holdMs} min={1000} max={12000} step={250} unit="ms" onChange={setHoldMs} />
         <Tuner label="Return" value={returnMs} min={200} max={2000} step={50} unit="ms" onChange={setReturnMs} />
         <span className="tuner__readout" title="Which stage of room has been appended, and how far each of the two travels has been run.">
