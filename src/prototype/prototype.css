@@ -429,17 +429,31 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
 }
 .sa > .sa__scroller::-webkit-scrollbar { display: none; }
 .sa--y > .sa__scroller {
-  overflow-y: auto; overflow-x: hidden; touch-action: pan-y;
+  overflow-y: auto; overflow-x: hidden; touch-action: manipulation;
   /* Contain ONLY the axis this surface owns. `overscroll-behavior: contain` on both
      axes stops the wheel chaining to the parent — which on a nested row means a
      vertical scroll over it scrolls nothing at all, and a thread list becomes
      unscrollable wherever a row sits under the cursor. */
   overscroll-behavior-y: contain;
 }
-/* pan-y on a horizontal surface is deliberate: it hands VERTICAL touch back to the
-   parent, so a row inside a list never steals the list's own scroll. */
+/* `manipulation` on BOTH, and the reasoning is worth keeping because the wrong value
+   here is invisible on a desktop.
+
+   `touch-action` is touch-only, so every wheel and mouse test passes whatever it
+   says. On a real phone the horizontal rows had `pan-y` — which permits only
+   VERTICAL panning — so horizontal swipes inside a tile did nothing at all. The
+   obvious fix, `pan-x` on the row, trades one bug for a worse one: the value is
+   intersected down the ancestor chain, so a row that permits only horizontal panning
+   also refuses to hand a vertical swipe to the list behind it, and the list stops
+   scrolling wherever a tile is under the thumb.
+
+   `manipulation` permits panning on both axes and leaves the routing to the browser,
+   which already does it correctly: a swipe scrolls whichever nested scroller can
+   move in that direction. What it does turn off is double-tap zoom, which an app
+   surface does not want anyway. Measured with real touch gestures — see the
+   `touch:` checks in scroll-actions.mjs. */
 .sa--x > .sa__scroller {
-  overflow-x: auto; overflow-y: hidden; touch-action: pan-y; display: flex;
+  overflow-x: auto; overflow-y: hidden; touch-action: manipulation; display: flex;
   overscroll-behavior-x: contain;
 }
 .sa--x > .sa__scroller > .sa__sheet { flex: 0 0 100%; }

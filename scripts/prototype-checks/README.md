@@ -15,6 +15,7 @@ node scripts/prototype-checks/native-scroll.mjs 520   # arg = viewport height
 node scripts/prototype-checks/overscroll.mjs 520
 node scripts/prototype-checks/drag.mjs
 node scripts/prototype-checks/scroll-actions.mjs
+node scripts/prototype-checks/touch-actions.mjs   # real touch gestures, mobile viewport
 ```
 
 Each prints PASS/FAIL per check and exits non-zero on any failure.
@@ -45,6 +46,14 @@ you have. **Chromium 151+ is required** for `WheelEvent.momentum`.
   that chases it walks down the whole staircase instead of stopping at the first
   stop, and a "park at the end" that targets it lands you fully revealed.
   `maxScroll - footerH` is the article's end whatever state you inherited.
+- **`touch-action` is invisible to every check that isn't touch.** It only governs
+  touch, so a wrong value passes all wheel and mouse tests while doing nothing but
+  break real phones — a horizontal scroller carrying `pan-y` refused horizontal
+  swipes entirely. Note it is intersected down the ancestor chain, so `pan-x` on a
+  nested row also stops a vertical swipe reaching the list behind it. `manipulation`
+  on both permits either axis and lets the browser route. Exercise it with CDP's
+  `Input.synthesizeScrollGesture` at `gestureSourceType: 'touch'`; dispatched touch
+  events are untrusted and scroll nothing, exactly like dispatched wheel events.
 - **Nesting breaks descendant CSS selectors.** These surfaces nest — horizontal rows
   inside a vertical card — so `.sa--y .sa__pad` reaches into the rows and sizes their
   pads on the wrong axis. Every axis-scoped rule must be child-scoped (`>`). The
