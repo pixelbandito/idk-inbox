@@ -513,3 +513,8 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
    hit-tested by the surface instead, because the scroller covers the strips. */
 .sa__action { border: 0; font: inherit; cursor: pointer; }
 .sa__action:focus-visible { outline: 2px solid #7aa2f7; outline-offset: -3px; }
+
+/* A fired action eases into its lit colour rather than snapping. Travel-driven
+   `--commit` is deliberately untransitioned so it tracks the finger; a tap has no
+   travel to track, so it gets the ease instead. */
+.sa__action[data-fired] { transition: background 160ms ease; }

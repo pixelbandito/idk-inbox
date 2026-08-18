@@ -74,15 +74,24 @@ const rowInView = async (sel = ROW) => {
   return centre(sel);
 };
 
-/** Wait for the surface to stop moving AND for its pads to stop changing. */
+/**
+ * Wait for the surface to stop moving AND for its pads to stop changing.
+ *
+ * Three consecutive identical samples, not two. Pad changes deliberately lag the
+ * last movement (the hook waits to be sure the compositor has finished before it
+ * touches layout), so a two-sample settle returns during that window and every
+ * assertion after it reads a state that is still one step from final.
+ */
 const settle = async (sel) => {
   let prev = '';
-  for (let i = 0; i < 25; i++) {
+  let same = 0;
+  for (let i = 0; i < 30; i++) {
     const s = await probe(sel);
     const key = `${s.pos}/${s.padStart}/${s.padEnd}`;
-    if (key === prev) return s;
+    same = key === prev ? same + 1 : 0;
+    if (same >= 2) return s;
     prev = key;
-    await sleep(80);
+    await sleep(100);
   }
   return probe(sel);
 };
@@ -289,6 +298,80 @@ await load();
   check('a revealed action is focusable and fires on Enter',
     focused === 'delete' && s.status.startsWith('Delete'),
     `focused "${focused}", status "${s.status}"`);
+}
+
+// --- 11. The far edge is still a stop after you have been to the near one ----
+// Regression: a fresh surface rests at its start, so the start pad is prepared at
+// mount. If pads never shrink, that room is still sitting there when you fling back
+// across the content — and the far affordance opens on arrival with no stop, no
+// offer, straight into the panel. Every side you are not resting against has to give
+// its room back.
+{
+  await load();
+  const c = await centre(CARD);
+  await page.mouse.move(c.x, c.y);
+  await settle(CARD);
+  const atTop = await probe(CARD);
+  check('a fresh card has prepared its leading pad', atTop.padStart > 0,
+    `padStart ${atTop.padStart}px`);
+
+  // Travel to the far end of the content and come to rest there.
+  await page.evaluate(() => {
+    const sc = document.querySelector('.sides__card > .sa__scroller');
+    sc.scrollTop = sc.scrollHeight;
+  });
+  const atBottom = await settle(CARD);
+  check('resting at the far edge gives the near pad back', atBottom.padStart === 0,
+    `padStart ${atTop.padStart} → ${atBottom.padStart}px, padEnd ${atBottom.padEnd}px`);
+
+  // Now fling back. With no leading pad there is nowhere to go past the content top,
+  // so the top affordance cannot open on arrival.
+  await page.mouse.wheel(0, -4000);
+  await sleep(200);
+  const midFling = await probe(CARD);
+  check('flinging back across the card does not open the far affordance',
+    midFling.stripStart === 0,
+    `leading strip ${midFling.stripStart}px, padStart ${midFling.padStart}px, pos ${midFling.pos}`);
+
+  const landed = await settle(CARD);
+  check('and it is prepared again only once you come to rest there',
+    landed.padStart > 0 && landed.stripStart === 0,
+    `padStart ${landed.padStart}px, strip ${landed.stripStart}px`);
+}
+
+// --- 12. A tapped action shows the activated state --------------------------
+// The lit treatment is driven by commit travel, and a tap has none — so without
+// following the FIRED action specifically, tapping ran the action with no visible
+// acknowledgement at all, and tapping an inner one would have lit the edgemost.
+{
+  await load();
+  const c = await rowInView();
+  await page.mouse.move(c.x, c.y);
+  await settle(ROW);
+  await page.mouse.wheel(220, 0);
+  await settle(ROW);
+
+  const lit = () => page.evaluate(() =>
+    [...document.querySelectorAll('.sides__row .sa__action')].map((el) => ({
+      id: el.dataset.actionId,
+      commit: Number(getComputedStyle(el).getPropertyValue('--commit')) || 0,
+      fired: el.dataset.fired === 'true',
+    })));
+
+  const before = await lit();
+  const box = await page.evaluate(() => {
+    const r = document.querySelector('.sides__row [data-action-id="delete"]').getBoundingClientRect();
+    return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+  });
+  await page.mouse.click(box.x, box.y);
+  await sleep(200);
+  const after = await lit();
+  const del = after.find((a) => a.id === 'delete');
+  const snooze = after.find((a) => a.id === 'snooze');
+  check('a tapped action lights up', del?.commit === 1 && del?.fired === true,
+    `delete --commit ${before.find((a) => a.id === 'delete')?.commit} → ${del?.commit}, fired ${del?.fired}`);
+  check('and the edgemost one does not light up instead', snooze?.commit === 0,
+    `snooze --commit ${snooze?.commit} (a travel here would have fired snooze)`);
 }
 
 await browser.close();

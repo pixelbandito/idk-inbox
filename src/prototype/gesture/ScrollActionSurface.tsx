@@ -57,6 +57,19 @@ function Strip({
   const commitProgress = config.commitPx > 0 ? Math.min(1, side.commit / config.commitPx) : 0;
   const lastIndex = config.actions.length - 1;
 
+  /**
+   * How lit each action is, 0–1.
+   *
+   * Once something has fired, the light belongs entirely to THAT action — a tap can
+   * run an inner one, and it would be a lie to brighten the edgemost instead just
+   * because that is what a travel would have chosen. Until then it tracks the commit
+   * travel on the edgemost, which is the only feedback the final stretch has.
+   */
+  const litness = (a: ScrollAction, i: number) => {
+    if (side.firedActionId) return a.id === side.firedActionId ? 1 : 0;
+    return i === lastIndex ? commitProgress : 0;
+  };
+
   return (
     <div
       className={`sa__strip sa__strip--${edge}`}
@@ -78,9 +91,10 @@ function Strip({
             data-tone={a.tone}
             data-action-id={a.id}
             data-edgemost={i === lastIndex || undefined}
+            data-fired={side.firedActionId === a.id || undefined}
             tabIndex={shown > 0 ? 0 : -1}
             onClick={() => onPick(edge, a)}
-            style={{ '--commit': i === lastIndex ? commitProgress : 0 } as React.CSSProperties}
+            style={{ '--commit': litness(a, i) } as React.CSSProperties}
           >
             <span className="sa__action-label">{a.label}</span>
           </button>

@@ -57,6 +57,12 @@ export interface SideState {
   /** px of the commit travelled, 0…commitPx. Only ever > 0 at stage 2. */
   commit: number;
   phase: SidePhase;
+  /**
+   * Which action just ran, while it is running. A completed travel always names the
+   * edgemost one, but a tap names its own — and the "activated" treatment has to
+   * follow the action that actually fired, not the one the travel would have picked.
+   */
+  firedActionId: string | null;
 }
 
 export interface ScrollActionsConfig {
@@ -71,7 +77,7 @@ export interface ScrollActionsConfig {
   returnMs?: number;
 }
 
-const IDLE_SIDE: SideState = { stage: 0, reveal: 0, commit: 0, phase: 'idle' };
+const IDLE_SIDE: SideState = { stage: 0, reveal: 0, commit: 0, phase: 'idle', firedActionId: null };
 const FIRED_HOLD_MS = 900;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const easeInOutCubic = (p: number) =>
@@ -109,6 +115,7 @@ export function useScrollActions(
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const firedSide = useRef<Edge | null>(null);
+  const firedActionId = useRef<string | null>(null);
   const returning = useRef(false);
   const returnRaf = useRef(0);
   const lastPhase = useRef({ start: 'idle' as SidePhase, end: 'idle' as SidePhase });
@@ -165,9 +172,18 @@ export function useScrollActions(
         stages.current[edge] = next;
         return;
       }
+      // Read the position BEFORE touching layout. Shrinking a pad reduces the
+      // scrollable range, and the browser silently clamps the position to the new
+      // maximum as part of that — so reading afterwards returns a value that has
+      // ALREADY been compensated, and applying the delta on top subtracts it twice.
+      //
+      // The symptom is specific and was reported as a snap: reveal both trailing
+      // actions, and a moment later the inner one disappears again, leaving exactly
+      // the edgemost. The amount lost is always the leading pad's own width.
+      const posBefore = read().pos;
       stages.current[edge] = next;
       el2.style[horiz ? 'width' : 'height'] = `${after}px`;
-      if (edge === 'start') write(read().pos + (after - before));
+      if (edge === 'start') write(posBefore + (after - before));
     };
 
     const measure = () => {
@@ -203,6 +219,7 @@ export function useScrollActions(
           reveal: c ? Math.min(shown, c.revealPx) : 0,
           commit: c ? Math.max(0, shown - c.revealPx) : 0,
           phase: phaseFor(edge, shown),
+          firedActionId: firedSide.current === edge ? firedActionId.current : null,
         };
       };
       setStartState(mk('start', m.startShown));
@@ -229,6 +246,7 @@ export function useScrollActions(
       const to = edge === 'start' ? m.startPad : m.max - m.endPad;
       if (Math.abs(from - to) < 0.5) {
         firedSide.current = null;
+        firedActionId.current = null;
         publish();
         return;
       }
@@ -245,6 +263,7 @@ export function useScrollActions(
         }
         stopReturn();
         firedSide.current = null;
+        firedActionId.current = null;
         setStage(edge, 0);
         publish();
       };
@@ -269,10 +288,12 @@ export function useScrollActions(
       const c = sideCfg(edge);
       if (!c || !c.actions.length) return;
       if (firedSide.current || returning.current) return;
+      const chosen = action ?? c.actions[c.actions.length - 1];
       firedSide.current = edge;
+      firedActionId.current = chosen.id;
       clearHold();
       publish();
-      c.onCommit?.(action ?? c.actions[c.actions.length - 1]);
+      c.onCommit?.(chosen);
       setTimeout(() => withdraw(edge), FIRED_HOLD_MS);
     };
 
@@ -285,19 +306,15 @@ export function useScrollActions(
     const prepare = () => {
       if (firedSide.current || returning.current) return;
 
-      // Pads only ever GROW here. There is deliberately no give-back:
+      // No "has the scroll finished animating?" gate here, deliberately.
       //
-      //   - It isn't needed. A pad that has been prepared but not travelled is
-      //     invisible and costs nothing but scroll range, and resting at that edge is
-      //     the very condition that would re-prepare it anyway. Surrendering it is a
-      //     round trip to the same state.
-      //   - It was actively harmful. Shrinking the START pad has to shift the
-      //     position to hold the content still, and that write CANCELS Chrome's
-      //     in-flight scroll animation — so surrendering the near pad while you
-      //     travelled the far one truncated the gesture. A 192px travel arrived as 96.
-      //
-      // Pads return to zero exactly once: in `withdraw`, which runs at rest and ends
-      // parked on the content edge, where settle prepares stage 1 again.
+      // One was added on the theory that resizing a pad mid-animation cancels it and
+      // truncates the travel. That theory was wrong: the truncation was a pad shrink
+      // subtracting its own width from the scroll position TWICE (see `setStage`).
+      // With that fixed, resizing during an animation is harmless, and the gate was
+      // pure latency — the thing that makes a surface feel like it is thinking.
+      // Input going quiet is the only wait that buys anything.
+
       const m = measure();
       const advance = (edge: Edge, atContentEdge: boolean, fullyRevealed: boolean) => {
         const c = sideCfg(edge);
@@ -333,12 +350,31 @@ export function useScrollActions(
 
       lastPos.current = m.pos;
 
-      // NOTE: pads are never resized here. Every stage change — growing or
-      // surrendering — happens in `prepare`, once input has gone quiet. Doing it
-      // mid-scroll meant the start pad could be surrendered while you were still
-      // travelling the end, and the position compensation that keeps content still
-      // CANCELS Chrome's in-flight scroll animation. A 192px travel arrived as 96.
-      // One rule covers it: the layout under a live gesture never changes.
+      // Give a pad back the moment you are no longer parked against its edge —
+      // immediately, with no settle and no stability check.
+      //
+      // GROWING a pad has to wait for input to go quiet, because room that appears
+      // under a live gesture is room that gesture spends for you. SHRINKING one
+      // carries no such risk: nothing is revealed, nobody is looking at it, and the
+      // operation is a genuine no-op — drop N px of room and take N px off the
+      // position, so the content does not move and its relation to the scroll
+      // geometry is unchanged. Gating that behind a timer buys nothing and makes the
+      // surface feel like it is thinking.
+      //
+      // This is what keeps the far edge a real stop. A pad is prepared wherever you
+      // come to rest, and a fresh surface rests at its start — so if the near pad
+      // survives, a fling across the content arrives to find the far affordance
+      // already open and travels straight into it. No stop, no offer, just the panel.
+      if (!firedSide.current && !returning.current) {
+        for (const edge of ['start', 'end'] as Edge[]) {
+          if (!sideCfg(edge) || stages.current[edge] === 0) continue;
+          const shown = edge === 'start' ? m.startShown : m.endShown;
+          if (shown > 0) continue; // being travelled — leave it alone
+          const parkedHere =
+            edge === 'start' ? m.pos <= m.startPad + 1 : m.pos >= m.max - m.endPad - 1;
+          if (!parkedHere) setStage(edge, 0);
+        }
+      }
 
       // The reading clock restarts when the MESSAGE changes, not on scroll activity:
       // what it has to cover is reading the words currently on screen.
