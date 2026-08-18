@@ -519,3 +519,14 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
    `--commit` is deliberately untransitioned so it tracks the finger; a tap has no
    travel to track, so it gets the ease instead. */
 .sa__action[data-fired] { transition: background 160ms ease; }
+
+/* A drag SELECTS rather than travels, so its feedback is different in kind: the
+   action under the drag is picked out with a ring, and the ones it is not on are
+   pushed back. Nothing here is a progress bar — there is no partial state to show,
+   because releasing runs the selection outright. */
+.sa__action[data-selected] {
+  outline: 2px solid rgba(255, 255, 255, 0.75);
+  outline-offset: -3px;
+}
+.sa--dragging .sa__action:not([data-selected]) { opacity: 0.55; }
+.sa--dragging .sa__scroller { cursor: grabbing; }

@@ -416,6 +416,83 @@ await load();
     `actions ${revealed.actions} → ${midCommit.actions}px (the extra goes to the one about to fire)`);
 }
 
+// --- 14. Drag selects by distance; scroll always means the edgemost -----------
+// The two paths deliberately disagree. A scroll has no release, so it needs one
+// fixed meaning. A drag has one, so distance can choose: one action-width in picks
+// the edgemost, two picks the next inward, and letting go runs whichever you are on.
+{
+  await load();
+  const c = await rowInView();
+
+  /** Drag along the row by `dx` and hold, reporting what is selected. */
+  const dragTo = async (dx, hold = true) => {
+    await page.mouse.move(c.x, c.y);
+    await page.mouse.down();
+    const steps = 14;
+    for (let i = 1; i <= steps; i++) {
+      await page.mouse.move(c.x - Math.round((dx * i) / steps), c.y);
+      await sleep(16);
+    }
+    await sleep(120);
+    const sel = await page.evaluate(() =>
+      document.querySelector('.sides__row .sa__action[data-selected]')?.dataset.actionId ?? null);
+    if (!hold) await page.mouse.up();
+    return sel;
+  };
+
+  const nearSel = await dragTo(130, false);   // ~1.4 action widths
+  await sleep(500);
+  const nearFired = (await probe(ROW)).status;
+  check('a drag one action-width in selects the edgemost, and running it fires that',
+    nearSel === 'snooze' && nearFired.startsWith('Snooze'),
+    `selected "${nearSel}", fired "${nearFired}"`);
+
+  await load();
+  const c2 = await rowInView();
+  c.x = c2.x; c.y = c2.y;
+  const farSel = await dragTo(230, false);    // past two action widths
+  await sleep(500);
+  const farFired = (await probe(ROW)).status;
+  check('dragging further selects the next action inward, and runs THAT',
+    farSel === 'delete' && farFired.startsWith('Delete'),
+    `selected "${farSel}", fired "${farFired}" (a scroll this far would have fired Snooze)`);
+}
+
+// --- 15. A short drag commits to nothing --------------------------------------
+{
+  await load();
+  const c = await rowInView();
+  await page.mouse.move(c.x, c.y);
+  await page.mouse.down();
+  for (let i = 0; i < 6; i++) { await page.mouse.move(c.x - 8 * (i + 1), c.y); await sleep(16); }
+  await page.mouse.up();
+  await sleep(700);
+  check('releasing short of the first action runs nothing',
+    (await probe(ROW)).status === 'nothing fired yet',
+    `status "${(await probe(ROW)).status}"`);
+}
+
+// --- 16. Axis arbitration: a nested row must not steal the card's drag ---------
+// Both surfaces see the same pointer, so the one whose axis the gesture is on has to
+// claim it and the other has to let go. Without it, dragging down over a row moves
+// the row and the card at once.
+{
+  await load();
+  const c = await rowInView();
+  const cardBefore = await probe(CARD);
+  const rowBefore = await probe(ROW);
+  await page.mouse.move(c.x, c.y);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) { await page.mouse.move(c.x, c.y - i * 12); await sleep(16); }
+  await page.mouse.up();
+  await sleep(500);
+  const cardAfter = await probe(CARD);
+  const rowAfter = await probe(ROW);
+  check('a vertical drag over a row moves the card, not the row',
+    cardAfter.pos !== cardBefore.pos && rowAfter.pos === rowBefore.pos,
+    `card ${cardBefore.pos} → ${cardAfter.pos}, row ${rowBefore.pos} → ${rowAfter.pos}`);
+}
+
 await browser.close();
 const failed = results.filter((r) => !r).length;
 console.log(`\n${results.length - failed}/${results.length} checks passed`);

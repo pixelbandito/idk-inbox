@@ -1,13 +1,13 @@
 import { useRef, type ReactNode } from 'react';
 import {
-  useScrollActions,
+  useEdgeActions,
+  type Axis,
+  type Edge,
+  type EdgeActionsConfig,
   type ScrollAction,
-  type ScrollActionsConfig,
   type SideConfig,
   type SideState,
-  type Edge,
-  type Axis,
-} from './scrollActions';
+} from './edgeActions';
 
 // The visible half of the mechanic. Structure mirrors the native-scroll rig, for
 // the same three reasons that made it work there:
@@ -59,16 +59,22 @@ function Strip({
   /** Each action's share of the reveal. The edgemost may exceed it; none may be under. */
   const base = config.revealPx / Math.max(1, config.actions.length);
 
-  /**
-   * How lit each action is, 0–1.
-   *
-   * Once something has fired, the light belongs entirely to THAT action — a tap can
-   * run an inner one, and it would be a lie to brighten the edgemost instead just
-   * because that is what a travel would have chosen. Until then it tracks the commit
-   * travel on the edgemost, which is the only feedback the final stretch has.
-   */
+  // Which action the current gesture is pointing at — and it is not always the
+  // edgemost. A scroll always means the edgemost, but a DRAG selects by distance, so
+  // while one is live the whole treatment has to follow the selection instead. Same
+  // for something that has already fired: a tap can run an inner action, and lighting
+  // the edgemost regardless would be a lie about what just happened.
+  const targetId = side.firedActionId ?? side.selectedActionId;
+  const targetIndex = targetId
+    ? config.actions.findIndex((a) => a.id === targetId)
+    : lastIndex;
+
+  /** How lit each action is, 0–1. */
   const litness = (a: ScrollAction, i: number) => {
     if (side.firedActionId) return a.id === side.firedActionId ? 1 : 0;
+    // A drag's selection is binary — you are on an action or you are not — because
+    // releasing runs it outright. There is no partial travel left to express.
+    if (side.selectedActionId) return a.id === side.selectedActionId ? 1 : 0;
     return i === lastIndex ? commitProgress : 0;
   };
 
@@ -104,14 +110,15 @@ function Strip({
             data-action-id={a.id}
             data-edgemost={i === lastIndex || undefined}
             data-fired={side.firedActionId === a.id || undefined}
+            data-selected={side.selectedActionId === a.id || undefined}
             tabIndex={shown > 0 ? 0 : -1}
             onClick={() => onPick(edge, a)}
             style={
               {
                 '--commit': litness(a, i),
-                // Everything holds its share of the reveal; only the edgemost grows,
-                // so the commit travel is absorbed by the action it is committing to.
-                flex: i === lastIndex ? `1 1 ${base}px` : `0 0 ${base}px`,
+                // Everything holds its share of the reveal; only the TARGET grows, so
+                // the extra travel is absorbed by the action it will actually run.
+                flex: i === targetIndex ? `1 1 ${base}px` : `0 0 ${base}px`,
               } as React.CSSProperties
             }
           >
@@ -128,8 +135,8 @@ export function ScrollActionSurface({ axis, start, end, settleMs, holdMs, return
   const startPadRef = useRef<HTMLDivElement>(null);
   const endPadRef = useRef<HTMLDivElement>(null);
 
-  const config: ScrollActionsConfig = { axis, start, end, settleMs, holdMs, returnMs };
-  const state = useScrollActions(scrollerRef, startPadRef, endPadRef, config);
+  const config: EdgeActionsConfig = { axis, start, end, settleMs, holdMs, returnMs };
+  const state = useEdgeActions(scrollerRef, startPadRef, endPadRef, config);
 
   /**
    * Route a click to whichever action is underneath it.
@@ -151,6 +158,9 @@ export function ScrollActionSurface({ axis, start, end, settleMs, holdMs, return
     const insideSheet =
       e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
     if (insideSheet) return;
+    // A drag that ended over an action already ran it; the click the browser
+    // synthesises afterwards must not run it a second time.
+    if (state.swallowClick.current) return;
 
     const hit = document
       .elementsFromPoint(e.clientX, e.clientY)
@@ -167,7 +177,10 @@ export function ScrollActionSurface({ axis, start, end, settleMs, holdMs, return
   // with their own onClick, so Tab and Enter reach them directly. This handler exists
   // only because a MOUSE click cannot, the scroller being on top.
   return (
-    <div className={`sa sa--${axis}${className ? ` ${className}` : ''}`} onClick={onSurfaceClick}>
+    <div
+      className={`sa sa--${axis}${state.dragging ? ' sa--dragging' : ''}${className ? ` ${className}` : ''}`}
+      onClick={onSurfaceClick}
+    >
       <Strip edge="start" axis={axis} side={state.start} config={start} onPick={state.activate} />
       <Strip edge="end" axis={axis} side={state.end} config={end} onPick={state.activate} />
       <div className="sa__scroller" ref={scrollerRef}>

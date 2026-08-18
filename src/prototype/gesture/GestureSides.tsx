@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ScrollActionSurface } from './ScrollActionSurface';
-import type { ScrollAction } from './scrollActions';
+import type { ScrollAction } from './edgeActions';
 
 // Rig 4 — the same scroll-to-act mechanic, generalised onto any edge.
 //
