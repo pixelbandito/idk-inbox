@@ -429,17 +429,31 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
 }
 .sa > .sa__scroller::-webkit-scrollbar { display: none; }
 .sa--y > .sa__scroller {
-  overflow-y: auto; overflow-x: hidden; touch-action: pan-y;
+  overflow-y: auto; overflow-x: hidden; touch-action: manipulation;
   /* Contain ONLY the axis this surface owns. `overscroll-behavior: contain` on both
      axes stops the wheel chaining to the parent — which on a nested row means a
      vertical scroll over it scrolls nothing at all, and a thread list becomes
      unscrollable wherever a row sits under the cursor. */
   overscroll-behavior-y: contain;
 }
-/* pan-y on a horizontal surface is deliberate: it hands VERTICAL touch back to the
-   parent, so a row inside a list never steals the list's own scroll. */
+/* `manipulation` on BOTH, and the reasoning is worth keeping because the wrong value
+   here is invisible on a desktop.
+
+   `touch-action` is touch-only, so every wheel and mouse test passes whatever it
+   says. On a real phone the horizontal rows had `pan-y` — which permits only
+   VERTICAL panning — so horizontal swipes inside a tile did nothing at all. The
+   obvious fix, `pan-x` on the row, trades one bug for a worse one: the value is
+   intersected down the ancestor chain, so a row that permits only horizontal panning
+   also refuses to hand a vertical swipe to the list behind it, and the list stops
+   scrolling wherever a tile is under the thumb.
+
+   `manipulation` permits panning on both axes and leaves the routing to the browser,
+   which already does it correctly: a swipe scrolls whichever nested scroller can
+   move in that direction. What it does turn off is double-tap zoom, which an app
+   surface does not want anyway. Measured with real touch gestures — see the
+   `touch:` checks in scroll-actions.mjs. */
 .sa--x > .sa__scroller {
-  overflow-x: auto; overflow-y: hidden; touch-action: pan-y; display: flex;
+  overflow-x: auto; overflow-y: hidden; touch-action: manipulation; display: flex;
   overscroll-behavior-x: contain;
 }
 .sa--x > .sa__scroller > .sa__sheet { flex: 0 0 100%; }
@@ -530,3 +544,60 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #16161d; color
 }
 .sa--dragging .sa__action:not([data-selected]) { opacity: 0.55; }
 .sa--dragging .sa__scroller { cursor: grabbing; }
+
+/* ---------------------------------------------------------------------------
+   Rig 5 — the combined arrangement: a horizontal panel strip, a vertical list of
+   horizontally-acting tiles, and a vertically-acting detail panel.
+   --------------------------------------------------------------------------- */
+.app { flex: 1; display: grid; grid-template-rows: 1fr auto; min-height: 0; gap: 0.75rem; padding: 0.75rem; }
+.app__strip {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-height: 0;
+  padding-bottom: 0.25rem;
+  /* Same reasoning as the surfaces: permit either axis and let the browser route.
+     A tile inside here shares this element's axis, so the two are genuinely nested
+     on X — the browser scrolls the tile until it runs out, and this strip after. */
+  touch-action: manipulation;
+}
+.app__panel {
+  flex: 0 0 min(78vw, 340px);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 0.5rem;
+  min-height: 0;
+  background: #14141b;
+  border: 1px solid #2a2a36;
+  border-radius: 14px;
+  padding: 0.75rem;
+}
+.app__panel--wide { flex-basis: min(88vw, 460px); }
+.app__panel--narrow { flex-basis: min(60vw, 240px); }
+.app__panel-title { margin: 0; font-size: 0.95rem; font-weight: 600; }
+
+.app__list, .app__detail { min-height: 0; }
+.app__list > .sa__scroller > .sa__sheet { background: none; padding: 0; }
+.app__detail > .sa__scroller > .sa__sheet { background: #16161f; padding: 0.9rem; min-height: 100%; box-sizing: border-box; }
+.app__detail p { margin: 0 0 0.85rem; color: #9aa0b4; line-height: 1.5; font-size: 0.9rem; }
+.app__meta { color: #6b7080 !important; font-size: 0.8rem !important; }
+
+.app__tile-wrap { margin-bottom: 0.5rem; }
+.app__tile > .sa__scroller > .sa__sheet { background: #1e1e2a; border-radius: 10px; padding: 0.7rem 0.85rem; }
+.app__msg { display: grid; gap: 0.15rem; }
+.app__msg[data-done] { opacity: 0.4; }
+.app__from { font-size: 0.75rem; color: #7aa2f7; }
+.app__subject { font-weight: 600; font-size: 0.9rem; }
+.app__preview { font-size: 0.8rem; color: #9aa0b4; }
+
+.app__labels { display: flex; flex-wrap: wrap; gap: 0.4rem; align-content: start; }
+.app__label { padding: 0.3rem 0.6rem; border-radius: 999px; background: #23232f; font-size: 0.8rem; }
+.app__note { grid-row: 3; margin: 0.5rem 0 0; font-size: 0.78rem; color: #6b7080; line-height: 1.45; }
+
+.app__log {
+  margin: 0; padding: 0.6rem 0.85rem; list-style: none;
+  background: #16161f; border-radius: 10px; display: grid; gap: 0.3rem;
+  font-size: 0.82rem; color: #d8dcea; min-height: 2.5rem;
+}
+.app__log-empty { color: #6b7080; }
